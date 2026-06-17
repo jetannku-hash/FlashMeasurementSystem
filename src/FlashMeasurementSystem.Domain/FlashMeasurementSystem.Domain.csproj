@@ -78,6 +78,10 @@
     <Compile Include="Tolerance\OverallJudgment.cs" />
     <Compile Include="CoordinateSystem\RigidTransform.cs" />
     <Compile Include="CoordinateSystem\TransformedRoi.cs" />
+    <Compile Include="Calibration\CalibrationProfile.cs" />
+    <Compile Include="Roi\RoiGeometry.cs" />
+    <Compile Include="Roi\MeasurementTool.cs" />
+    <Compile Include="Roi\Recipe.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

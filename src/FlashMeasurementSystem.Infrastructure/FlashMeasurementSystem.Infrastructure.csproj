@@ -52,8 +52,20 @@
     <Reference Include="System.Core" />
   </ItemGroup>
   <ItemGroup>
+    <!-- Newtonsoft.Json 以 vendored DLL + HintPath 引用（與 halcondotnet 同模式）。
+         原因：非 SDK csproj 的 PackageReference 在 dotnet build 下不會注入編譯引用，
+         vendored DLL 可同時相容 dotnet build 與 VS msbuild，且離線可重現。版本 13.0.3。 -->
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>..\..\lib\Newtonsoft.Json.13.0.3\Newtonsoft.Json.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Tolerance\ToleranceJudger.cs" />
+    <Compile Include="Calibration\PixelSizeCalibrator.cs" />
+    <Compile Include="Roi\RecipeManager.cs" />
+    <Compile Include="Calibration\CalibrationStore.cs" />
+    <Compile Include="Roi\RecipeStore.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\FlashMeasurementSystem.Application\FlashMeasurementSystem.Application.csproj">

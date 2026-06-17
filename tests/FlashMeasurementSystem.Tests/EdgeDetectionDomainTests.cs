@@ -121,6 +121,10 @@ namespace FlashMeasurementSystem.Tests
             Console.WriteLine("ToleranceDomainTests passed");
             CoordinateSystemDomainTests.Run();
             Console.WriteLine("CoordinateSystemDomainTests passed");
+            CalibrationDomainTests.Run();
+            Console.WriteLine("CalibrationDomainTests passed");
+            RoiDomainTests.Run();
+            Console.WriteLine("RoiDomainTests passed");
             Console.WriteLine("EdgeDetectionDomainTests passed");
             return 0;
         }

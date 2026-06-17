@@ -21,7 +21,9 @@ data/images/
 data/reports/
 data/templates/*.shm
 
-# ── NuGet (M2 起引入；以 PackageReference 為主，不提交 packages/) ──
+# ── NuGet 還原資料夾（本專案改用 vendored DLL，不使用 packages/） ──
+# 注意：lib/ 下的 vendored 第三方 DLL（如 Newtonsoft.Json）是「刻意提交」的依賴，
+# 非 build 產物，請勿加入忽略——否則其他機器以 dotnet build 會找不到引用。
 packages/
 
 # ── Misc ──────────────────────────────
