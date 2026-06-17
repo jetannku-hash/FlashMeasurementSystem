@@ -1,0 +1,29 @@
+# ── Build outputs ──────────────────────────────
+bin/
+obj/
+
+# ── Visual Studio ──────────────────────────────
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# ── Quarantined backup (見 CLAUDE.md：保留勿動、不納入版控) ──
+_obsolete_build_20260605/
+
+# ── Generated knowledge graph (graphify 產生物) ──
+graphify-out/
+
+# ── Data: 輸出 / 大型 / 機器專屬（見 CLAUDE.md 與全域規範） ──
+data/logs/
+data/images/
+data/reports/
+data/templates/*.shm
+
+# ── NuGet (M2 起引入；以 PackageReference 為主，不提交 packages/) ──
+packages/
+
+# ── Misc ──────────────────────────────
+*.tmp
+Thumbs.db
