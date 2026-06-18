@@ -18,6 +18,10 @@ using FlashMeasurementSystem.Domain.DistanceMeasurement;
 using FlashMeasurementSystem.Halcon.DistanceMeasurement;
 using FlashMeasurementSystem.Domain.AngleMeasurement;
 using FlashMeasurementSystem.Halcon.AngleMeasurement;
+using FlashMeasurementSystem.Domain.Roi;
+using FlashMeasurementSystem.Domain.CoordinateSystem;
+using FlashMeasurementSystem.Halcon.CoordinateSystem;
+using FlashMeasurementSystem.Infrastructure.Roi;
 using HalconDotNet;
 namespace FlashMeasurementSystem
 {
@@ -39,6 +43,15 @@ namespace FlashMeasurementSystem
         private LineFittingResult _latestLineFittingResult;
         private CircleFittingResult _latestCircleFittingResult;
         private bool _updatingEdgeRoiControls;
+
+        // M3c-1：配方執行（Stage A：載入 + 設參考姿態 + 轉換並繪製跟隨工件的 ROI）
+        private readonly HalconCoordinateMapper _coordinateMapper = new HalconCoordinateMapper();
+        private readonly RecipeStore _recipeStore = new RecipeStore();
+        private Recipe _loadedRecipe;
+        private string _loadedRecipePath;
+        private OpenFileDialog _openRecipeDialog;
+        private double _lastMatchRow, _lastMatchCol, _lastMatchAngleDeg;
+        private bool _hasMatch;
 
         public MainWindow()
         {
@@ -75,17 +88,30 @@ namespace FlashMeasurementSystem
             EnsureComboDefault(contourModeCombo);          // 預設 "point_to_point"
             EnsureComboDefault(angleModeCombo);            // 預設 "line_to_line"
 
-            // 校正按鈕（M3b / 4.10b）：程式碼動態加在 Measurement 分頁頂端，不動 Designer.cs。
-            // measurementBox 為 Dock=Fill 且先加入，故此 Top 按鈕置前後可佔頂端、GroupBox 填其餘。
-            var calibButton = new Button
+            // 校正 + 配方按鈕（M3b/M3c）：程式碼動態加在 Measurement 分頁頂端的工具列，不動 Designer.cs。
+            // measurementBox 為 Dock=Fill 且先加入，故此 Top 工具列置前後可佔頂端、GroupBox 填其餘。
+            var topToolbar = new FlowLayoutPanel
             {
-                Text = "校正 (Pixel Size)...",
                 Dock = DockStyle.Top,
-                Height = 28
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = true,
+                Height = 34,
+                AutoSize = false
             };
+            var calibButton = new Button { Text = "校正...", Width = 64, Height = 26 };
             calibButton.Click += OpenCalibrationDialog;
-            measurementTabPage.Controls.Add(calibButton);
-            calibButton.BringToFront();
+            var loadRecipeButton = new Button { Text = "Load Recipe", Width = 84, Height = 26 };
+            loadRecipeButton.Click += LoadRecipeButton_Click;
+            var setRefButton = new Button { Text = "Set Ref", Width = 64, Height = 26 };
+            setRefButton.Click += SetRefPoseButton_Click;
+            var runRecipeButton = new Button { Text = "Run Recipe", Width = 84, Height = 26 };
+            runRecipeButton.Click += RunRecipeButton_Click;
+            topToolbar.Controls.Add(calibButton);
+            topToolbar.Controls.Add(loadRecipeButton);
+            topToolbar.Controls.Add(setRefButton);
+            topToolbar.Controls.Add(runRecipeButton);
+            measurementTabPage.Controls.Add(topToolbar);
+            topToolbar.BringToFront();
 
             _openImageDialog = new OpenFileDialog
             {
@@ -354,6 +380,12 @@ namespace FlashMeasurementSystem
                     var capturedCol = result.Column;
                     var capturedAngle = result.AngleDeg;
                     var capturedScore = result.Score;
+
+                    // M3c-1：保存當前匹配姿態，供配方執行的 ROI 座標轉換使用。
+                    _lastMatchRow = result.Row;
+                    _lastMatchCol = result.Column;
+                    _lastMatchAngleDeg = result.AngleDeg;
+                    _hasMatch = true;
 
                     _imageHelper.SetPersistentOverlayAction(() =>
                     {
@@ -733,6 +765,163 @@ namespace FlashMeasurementSystem
                 ReadOnly = true
             };
             _edgeResultsGrid.Columns.Add(column);
+        }
+
+        // ─── M3c-1 Stage A：配方執行（載入 + 設參考姿態 + 轉換並繪製 ROI）────────────
+
+        // 已套用工具 ROI（轉換後的繪製資料）。用小型類別避免相依 ValueTuple。
+        private sealed class PlacedRoi
+        {
+            public double Row, Col, AngleRad, Length1, Length2;
+            public string Name;
+        }
+
+        private void LoadRecipeButton_Click(object sender, EventArgs e)
+        {
+            if (_openRecipeDialog == null)
+            {
+                _openRecipeDialog = new OpenFileDialog
+                {
+                    Filter = "Recipe (*.zcp)|*.zcp|All Files|*.*",
+                    Title = "Load Recipe"
+                };
+                string dir = ResolveRecipesDir();
+                if (Directory.Exists(dir)) _openRecipeDialog.InitialDirectory = dir;
+            }
+
+            if (_openRecipeDialog.ShowDialog(this) != DialogResult.OK) return;
+
+            try
+            {
+                _loadedRecipe = _recipeStore.Load(_openRecipeDialog.FileName);
+                _loadedRecipePath = _openRecipeDialog.FileName;
+                measureResultLabel.Text = string.Format(CultureInfo.InvariantCulture,
+                    "已載入配方 '{0}'（{1} 工具，SchemaVer {2}{3}）",
+                    _loadedRecipe.Name, _loadedRecipe.Tools.Count, _loadedRecipe.SchemaVersion,
+                    _loadedRecipe.HasReferencePose ? "，含參考姿態" : "，無參考姿態（需 Set Ref）");
+            }
+            catch (Exception ex)
+            {
+                _loadedRecipe = null;
+                _loadedRecipePath = null;
+                measureResultLabel.Text = "載入配方失敗: " + ex.Message;
+            }
+        }
+
+        // 以「目前的模板匹配姿態」設為配方的參考姿態，並存回原檔。
+        // 這定義了 ROI 的 reference frame：之後在其他影像匹配時，ROI 依當前姿態相對此參考轉換。
+        private void SetRefPoseButton_Click(object sender, EventArgs e)
+        {
+            if (_loadedRecipe == null) { MessageBox.Show("請先載入配方 (.zcp)。", "Info"); return; }
+            if (!_hasMatch) { MessageBox.Show("請先在參考影像上執行模板匹配。", "Info"); return; }
+
+            _loadedRecipe.RefRow = _lastMatchRow;
+            _loadedRecipe.RefCol = _lastMatchCol;
+            _loadedRecipe.RefAngleRad = _lastMatchAngleDeg * Math.PI / 180.0;
+            _loadedRecipe.HasReferencePose = true;
+
+            try
+            {
+                if (!string.IsNullOrEmpty(_loadedRecipePath))
+                {
+                    _recipeStore.Save(_loadedRecipe, _loadedRecipePath);
+                }
+                measureResultLabel.Text = string.Format(CultureInfo.InvariantCulture,
+                    "參考姿態已設定並存檔：Row={0:F2} Col={1:F2} Angle={2:F2}°",
+                    _loadedRecipe.RefRow, _loadedRecipe.RefCol, _lastMatchAngleDeg);
+            }
+            catch (Exception ex)
+            {
+                measureResultLabel.Text = "參考姿態存檔失敗: " + ex.Message;
+            }
+        }
+
+        // 執行配方（Stage A）：把每個工具 ROI 由參考座標系轉到當前匹配姿態，畫在影像上。
+        // 量測 + 公差 OK/NG 於 Stage B 接上。
+        private void RunRecipeButton_Click(object sender, EventArgs e)
+        {
+            if (_loadedRecipe == null) { MessageBox.Show("請先載入配方 (.zcp)。", "Info"); return; }
+            if (_imageHelper == null || _imageHelper.CurrentImage == null) { MessageBox.Show("請先載入影像。", "Info"); return; }
+
+            RigidTransform transform = null;
+            if (_loadedRecipe.HasReferencePose)
+            {
+                if (!_hasMatch)
+                {
+                    MessageBox.Show("此配方含參考姿態，請先對目前影像執行模板匹配以取得當前工件姿態。", "Info");
+                    return;
+                }
+                transform = _coordinateMapper.CreateFromMatch(
+                    _loadedRecipe.RefRow, _loadedRecipe.RefCol, _loadedRecipe.RefAngleRad,
+                    _lastMatchRow, _lastMatchCol, _lastMatchAngleDeg * Math.PI / 180.0);
+            }
+
+            var placed = new System.Collections.Generic.List<PlacedRoi>();
+            foreach (MeasurementTool tool in _loadedRecipe.Tools)
+            {
+                RoiGeometry g = tool.Roi;
+                if (g == null) continue;
+                double row = g.CenterRow, col = g.CenterCol, ang = g.AngleRad;
+                if (transform != null)
+                {
+                    TransformedRoi tr = _coordinateMapper.TransformRoi(g.CenterRow, g.CenterCol, g.AngleRad, transform);
+                    row = tr.Row; col = tr.Col; ang = tr.AngleRad;
+                }
+                placed.Add(new PlacedRoi
+                {
+                    Row = row, Col = col, AngleRad = ang,
+                    Length1 = g.Length1, Length2 = g.Length2,
+                    Name = tool.Name
+                });
+            }
+
+            _imageHelper.SetPersistentOverlayAction(() =>
+            {
+                OverlayAnnotator an = _imageHelper.Annotator;
+                // 若有匹配，先畫匹配輪廓，讓使用者看出 ROI 是否跟著工件移動。
+                if (_hasMatch)
+                {
+                    try
+                    {
+                        using (HObject contour = _templateMatcher.GetMatchContour(_lastMatchRow, _lastMatchCol, _lastMatchAngleDeg))
+                        {
+                            an.DrawMatchContour(contour, _lastMatchRow, _lastMatchCol, _lastMatchAngleDeg, 1.0);
+                        }
+                    }
+                    catch (HalconException) { /* 無模板載入則略過輪廓 */ }
+                }
+                foreach (PlacedRoi p in placed)
+                {
+                    an.DrawRectangle2(p.Row, p.Col, p.AngleRad, p.Length1, p.Length2, "orange");
+                    an.DrawText(p.Name ?? string.Empty, (int)p.Row, (int)p.Col, "orange");
+                }
+            });
+
+            measureResultLabel.Text = string.Format(CultureInfo.InvariantCulture,
+                "已套用配方 '{0}'：{1} 個工具 ROI{2}",
+                _loadedRecipe.Name, placed.Count,
+                transform != null ? "（已依匹配姿態轉換）" : "（無參考姿態，使用原座標）");
+        }
+
+        private static string ResolveRecipesDir()
+        {
+            try
+            {
+                var current = new System.IO.DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory);
+                while (current != null)
+                {
+                    if (System.IO.File.Exists(System.IO.Path.Combine(current.FullName, "FlashMeasurementSystem.sln")))
+                    {
+                        return System.IO.Path.Combine(current.FullName, "data", "recipes");
+                    }
+                    current = current.Parent;
+                }
+            }
+            catch
+            {
+                // 退回 base directory
+            }
+            return System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "data", "recipes");
         }
 
         // 開啟簡易 pixel size 校正對話框（M3b / 4.10b）。帶入目前影像尺寸供 FOV 計算。

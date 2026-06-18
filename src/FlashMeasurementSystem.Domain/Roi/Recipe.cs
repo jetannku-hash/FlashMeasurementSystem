@@ -11,12 +11,21 @@ namespace FlashMeasurementSystem.Domain.Roi
     /// </summary>
     public class Recipe
     {
-        public int SchemaVersion { get; set; } = 1;
+        // v2：新增參考姿態（RefRow/RefCol/RefAngleRad + HasReferencePose），供 ROI 跟隨工件。
+        public int SchemaVersion { get; set; } = 2;
         public string RecipeId { get; set; } = "";
         public string Name { get; set; } = "";
 
         // 以 id 參考 data/calibrations 下的校正檔；空字串表示尚未指定校正。
         public string CalibrationProfileId { get; set; } = "";
+
+        // 參考姿態：定義 ROI 時模板匹配到的工件姿態（reference frame）。執行期以此與「當前
+        // 匹配姿態」算剛體變換，使各工具 ROI 跟著工件平移/旋轉。角度為 radian。
+        // HasReferencePose = false 時，ROI 視為已在當前影像座標系（不做轉換）。
+        public double RefRow { get; set; }
+        public double RefCol { get; set; }
+        public double RefAngleRad { get; set; }
+        public bool HasReferencePose { get; set; }
 
         public List<MeasurementTool> Tools { get; set; } = new List<MeasurementTool>();
 

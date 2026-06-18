@@ -25,9 +25,11 @@ namespace FlashMeasurementSystem.Tests
             AssertEqual(false, tool.Tolerance == null, "Tool reuses ToleranceSpec");
 
             Recipe recipe = Recipe.Default();
-            AssertEqual(1, recipe.SchemaVersion, "Default Recipe SchemaVersion");
+            AssertEqual(2, recipe.SchemaVersion, "Default Recipe SchemaVersion");
             AssertEqual(0, recipe.Tools.Count, "Default Recipe empty tools");
             AssertEqual("", recipe.CalibrationProfileId, "Default no calibration ref");
+            AssertEqual(false, recipe.HasReferencePose, "Default no reference pose");
+            AssertEqual(0.0, recipe.RefAngleRad, "Default RefAngleRad");
 
             // ─── RecipeManager CRUD ─────────────────────────────────
             RecipeManager mgr = new RecipeManager(recipe);
@@ -63,7 +65,11 @@ namespace FlashMeasurementSystem.Tests
             {
                 RecipeId = "R-1",
                 Name = "demo",
-                CalibrationProfileId = "CAL-1"
+                CalibrationProfileId = "CAL-1",
+                HasReferencePose = true,
+                RefRow = 1200.5,
+                RefCol = 800.25,
+                RefAngleRad = 0.3491
             };
             new RecipeManager(src).Add(new MeasurementTool
             {
@@ -84,9 +90,12 @@ namespace FlashMeasurementSystem.Tests
                     throw new InvalidOperationException("Recipe file not written");
                 Recipe rt = store.Load(path);
 
-                AssertEqual(1, rt.SchemaVersion, "Round-trip SchemaVersion");
+                AssertEqual(2, rt.SchemaVersion, "Round-trip SchemaVersion");
                 AssertEqual("R-1", rt.RecipeId, "Round-trip RecipeId");
                 AssertEqual("CAL-1", rt.CalibrationProfileId, "Round-trip calibration ref by id");
+                AssertEqual(true, rt.HasReferencePose, "Round-trip HasReferencePose");
+                AssertClose(1200.5, rt.RefRow, 1e-9, "Round-trip RefRow");
+                AssertClose(0.3491, rt.RefAngleRad, 1e-9, "Round-trip RefAngleRad");
                 AssertEqual(1, rt.Tools.Count, "Round-trip tool count");
 
                 MeasurementTool t = rt.Tools[0];
