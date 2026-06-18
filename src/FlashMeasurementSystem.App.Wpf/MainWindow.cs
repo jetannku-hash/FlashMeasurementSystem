@@ -785,6 +785,57 @@ namespace FlashMeasurementSystem
             {
                 an.DrawCircle(circle.CenterRow, circle.CenterColumn, circle.RadiusPx, "green");
             }
+
+            // 結果表（4.13b/B）：顯示目前量測值；公差判定 (IsOk) 留白，待配方流程 (M3c) 接上 OK/NG。
+            System.Collections.Generic.List<OverlayResultRow> resultRows = BuildResultRows();
+            if (resultRows.Count > 0)
+            {
+                an.DrawResultTable(resultRows);
+            }
+        }
+
+        // 從目前的 _latest* 量測狀態建出結果表的列。IsOk 一律 null（此階段只顯示數值，
+        // 公差 OK/NG 待 M3c 配方載入 nominal/公差後再接 ToleranceJudger）。
+        private System.Collections.Generic.List<OverlayResultRow> BuildResultRows()
+        {
+            var rows = new System.Collections.Generic.List<OverlayResultRow>();
+
+            EdgeResult edges = _latestEdgeResult;
+            if (edges != null && edges.Success && edges.EdgePoints != null && edges.EdgePoints.Count > 0)
+            {
+                rows.Add(new OverlayResultRow
+                {
+                    Name = "Edges",
+                    ValueText = edges.EdgePoints.Count + " pts",
+                    IsOk = null
+                });
+            }
+
+            LineFittingResult line = _latestLineFittingResult;
+            if (line != null && line.Success)
+            {
+                rows.Add(new OverlayResultRow
+                {
+                    Name = "Line",
+                    ValueText = string.Format(CultureInfo.InvariantCulture,
+                        "Len={0:F1}px Ang={1:F2}deg", line.Length, line.AngleDeg),
+                    IsOk = null
+                });
+            }
+
+            CircleFittingResult circleResult = _latestCircleFittingResult;
+            if (circleResult != null && circleResult.Success)
+            {
+                rows.Add(new OverlayResultRow
+                {
+                    Name = "Circle",
+                    ValueText = string.Format(CultureInfo.InvariantCulture,
+                        "D={0:F1}px R={1:F1}px", circleResult.DiameterPx, circleResult.RadiusPx),
+                    IsOk = null
+                });
+            }
+
+            return rows;
         }
 
         // Detect / Fit Line / Fit Circle 共用：以 DrawFittingLayers 為 persistent overlay。
