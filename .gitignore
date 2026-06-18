@@ -20,6 +20,9 @@ data/logs/
 data/images/
 data/reports/
 data/templates/*.shm
+# 校正/配方為機台專屬的執行期資料，不納入版控（保留資料夾的 .gitkeep）。
+data/calibrations/*.json
+data/recipes/*.zcp
 
 # ── NuGet 還原資料夾（本專案改用 vendored DLL，不使用 packages/） ──
 # 注意：lib/ 下的 vendored 第三方 DLL（如 Newtonsoft.Json）是「刻意提交」的依賴，
