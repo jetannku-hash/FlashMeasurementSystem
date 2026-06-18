@@ -77,6 +77,7 @@
     </Compile>
     <Compile Include="Program.cs" />
     <Compile Include="OverlayAnnotator.cs" />
+    <Compile Include="CalibrationDialog.cs" />
     <Compile Include="HWindowControlHelper.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <EmbeddedResource Include="MainWindow.resx">

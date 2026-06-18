@@ -1,0 +1,13 @@
+{
+  "SchemaVersion": 1,
+  "ProfileId": "CALIB-DEFAULT",
+  "Description": "",
+  "PixelSizeUmX": 10.0,
+  "PixelSizeUmY": 10.0,
+  "FieldOfViewMmX": 0.01,
+  "FieldOfViewMmY": 0.01,
+  "CalibrationStandardMm": 5.0,
+  "MeasuredPixels": 500.0,
+  "DistortionCorrected": false,
+  "CreatedAt": "2026-06-18T17:26:40.0887575+08:00"
+}

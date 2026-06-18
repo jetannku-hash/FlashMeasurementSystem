@@ -75,6 +75,18 @@ namespace FlashMeasurementSystem
             EnsureComboDefault(contourModeCombo);          // 預設 "point_to_point"
             EnsureComboDefault(angleModeCombo);            // 預設 "line_to_line"
 
+            // 校正按鈕（M3b / 4.10b）：程式碼動態加在 Measurement 分頁頂端，不動 Designer.cs。
+            // measurementBox 為 Dock=Fill 且先加入，故此 Top 按鈕置前後可佔頂端、GroupBox 填其餘。
+            var calibButton = new Button
+            {
+                Text = "校正 (Pixel Size)...",
+                Dock = DockStyle.Top,
+                Height = 28
+            };
+            calibButton.Click += OpenCalibrationDialog;
+            measurementTabPage.Controls.Add(calibButton);
+            calibButton.BringToFront();
+
             _openImageDialog = new OpenFileDialog
             {
                 Filter = "Image Files|*.png;*.jpg;*.jpeg;*.bmp;*.tif;*.tiff|All Files|*.*",
@@ -721,6 +733,30 @@ namespace FlashMeasurementSystem
                 ReadOnly = true
             };
             _edgeResultsGrid.Columns.Add(column);
+        }
+
+        // 開啟簡易 pixel size 校正對話框（M3b / 4.10b）。帶入目前影像尺寸供 FOV 計算。
+        private void OpenCalibrationDialog(object sender, EventArgs e)
+        {
+            int width = 0, height = 0;
+            if (_imageHelper != null && _imageHelper.CurrentImage != null)
+            {
+                try
+                {
+                    HOperatorSet.GetImageSize(_imageHelper.CurrentImage, out HTuple w, out HTuple h);
+                    width = w.I;
+                    height = h.I;
+                }
+                catch (HalconException)
+                {
+                    // 取不到尺寸就用 0（對話框會以 Min=1 處理），不阻擋校正
+                }
+            }
+
+            using (var dialog = new CalibrationDialog(width, height))
+            {
+                dialog.ShowDialog(this);
+            }
         }
 
         // 單一 overlay slot 的共用底層：把目前有效的偵測/擬合狀態（ROI 框 + 邊緣十字 +
