@@ -19,9 +19,11 @@ using FlashMeasurementSystem.Halcon.DistanceMeasurement;
 using FlashMeasurementSystem.Domain.AngleMeasurement;
 using FlashMeasurementSystem.Halcon.AngleMeasurement;
 using FlashMeasurementSystem.Domain.Roi;
-using FlashMeasurementSystem.Domain.CoordinateSystem;
+using FlashMeasurementSystem.Domain.Calibration;
 using FlashMeasurementSystem.Halcon.CoordinateSystem;
 using FlashMeasurementSystem.Infrastructure.Roi;
+using FlashMeasurementSystem.Infrastructure.Tolerance;
+using FlashMeasurementSystem.Infrastructure.Calibration;
 using HalconDotNet;
 namespace FlashMeasurementSystem
 {
@@ -52,6 +54,10 @@ namespace FlashMeasurementSystem
         private OpenFileDialog _openRecipeDialog;
         private double _lastMatchRow, _lastMatchCol, _lastMatchAngleDeg;
         private bool _hasMatch;
+        // B1：配方執行引擎與其相依（量測 + 公差判定 + 校正載入）
+        private readonly ToleranceJudger _judger = new ToleranceJudger();
+        private readonly CalibrationStore _calibrationStore = new CalibrationStore();
+        private RecipeRunner _recipeRunner;
 
         public MainWindow()
         {
@@ -67,6 +73,9 @@ namespace FlashMeasurementSystem
             _imageHelper = new HWindowControlHelper(hWindowControl);
             _imageHelper.MouseMoved += OnImageMouseMoved;
             _imageHelper.RoiSelected += OnImageRoiSelected;
+
+            // 配方執行引擎（B1）：以既有 adapters 注入（量測 + 公差 + 座標映射）。
+            _recipeRunner = new RecipeRunner(_edgeDetector, _circleFitter, _judger, _coordinateMapper);
 
             // 三個下拉的選項由 designer 以 Items.AddRange 填入，但沒有設預設選取，
             // 導致畫面顯示空白、且 RunEdgeDetectionButton_Click 讀 SelectedItem.ToString()
@@ -767,14 +776,8 @@ namespace FlashMeasurementSystem
             _edgeResultsGrid.Columns.Add(column);
         }
 
-        // ─── M3c-1 Stage A：配方執行（載入 + 設參考姿態 + 轉換並繪製 ROI）────────────
-
-        // 已套用工具 ROI（轉換後的繪製資料）。用小型類別避免相依 ValueTuple。
-        private sealed class PlacedRoi
-        {
-            public double Row, Col, AngleRad, Length1, Length2;
-            public string Name;
-        }
+        // ─── M3c-1：配方執行（載入 + 設參考姿態 + 量測 + 公差判定）────────────
+        // PlacedRoi / ToolRunResult / RecipeRunner 定義於 RecipeRunner.cs。
 
         private void LoadRecipeButton_Click(object sender, EventArgs e)
         {
@@ -836,49 +839,50 @@ namespace FlashMeasurementSystem
             }
         }
 
-        // 執行配方（Stage A）：把每個工具 ROI 由參考座標系轉到當前匹配姿態，畫在影像上。
-        // 量測 + 公差 OK/NG 於 Stage B 接上。
+        // 執行配方（B1）：每個工具 ROI 轉到當前匹配姿態 → circle 量直徑(mm) → 公差判定 →
+        // 結果表 OK/NG 上色 + 畫擬合圓。pixel size 優先用配方參考的校正檔，否則退回量測分頁數值。
         private void RunRecipeButton_Click(object sender, EventArgs e)
         {
             if (_loadedRecipe == null) { MessageBox.Show("請先載入配方 (.zcp)。", "Info"); return; }
             if (_imageHelper == null || _imageHelper.CurrentImage == null) { MessageBox.Show("請先載入影像。", "Info"); return; }
-
-            RigidTransform transform = null;
-            if (_loadedRecipe.HasReferencePose)
+            if (_loadedRecipe.HasReferencePose && !_hasMatch)
             {
-                if (!_hasMatch)
-                {
-                    MessageBox.Show("此配方含參考姿態，請先對目前影像執行模板匹配以取得當前工件姿態。", "Info");
-                    return;
-                }
-                transform = _coordinateMapper.CreateFromMatch(
-                    _loadedRecipe.RefRow, _loadedRecipe.RefCol, _loadedRecipe.RefAngleRad,
-                    _lastMatchRow, _lastMatchCol, _lastMatchAngleDeg * Math.PI / 180.0);
+                MessageBox.Show("此配方含參考姿態，請先對目前影像執行模板匹配以取得當前工件姿態。", "Info");
+                return;
             }
 
-            var placed = new System.Collections.Generic.List<PlacedRoi>();
-            foreach (MeasurementTool tool in _loadedRecipe.Tools)
+            // pixel size 來源（決策 A）：配方 CalibrationProfileId 有設且檔案存在 → 用校正檔；否則退回量測分頁。
+            double pixelSizeUmX = (double)measurementPixelSizeXNumeric.Value;
+            double pixelSizeUmY = (double)measurementPixelSizeYNumeric.Value;
+            string pixelSizeSource = "量測分頁";
+            if (!string.IsNullOrEmpty(_loadedRecipe.CalibrationProfileId))
             {
-                RoiGeometry g = tool.Roi;
-                if (g == null) continue;
-                double row = g.CenterRow, col = g.CenterCol, ang = g.AngleRad;
-                if (transform != null)
+                try
                 {
-                    TransformedRoi tr = _coordinateMapper.TransformRoi(g.CenterRow, g.CenterCol, g.AngleRad, transform);
-                    row = tr.Row; col = tr.Col; ang = tr.AngleRad;
+                    string calPath = System.IO.Path.Combine(ResolveCalibrationsDir(), _loadedRecipe.CalibrationProfileId + ".json");
+                    if (System.IO.File.Exists(calPath))
+                    {
+                        CalibrationProfile prof = _calibrationStore.Load(calPath);
+                        pixelSizeUmX = prof.PixelSizeUmX;
+                        pixelSizeUmY = prof.PixelSizeUmY;
+                        pixelSizeSource = "校正檔 " + _loadedRecipe.CalibrationProfileId;
+                    }
                 }
-                placed.Add(new PlacedRoi
+                catch
                 {
-                    Row = row, Col = col, AngleRad = ang,
-                    Length1 = g.Length1, Length2 = g.Length2,
-                    Name = tool.Name
-                });
+                    // 載入校正檔失敗 → 沿用量測分頁數值
+                }
             }
+
+            System.Collections.Generic.List<ToolRunResult> results = _recipeRunner.Run(
+                _loadedRecipe, _imageHelper.CurrentImage,
+                _hasMatch, _lastMatchRow, _lastMatchCol, _lastMatchAngleDeg * Math.PI / 180.0,
+                pixelSizeUmX, pixelSizeUmY);
 
             _imageHelper.SetPersistentOverlayAction(() =>
             {
                 OverlayAnnotator an = _imageHelper.Annotator;
-                // 若有匹配，先畫匹配輪廓，讓使用者看出 ROI 是否跟著工件移動。
+                // 匹配輪廓（綠），讓使用者看出 ROI 與工件的關係。
                 if (_hasMatch)
                 {
                     try
@@ -890,17 +894,55 @@ namespace FlashMeasurementSystem
                     }
                     catch (HalconException) { /* 無模板載入則略過輪廓 */ }
                 }
-                foreach (PlacedRoi p in placed)
+
+                var rows = new System.Collections.Generic.List<OverlayResultRow>();
+                foreach (ToolRunResult r in results)
                 {
-                    an.DrawRectangle2(p.Row, p.Col, p.AngleRad, p.Length1, p.Length2, "orange");
-                    an.DrawText(p.Name ?? string.Empty, (int)p.Row, (int)p.Col, "orange");
+                    an.DrawRectangle2(r.Roi.Row, r.Roi.Col, r.Roi.AngleRad, r.Roi.Length1, r.Roi.Length2, "orange");
+                    an.DrawText(r.Name ?? string.Empty, (int)r.Roi.Row, (int)r.Roi.Col, "orange");
+
+                    if (r.Measured)
+                    {
+                        string circleColor = r.IsOk == true ? "green" : (r.IsOk == false ? "red" : "yellow");
+                        an.DrawCircle(r.FitCenterRow, r.FitCenterCol, r.FitRadiusPx, circleColor);
+                    }
+
+                    rows.Add(new OverlayResultRow { Name = r.Name, ValueText = r.ValueText, IsOk = r.IsOk });
                 }
+                an.DrawResultTable(rows);
             });
 
+            int okCount = 0, ngCount = 0;
+            foreach (ToolRunResult r in results)
+            {
+                if (r.IsOk == true) okCount++;
+                else if (r.IsOk == false) ngCount++;
+            }
             measureResultLabel.Text = string.Format(CultureInfo.InvariantCulture,
-                "已套用配方 '{0}'：{1} 個工具 ROI{2}",
-                _loadedRecipe.Name, placed.Count,
-                transform != null ? "（已依匹配姿態轉換）" : "（無參考姿態，使用原座標）");
+                "配方 '{0}'：{1} 工具，OK {2} / NG {3}（pixel size：{4}）",
+                _loadedRecipe.Name, results.Count, okCount, ngCount, pixelSizeSource);
+        }
+
+        // 由 app base directory 往上找 .sln，定位 data/calibrations（與 CalibrationDialog 同邏輯）。
+        private static string ResolveCalibrationsDir()
+        {
+            try
+            {
+                var current = new System.IO.DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory);
+                while (current != null)
+                {
+                    if (System.IO.File.Exists(System.IO.Path.Combine(current.FullName, "FlashMeasurementSystem.sln")))
+                    {
+                        return System.IO.Path.Combine(current.FullName, "data", "calibrations");
+                    }
+                    current = current.Parent;
+                }
+            }
+            catch
+            {
+                // 退回 base directory
+            }
+            return System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "data", "calibrations");
         }
 
         private static string ResolveRecipesDir()
