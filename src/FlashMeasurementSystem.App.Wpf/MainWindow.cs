@@ -75,7 +75,7 @@ namespace FlashMeasurementSystem
             _imageHelper.RoiSelected += OnImageRoiSelected;
 
             // 配方執行引擎：以既有 adapters 注入（邊緣 + 圓/線擬合 + 公差 + 座標映射）。
-            _recipeRunner = new RecipeRunner(_edgeDetector, _circleFitter, _lineFitter, _distanceMeasurer, _judger, _coordinateMapper);
+            _recipeRunner = new RecipeRunner(_edgeDetector, _circleFitter, _lineFitter, _distanceMeasurer, _angleMeasurer, _judger, _coordinateMapper);
 
             // 三個下拉的選項由 designer 以 Items.AddRange 填入，但沒有設預設選取，
             // 導致畫面顯示空白、且 RunEdgeDetectionButton_Click 讀 SelectedItem.ToString()
@@ -918,6 +918,12 @@ namespace FlashMeasurementSystem
                     else if (r.Measured && r.ToolType == "distance")
                     {
                         an.DrawDistance(r.DistRow1, r.DistCol1, r.DistRow2, r.DistCol2, r.ValueText, r.IsOk);
+                    }
+                    else if (r.Measured && r.ToolType == "angle")
+                    {
+                        // 弧由線A端點方向(起點)起，延伸角度=AngleDeg(銳角)。
+                        double extent = r.AngleDeg * Math.PI / 180.0;
+                        an.DrawAngle(r.AngleCenterRow, r.AngleCenterCol, r.AngleRadiusPx, r.AngleStartRad, extent, r.ValueText, r.IsOk);
                     }
 
                     rows.Add(new OverlayResultRow { Name = r.Name, ValueText = r.ValueText, IsOk = r.IsOk });

@@ -1,11 +1,14 @@
+using System;
 using System.Collections.Generic;
 using System.Globalization;
+using FlashMeasurementSystem.Application.AngleMeasurement;
 using FlashMeasurementSystem.Application.CircleFitting;
 using FlashMeasurementSystem.Application.CoordinateSystem;
 using FlashMeasurementSystem.Application.DistanceMeasurement;
 using FlashMeasurementSystem.Application.EdgeDetection;
 using FlashMeasurementSystem.Application.LineFitting;
 using FlashMeasurementSystem.Application.Tolerance;
+using FlashMeasurementSystem.Domain.AngleMeasurement;
 using FlashMeasurementSystem.Domain.CircleFitting;
 using FlashMeasurementSystem.Domain.CoordinateSystem;
 using FlashMeasurementSystem.Domain.DistanceMeasurement;
@@ -41,6 +44,10 @@ namespace FlashMeasurementSystem
         public double LineRow1, LineCol1, LineRow2, LineCol2, LineAngleDeg;  // line 元素（供繪製/複合工具引用）
         public double DistMm;          // distance：距離 (mm)
         public double DistRow1, DistCol1, DistRow2, DistCol2;  // distance 連線兩端（供繪製）
+        public double AngleDeg;         // angle：夾角 AcuteAngleDeg (0~90)
+        public double AngleCenterRow, AngleCenterCol;   // angle 兩線交點（供畫弧）
+        public double AngleRadiusPx;    // angle 弧線半徑（供畫弧）
+        public double AngleStartRad;    // angle 弧起點方位角（供畫弧）
         public bool? IsOk;             // 公差判定；null = 無判定
         public string ValueText;       // 結果表顯示文字
         public string Message;         // 失敗/說明
@@ -57,17 +64,19 @@ namespace FlashMeasurementSystem
         private readonly ICircleFitter _circleFitter;
         private readonly ILineFitter _lineFitter;
         private readonly IDistanceMeasurer<HXLDCont> _distanceMeasurer;
+        private readonly IAngleMeasurer _angleMeasurer;
         private readonly IToleranceJudger _judger;
         private readonly ICoordinateMapper _mapper;
 
         public RecipeRunner(IEdgeDetector<HImage> edgeDetector, ICircleFitter circleFitter,
             ILineFitter lineFitter, IDistanceMeasurer<HXLDCont> distanceMeasurer,
-            IToleranceJudger judger, ICoordinateMapper mapper)
+            IAngleMeasurer angleMeasurer, IToleranceJudger judger, ICoordinateMapper mapper)
         {
             _edgeDetector = edgeDetector;
             _circleFitter = circleFitter;
             _lineFitter = lineFitter;
             _distanceMeasurer = distanceMeasurer;
+            _angleMeasurer = angleMeasurer;
             _judger = judger;
             _mapper = mapper;
         }
@@ -142,6 +151,10 @@ namespace FlashMeasurementSystem
                 if (tool.ToolType == "distance")
                 {
                     MeasureDistance(res, tool, byId, pixelSizeUmX, pixelSizeUmY);
+                }
+                else if (tool.ToolType == "angle")
+                {
+                    MeasureAngle(res, tool, byId);
                 }
                 else
                 {
@@ -341,6 +354,89 @@ namespace FlashMeasurementSystem
             {
                 res.Measured = false;
                 res.ValueText = "距離計算異常";
+                res.Message = ex.Message;
+            }
+        }
+
+        // angle（B2c）：參考兩個 line 元素，用 angle_ll 算夾角的 AcuteAngleDeg（0~90）。
+        // 旋轉不變量：工件轉 30°，兩線各多 30°，夾角仍同。
+        private void MeasureAngle(ToolRunResult res, MeasurementTool tool,
+            Dictionary<string, ToolRunResult> byId)
+        {
+            res.Supported = true;
+
+            if (tool.RefToolIds == null || tool.RefToolIds.Count < 2)
+            {
+                res.Measured = false;
+                res.ValueText = "需 2 參考元素";
+                res.Message = "angle 需 RefToolIds 含 2 個 line 元素";
+                return;
+            }
+
+            ToolRunResult a, b;
+            if (!byId.TryGetValue(tool.RefToolIds[0], out a) || !byId.TryGetValue(tool.RefToolIds[1], out b))
+            {
+                res.Measured = false;
+                res.ValueText = "找不到參考元素";
+                return;
+            }
+            if (!a.Measured || !b.Measured)
+            {
+                res.Measured = false;
+                res.ValueText = "參考元素未量測";
+                return;
+            }
+            if (a.ToolType != "line" || b.ToolType != "line")
+            {
+                res.Measured = false;
+                res.ValueText = "僅支援 line↔line";
+                res.Message = "B2c 角度僅支援兩 line 元素";
+                return;
+            }
+
+            try
+            {
+                var ap = AngleMeasurementParameters.Default();
+                AngleMeasurementResult ar = _angleMeasurer.MeasureAngle(
+                    a.LineRow1, a.LineCol1, a.LineRow2, a.LineCol2,
+                    b.LineRow1, b.LineCol1, b.LineRow2, b.LineCol2, ap);
+
+                if (!ar.Success)
+                {
+                    res.Measured = false;
+                    res.ValueText = "角度計算失敗";
+                    res.Message = ar.ErrorMessage;
+                    return;
+                }
+
+                res.Measured = true;
+                res.AngleDeg = ar.AcuteAngleDeg;
+                res.ValueText = string.Format(CultureInfo.InvariantCulture, "{0:F2}°", res.AngleDeg);
+
+                // 兩線交點：取 a1→a2 與 b1→b2 的交點（四點重心當近似頂點，對近交點/平行線也安全）。
+                res.AngleCenterRow = (a.LineRow1 + a.LineRow2 + b.LineRow1 + b.LineRow2) / 4.0;
+                res.AngleCenterCol = (a.LineCol1 + a.LineCol2 + b.LineCol1 + b.LineCol2) / 4.0;
+                res.AngleRadiusPx = 80.0;  // 弧線半徑（像素）
+                // 弧起點：線 A 的第一端點指向交點（頂點）的方位角。
+                res.AngleStartRad = Math.Atan2(a.LineRow1 - res.AngleCenterRow, a.LineCol1 - res.AngleCenterCol);
+
+                if (tool.Tolerance != null)
+                {
+                    var input = new ToleranceItemInput
+                    {
+                        ToolId = tool.Id,
+                        ToolName = tool.Name,
+                        MeasuredValue = res.AngleDeg,
+                        Spec = tool.Tolerance
+                    };
+                    OverallJudgment overall = _judger.Judge(new List<ToleranceItemInput> { input });
+                    if (overall.Items.Count > 0) res.IsOk = overall.Items[0].IsOk;
+                }
+            }
+            catch (HalconException ex)
+            {
+                res.Measured = false;
+                res.ValueText = "角度計算異常";
                 res.Message = ex.Message;
             }
         }
