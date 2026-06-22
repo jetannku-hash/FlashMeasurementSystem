@@ -2,11 +2,13 @@ using System.Collections.Generic;
 using System.Globalization;
 using FlashMeasurementSystem.Application.CircleFitting;
 using FlashMeasurementSystem.Application.CoordinateSystem;
+using FlashMeasurementSystem.Application.DistanceMeasurement;
 using FlashMeasurementSystem.Application.EdgeDetection;
 using FlashMeasurementSystem.Application.LineFitting;
 using FlashMeasurementSystem.Application.Tolerance;
 using FlashMeasurementSystem.Domain.CircleFitting;
 using FlashMeasurementSystem.Domain.CoordinateSystem;
+using FlashMeasurementSystem.Domain.DistanceMeasurement;
 using FlashMeasurementSystem.Domain.EdgeDetection;
 using FlashMeasurementSystem.Domain.LineFitting;
 using FlashMeasurementSystem.Domain.Roi;
@@ -37,6 +39,8 @@ namespace FlashMeasurementSystem
         public double DiameterMm;      // circle：直徑 (mm)
         public double FitCenterRow, FitCenterCol, FitRadiusPx;  // 擬合圓（供繪製）
         public double LineRow1, LineCol1, LineRow2, LineCol2, LineAngleDeg;  // line 元素（供繪製/複合工具引用）
+        public double DistMm;          // distance：距離 (mm)
+        public double DistRow1, DistCol1, DistRow2, DistCol2;  // distance 連線兩端（供繪製）
         public bool? IsOk;             // 公差判定；null = 無判定
         public string ValueText;       // 結果表顯示文字
         public string Message;         // 失敗/說明
@@ -52,15 +56,18 @@ namespace FlashMeasurementSystem
         private readonly IEdgeDetector<HImage> _edgeDetector;
         private readonly ICircleFitter _circleFitter;
         private readonly ILineFitter _lineFitter;
+        private readonly IDistanceMeasurer<HXLDCont> _distanceMeasurer;
         private readonly IToleranceJudger _judger;
         private readonly ICoordinateMapper _mapper;
 
         public RecipeRunner(IEdgeDetector<HImage> edgeDetector, ICircleFitter circleFitter,
-            ILineFitter lineFitter, IToleranceJudger judger, ICoordinateMapper mapper)
+            ILineFitter lineFitter, IDistanceMeasurer<HXLDCont> distanceMeasurer,
+            IToleranceJudger judger, ICoordinateMapper mapper)
         {
             _edgeDetector = edgeDetector;
             _circleFitter = circleFitter;
             _lineFitter = lineFitter;
+            _distanceMeasurer = distanceMeasurer;
             _judger = judger;
             _mapper = mapper;
         }
@@ -83,11 +90,16 @@ namespace FlashMeasurementSystem
             // 直徑非軸向，用 X/Y 平均（等向校正時 X=Y）。
             double pixelSizeUm = (pixelSizeUmX + pixelSizeUmY) / 2.0;
 
+            // 兩階段：先量元素（line/circle）並以 Id 索引，再算複合工具（distance）引用它們。
+            var byId = new Dictionary<string, ToolRunResult>();
+
+            // ── Pass 1：元素工具（line / circle）──
             foreach (MeasurementTool tool in recipe.Tools)
             {
                 if (tool == null || tool.Roi == null) continue;
-                RoiGeometry g = tool.Roi;
+                if (tool.ToolType != "circle" && tool.ToolType != "line") continue;
 
+                RoiGeometry g = tool.Roi;
                 double row = g.CenterRow, col = g.CenterCol, ang = g.AngleRad;
                 if (transform != null)
                 {
@@ -110,9 +122,26 @@ namespace FlashMeasurementSystem
                 {
                     MeasureCircle(image, res, tool, row, col, ang, g.Length1, g.Length2, pixelSizeUm);
                 }
-                else if (tool.ToolType == "line")
+                else
                 {
                     MeasureLine(image, res, tool, row, col, ang, g.Length1, g.Length2);
+                }
+
+                results.Add(res);
+                if (!string.IsNullOrEmpty(tool.Id)) byId[tool.Id] = res;
+            }
+
+            // ── Pass 2：複合工具（distance）與其他 ──
+            foreach (MeasurementTool tool in recipe.Tools)
+            {
+                if (tool == null) continue;
+                if (tool.ToolType == "circle" || tool.ToolType == "line") continue;  // 已於 Pass 1 處理
+
+                var res = new ToolRunResult { Name = tool.Name, ToolType = tool.ToolType };
+
+                if (tool.ToolType == "distance")
+                {
+                    MeasureDistance(res, tool, byId, pixelSizeUmX, pixelSizeUmY);
                 }
                 else
                 {
@@ -226,6 +255,92 @@ namespace FlashMeasurementSystem
             {
                 res.Measured = false;
                 res.ValueText = "量測異常";
+                res.Message = ex.Message;
+            }
+        }
+
+        // distance（B2b）：參考兩個 line 元素，用 distance_ss 最小距（M1 MeasureLineToLine，
+        // 內部已換 mm）算垂直間距 → 判定。僅支援 line↔line。
+        private void MeasureDistance(ToolRunResult res, MeasurementTool tool,
+            Dictionary<string, ToolRunResult> byId, double pixelSizeUmX, double pixelSizeUmY)
+        {
+            res.Supported = true;
+
+            if (tool.RefToolIds == null || tool.RefToolIds.Count < 2)
+            {
+                res.Measured = false;
+                res.ValueText = "需 2 參考元素";
+                res.Message = "distance 需 RefToolIds 含 2 個元素";
+                return;
+            }
+
+            ToolRunResult a, b;
+            if (!byId.TryGetValue(tool.RefToolIds[0], out a) || !byId.TryGetValue(tool.RefToolIds[1], out b))
+            {
+                res.Measured = false;
+                res.ValueText = "找不到參考元素";
+                res.Message = "RefToolIds 指向的元素不存在";
+                return;
+            }
+            if (!a.Measured || !b.Measured)
+            {
+                res.Measured = false;
+                res.ValueText = "參考元素未量測";
+                return;
+            }
+            if (a.ToolType != "line" || b.ToolType != "line")
+            {
+                res.Measured = false;
+                res.ValueText = "僅支援 line↔line";
+                res.Message = "B2b 距離僅支援兩 line 元素";
+                return;
+            }
+
+            try
+            {
+                var dp = new DistanceMeasurementParameters
+                {
+                    PixelSizeUmX = pixelSizeUmX,
+                    PixelSizeUmY = pixelSizeUmY
+                };
+                DistanceMeasurementResult dr = _distanceMeasurer.MeasureLineToLine(
+                    a.LineRow1, a.LineCol1, a.LineRow2, a.LineCol2,
+                    b.LineRow1, b.LineCol1, b.LineRow2, b.LineCol2, dp);
+
+                if (!dr.Success)
+                {
+                    res.Measured = false;
+                    res.ValueText = "距離計算失敗";
+                    res.Message = dr.ErrorMessage;
+                    return;
+                }
+
+                res.Measured = true;
+                res.DistMm = dr.DistanceMm;
+                // 連線兩端用兩元素線段中點（供視覺標註）。
+                res.DistRow1 = (a.LineRow1 + a.LineRow2) / 2.0;
+                res.DistCol1 = (a.LineCol1 + a.LineCol2) / 2.0;
+                res.DistRow2 = (b.LineRow1 + b.LineRow2) / 2.0;
+                res.DistCol2 = (b.LineCol1 + b.LineCol2) / 2.0;
+                res.ValueText = string.Format(CultureInfo.InvariantCulture, "D={0:F4}mm", res.DistMm);
+
+                if (tool.Tolerance != null)
+                {
+                    var input = new ToleranceItemInput
+                    {
+                        ToolId = tool.Id,
+                        ToolName = tool.Name,
+                        MeasuredValue = res.DistMm,
+                        Spec = tool.Tolerance
+                    };
+                    OverallJudgment overall = _judger.Judge(new List<ToleranceItemInput> { input });
+                    if (overall.Items.Count > 0) res.IsOk = overall.Items[0].IsOk;
+                }
+            }
+            catch (HalconException ex)
+            {
+                res.Measured = false;
+                res.ValueText = "距離計算異常";
                 res.Message = ex.Message;
             }
         }

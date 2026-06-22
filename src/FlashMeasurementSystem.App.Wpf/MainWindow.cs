@@ -75,7 +75,7 @@ namespace FlashMeasurementSystem
             _imageHelper.RoiSelected += OnImageRoiSelected;
 
             // 配方執行引擎：以既有 adapters 注入（邊緣 + 圓/線擬合 + 公差 + 座標映射）。
-            _recipeRunner = new RecipeRunner(_edgeDetector, _circleFitter, _lineFitter, _judger, _coordinateMapper);
+            _recipeRunner = new RecipeRunner(_edgeDetector, _circleFitter, _lineFitter, _distanceMeasurer, _judger, _coordinateMapper);
 
             // 三個下拉的選項由 designer 以 Items.AddRange 填入，但沒有設預設選取，
             // 導致畫面顯示空白、且 RunEdgeDetectionButton_Click 讀 SelectedItem.ToString()
@@ -898,8 +898,12 @@ namespace FlashMeasurementSystem
                 var rows = new System.Collections.Generic.List<OverlayResultRow>();
                 foreach (ToolRunResult r in results)
                 {
-                    an.DrawRectangle2(r.Roi.Row, r.Roi.Col, r.Roi.AngleRad, r.Roi.Length1, r.Roi.Length2, "orange");
-                    an.DrawText(r.Name ?? string.Empty, (int)r.Roi.Row, (int)r.Roi.Col, "orange");
+                    // 元素工具（line/circle）有 ROI → 畫框；複合工具（distance）r.Roi 為 null。
+                    if (r.Roi != null)
+                    {
+                        an.DrawRectangle2(r.Roi.Row, r.Roi.Col, r.Roi.AngleRad, r.Roi.Length1, r.Roi.Length2, "orange");
+                        an.DrawText(r.Name ?? string.Empty, (int)r.Roi.Row, (int)r.Roi.Col, "orange");
+                    }
 
                     if (r.Measured && r.ToolType == "circle")
                     {
@@ -910,6 +914,10 @@ namespace FlashMeasurementSystem
                     {
                         string lineColor = r.IsOk == true ? "green" : (r.IsOk == false ? "red" : "yellow");
                         an.DrawLine(r.LineRow1, r.LineCol1, r.LineRow2, r.LineCol2, lineColor);
+                    }
+                    else if (r.Measured && r.ToolType == "distance")
+                    {
+                        an.DrawDistance(r.DistRow1, r.DistCol1, r.DistRow2, r.DistCol2, r.ValueText, r.IsOk);
                     }
 
                     rows.Add(new OverlayResultRow { Name = r.Name, ValueText = r.ValueText, IsOk = r.IsOk });
