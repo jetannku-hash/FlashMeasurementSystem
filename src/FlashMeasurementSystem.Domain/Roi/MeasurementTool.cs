@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using FlashMeasurementSystem.Domain.EdgeDetection;
 using FlashMeasurementSystem.Domain.Tolerance;
 
@@ -18,5 +19,9 @@ namespace FlashMeasurementSystem.Domain.Roi
         public RoiGeometry Roi { get; set; } = new RoiGeometry();
         public EdgeDetectionParameters EdgeParameters { get; set; } = EdgeDetectionParameters.Default();
         public ToleranceSpec Tolerance { get; set; } = ToleranceSpec.Default();
+
+        // 複合工具（distance/angle）參考的元素工具 Id（line/circle）。
+        // 自足工具（circle/line 元素）此清單為空。順序有意義（例：distance 取 [0]→[1]）。
+        public List<string> RefToolIds { get; set; } = new List<string>();
     }
 }

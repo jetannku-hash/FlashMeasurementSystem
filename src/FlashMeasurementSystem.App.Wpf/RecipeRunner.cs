@@ -1,13 +1,14 @@
-using System;
 using System.Collections.Generic;
 using System.Globalization;
 using FlashMeasurementSystem.Application.CircleFitting;
 using FlashMeasurementSystem.Application.CoordinateSystem;
 using FlashMeasurementSystem.Application.EdgeDetection;
+using FlashMeasurementSystem.Application.LineFitting;
 using FlashMeasurementSystem.Application.Tolerance;
 using FlashMeasurementSystem.Domain.CircleFitting;
 using FlashMeasurementSystem.Domain.CoordinateSystem;
 using FlashMeasurementSystem.Domain.EdgeDetection;
+using FlashMeasurementSystem.Domain.LineFitting;
 using FlashMeasurementSystem.Domain.Roi;
 using FlashMeasurementSystem.Domain.Tolerance;
 using HalconDotNet;
@@ -35,6 +36,7 @@ namespace FlashMeasurementSystem
         public bool Measured;          // 量測是否成功
         public double DiameterMm;      // circle：直徑 (mm)
         public double FitCenterRow, FitCenterCol, FitRadiusPx;  // 擬合圓（供繪製）
+        public double LineRow1, LineCol1, LineRow2, LineCol2, LineAngleDeg;  // line 元素（供繪製/複合工具引用）
         public bool? IsOk;             // 公差判定；null = 無判定
         public string ValueText;       // 結果表顯示文字
         public string Message;         // 失敗/說明
@@ -49,14 +51,16 @@ namespace FlashMeasurementSystem
     {
         private readonly IEdgeDetector<HImage> _edgeDetector;
         private readonly ICircleFitter _circleFitter;
+        private readonly ILineFitter _lineFitter;
         private readonly IToleranceJudger _judger;
         private readonly ICoordinateMapper _mapper;
 
         public RecipeRunner(IEdgeDetector<HImage> edgeDetector, ICircleFitter circleFitter,
-            IToleranceJudger judger, ICoordinateMapper mapper)
+            ILineFitter lineFitter, IToleranceJudger judger, ICoordinateMapper mapper)
         {
             _edgeDetector = edgeDetector;
             _circleFitter = circleFitter;
+            _lineFitter = lineFitter;
             _judger = judger;
             _mapper = mapper;
         }
@@ -106,12 +110,16 @@ namespace FlashMeasurementSystem
                 {
                     MeasureCircle(image, res, tool, row, col, ang, g.Length1, g.Length2, pixelSizeUm);
                 }
+                else if (tool.ToolType == "line")
+                {
+                    MeasureLine(image, res, tool, row, col, ang, g.Length1, g.Length2);
+                }
                 else
                 {
                     res.Supported = false;
                     res.IsOk = null;
-                    res.ValueText = "(B1 未支援)";
-                    res.Message = "工具型別 '" + tool.ToolType + "' 於 B1 尚未支援";
+                    res.ValueText = "(未支援)";
+                    res.Message = "工具型別 '" + tool.ToolType + "' 尚未支援";
                 }
 
                 results.Add(res);
@@ -169,6 +177,50 @@ namespace FlashMeasurementSystem
                         res.IsOk = overall.Items[0].IsOk;
                     }
                 }
+            }
+            catch (HalconException ex)
+            {
+                res.Measured = false;
+                res.ValueText = "量測異常";
+                res.Message = ex.Message;
+            }
+        }
+
+        // line 元素（B2a）：ROI → subpix 邊緣 → 擬合線。元素本身不判定（IsOk=null），
+        // 擬合線供繪製與後續複合工具（distance/angle）引用。
+        private void MeasureLine(HImage image, ToolRunResult res, MeasurementTool tool,
+            double row, double col, double ang, double length1, double length2)
+        {
+            res.Supported = true;
+            try
+            {
+                EdgeDetectionRoi edgeRoi = EdgeDetectionRoi.FromCenter(row, col, length1, length2, ang);
+                EdgeDetectionParameters edgeParams = tool.EdgeParameters ?? EdgeDetectionParameters.Default();
+
+                EdgeResult edges = _edgeDetector.DetectEdgesSubPix(image, edgeRoi, edgeParams);
+                if (!edges.Success || edges.EdgePoints == null || edges.EdgePoints.Count < 2)
+                {
+                    res.Measured = false;
+                    res.ValueText = "邊緣不足";
+                    res.Message = edges.ErrorMessage;
+                    return;
+                }
+
+                LineFittingResult line = _lineFitter.FitLine(edges.EdgePoints, LineFittingParameters.Default());
+                if (!line.Success)
+                {
+                    res.Measured = false;
+                    res.ValueText = "擬合失敗";
+                    res.Message = line.ErrorMessage;
+                    return;
+                }
+
+                res.Measured = true;
+                res.LineRow1 = line.Row1; res.LineCol1 = line.Column1;
+                res.LineRow2 = line.Row2; res.LineCol2 = line.Column2;
+                res.LineAngleDeg = line.AngleDeg;
+                res.IsOk = null;  // 元素不判定（B2a）
+                res.ValueText = string.Format(CultureInfo.InvariantCulture, "Ang={0:F2}deg", line.AngleDeg);
             }
             catch (HalconException ex)
             {

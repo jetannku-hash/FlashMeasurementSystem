@@ -11,8 +11,9 @@ namespace FlashMeasurementSystem.Domain.Roi
     /// </summary>
     public class Recipe
     {
-        // v2：新增參考姿態（RefRow/RefCol/RefAngleRad + HasReferencePose），供 ROI 跟隨工件。
-        public int SchemaVersion { get; set; } = 2;
+        // v2：參考姿態（RefRow/RefCol/RefAngleRad + HasReferencePose），供 ROI 跟隨工件。
+        // v3：MeasurementTool.RefToolIds（複合工具 distance/angle 參考元素工具）。
+        public int SchemaVersion { get; set; } = 3;
         public string RecipeId { get; set; } = "";
         public string Name { get; set; } = "";
 

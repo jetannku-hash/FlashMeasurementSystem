@@ -74,8 +74,8 @@ namespace FlashMeasurementSystem
             _imageHelper.MouseMoved += OnImageMouseMoved;
             _imageHelper.RoiSelected += OnImageRoiSelected;
 
-            // 配方執行引擎（B1）：以既有 adapters 注入（量測 + 公差 + 座標映射）。
-            _recipeRunner = new RecipeRunner(_edgeDetector, _circleFitter, _judger, _coordinateMapper);
+            // 配方執行引擎：以既有 adapters 注入（邊緣 + 圓/線擬合 + 公差 + 座標映射）。
+            _recipeRunner = new RecipeRunner(_edgeDetector, _circleFitter, _lineFitter, _judger, _coordinateMapper);
 
             // 三個下拉的選項由 designer 以 Items.AddRange 填入，但沒有設預設選取，
             // 導致畫面顯示空白、且 RunEdgeDetectionButton_Click 讀 SelectedItem.ToString()
@@ -901,10 +901,15 @@ namespace FlashMeasurementSystem
                     an.DrawRectangle2(r.Roi.Row, r.Roi.Col, r.Roi.AngleRad, r.Roi.Length1, r.Roi.Length2, "orange");
                     an.DrawText(r.Name ?? string.Empty, (int)r.Roi.Row, (int)r.Roi.Col, "orange");
 
-                    if (r.Measured)
+                    if (r.Measured && r.ToolType == "circle")
                     {
                         string circleColor = r.IsOk == true ? "green" : (r.IsOk == false ? "red" : "yellow");
                         an.DrawCircle(r.FitCenterRow, r.FitCenterCol, r.FitRadiusPx, circleColor);
+                    }
+                    else if (r.Measured && r.ToolType == "line")
+                    {
+                        string lineColor = r.IsOk == true ? "green" : (r.IsOk == false ? "red" : "yellow");
+                        an.DrawLine(r.LineRow1, r.LineCol1, r.LineRow2, r.LineCol2, lineColor);
                     }
 
                     rows.Add(new OverlayResultRow { Name = r.Name, ValueText = r.ValueText, IsOk = r.IsOk });
