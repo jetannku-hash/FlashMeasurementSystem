@@ -104,8 +104,7 @@ namespace FlashMeasurementSystem
                 Dock = DockStyle.Top,
                 FlowDirection = FlowDirection.LeftToRight,
                 WrapContents = true,
-                Height = 34,
-                AutoSize = false
+                AutoSize = true
             };
             var calibButton = new Button { Text = "校正...", Width = 64, Height = 26 };
             calibButton.Click += OpenCalibrationDialog;
@@ -115,10 +114,14 @@ namespace FlashMeasurementSystem
             setRefButton.Click += SetRefPoseButton_Click;
             var runRecipeButton = new Button { Text = "Run Recipe", Width = 84, Height = 26 };
             runRecipeButton.Click += RunRecipeButton_Click;
+            // 配方編輯器（M3c-2）：建/編 .zcp。Load Recipe 為執行流程入口，兩者並存。
+            var editRecipeButton = new Button { Text = "Edit Recipe", Width = 84, Height = 26 };
+            editRecipeButton.Click += OpenRecipeEditor;
             topToolbar.Controls.Add(calibButton);
             topToolbar.Controls.Add(loadRecipeButton);
             topToolbar.Controls.Add(setRefButton);
             topToolbar.Controls.Add(runRecipeButton);
+            topToolbar.Controls.Add(editRecipeButton);
             measurementTabPage.Controls.Add(topToolbar);
             topToolbar.BringToFront();
 
@@ -1007,6 +1010,33 @@ namespace FlashMeasurementSystem
             {
                 dialog.ShowDialog(this);
             }
+        }
+
+        // 開啟 RecipeEditor（獨立非 modal Form，方便同時操作主畫面取 ROI）。
+        // 需先有影像（ROI 擷取需要）。編輯器存檔後以 callback 回寫 MainWindow，
+        // Run Recipe 立即可用編輯結果，不需重新 Load。
+        private void OpenRecipeEditor(object sender, EventArgs e)
+        {
+            if (_imageHelper == null || _imageHelper.CurrentImage == null)
+            {
+                MessageBox.Show(this, "Please load an image first.", "Recipe Editor",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            // If a recipe is already loaded in MainWindow, pass it to the editor
+            // so the user can inspect and edit without re-loading. On save, write the
+            // edited recipe back so Run Recipe uses it immediately (no re-load needed).
+            var editor = new RecipeEditor(_imageHelper, _loadedRecipe, _loadedRecipePath,
+                (recipe, path) =>
+                {
+                    _loadedRecipe = recipe;
+                    _loadedRecipePath = path;
+                    measureResultLabel.Text = string.Format(CultureInfo.InvariantCulture,
+                        "已從編輯器更新配方 '{0}'（{1} 工具）。可執行 Run Recipe。",
+                        recipe.Name, recipe.Tools.Count);
+                });
+            editor.Show(this);
         }
 
         // 單一 overlay slot 的共用底層：把目前有效的偵測/擬合狀態（ROI 框 + 邊緣十字 +

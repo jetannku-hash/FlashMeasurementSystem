@@ -30,6 +30,7 @@ namespace FlashMeasurementSystem
         private int _panStartX, _panStartY;
         private bool _isResizing;
         private Action _persistentOverlayAction;
+        private Action<double, double, double, double> _roiCallback;
 
         public HWindowControlHelper(HWindowControl control)
         {
@@ -129,6 +130,20 @@ namespace FlashMeasurementSystem
             ClearOverlay();
         }
 
+        /// <summary>
+        /// 請求一次性 ROI 繪製。畫完後以 callback 傳回 (startRow,startCol,endRow,endCol)，
+        /// 不觸發現有的 RoiSelected 事件。若已有 pending request，舊 request 會被取代。
+        /// </summary>
+        public void RequestRoi(Action<double, double, double, double> callback)
+        {
+            _roiCallback = callback;
+            _roiStartRow = _roiEndRow = 0;
+            _roiStartCol = _roiEndCol = 0;
+            _persistentOverlayAction = null;
+            IsRoiMode = true;
+            Redraw();
+        }
+
         public void SetPersistentOverlayAction(Action action)
         {
             _persistentOverlayAction = action;
@@ -207,7 +222,19 @@ namespace FlashMeasurementSystem
                 _isDrawingRoi = false;
                 PixelToImage(e.X, e.Y, out _roiEndRow, out _roiEndCol);
                 if (Math.Abs(_roiEndRow - _roiStartRow) > 5 && Math.Abs(_roiEndCol - _roiStartCol) > 5)
-                    RoiSelected?.Invoke(_roiStartRow, _roiStartCol, _roiEndRow, _roiEndCol);
+                {
+                    if (_roiCallback != null)
+                    {
+                        var cb = _roiCallback;
+                        _roiCallback = null;
+                        IsRoiMode = false;
+                        cb(_roiStartRow, _roiStartCol, _roiEndRow, _roiEndCol);
+                    }
+                    else
+                    {
+                        RoiSelected?.Invoke(_roiStartRow, _roiStartCol, _roiEndRow, _roiEndCol);
+                    }
+                }
             }
         }
 
