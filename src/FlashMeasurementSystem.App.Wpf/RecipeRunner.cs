@@ -330,11 +330,18 @@ namespace FlashMeasurementSystem
 
                 res.Measured = true;
                 res.DistMm = dr.DistanceMm;
-                // 連線兩端用兩元素線段中點（供視覺標註）。
-                res.DistRow1 = (a.LineRow1 + a.LineRow2) / 2.0;
-                res.DistCol1 = (a.LineCol1 + a.LineCol2) / 2.0;
-                res.DistRow2 = (b.LineRow1 + b.LineRow2) / 2.0;
-                res.DistCol2 = (b.LineCol1 + b.LineCol2) / 2.0;
+                // 視覺化：量到的是兩線「垂直最近距離」(distance_ss min)。用「line A 中點 →
+                // 該點在 line B 上的垂足」畫線段，使其與邊垂直、長度等於間距（避免中點對中點
+                // 因兩 ROI 水平偏移而畫成斜線，誤導使用者）。
+                double aMidRow = (a.LineRow1 + a.LineRow2) / 2.0;
+                double aMidCol = (a.LineCol1 + a.LineCol2) / 2.0;
+                ProjectPointOntoLine(aMidRow, aMidCol,
+                    b.LineRow1, b.LineCol1, b.LineRow2, b.LineCol2,
+                    out double footRow, out double footCol);
+                res.DistRow1 = aMidRow;
+                res.DistCol1 = aMidCol;
+                res.DistRow2 = footRow;
+                res.DistCol2 = footCol;
                 res.ValueText = string.Format(CultureInfo.InvariantCulture, "D={0:F4}mm", res.DistMm);
 
                 if (tool.Tolerance != null)
@@ -356,6 +363,26 @@ namespace FlashMeasurementSystem
                 res.ValueText = "距離計算異常";
                 res.Message = ex.Message;
             }
+        }
+
+        // 把點 (pRow,pCol) 垂直投影到通過 (r1,c1)-(r2,c2) 的無限長直線，回傳垂足。
+        // 線段退化（長度 0）時回傳該端點，避免除以 0。
+        private static void ProjectPointOntoLine(double pRow, double pCol,
+            double r1, double c1, double r2, double c2,
+            out double footRow, out double footCol)
+        {
+            double dRow = r2 - r1;
+            double dCol = c2 - c1;
+            double lenSq = dRow * dRow + dCol * dCol;
+            if (lenSq < 1e-9)
+            {
+                footRow = r1;
+                footCol = c1;
+                return;
+            }
+            double t = ((pRow - r1) * dRow + (pCol - c1) * dCol) / lenSq;
+            footRow = r1 + t * dRow;
+            footCol = c1 + t * dCol;
         }
 
         // angle（B2c）：參考兩個 line 元素，用 angle_ll 算夾角的 AcuteAngleDeg（0~90）。
