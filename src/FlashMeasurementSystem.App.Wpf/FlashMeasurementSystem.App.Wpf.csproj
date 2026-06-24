@@ -81,6 +81,7 @@
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="RecipeRunner.cs" />
+    <Compile Include="MeasurementWorkflow.cs" />
     <Compile Include="HWindowControlHelper.cs" />
     <Compile Include="RecipeEditor.cs">
       <SubType>Form</SubType>
