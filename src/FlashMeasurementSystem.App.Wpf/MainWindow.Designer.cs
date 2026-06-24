@@ -109,6 +109,7 @@ namespace FlashMeasurementSystem
             this.measureAngleButton = new System.Windows.Forms.Button();
             this.measureResultLabel = new System.Windows.Forms.Label();
             this.statusStrip = new System.Windows.Forms.StatusStrip();
+            this.progressLabel = new System.Windows.Forms.ToolStripStatusLabel();
             this.coordLabel = new System.Windows.Forms.ToolStripStatusLabel();
             this.imageSizeLabel = new System.Windows.Forms.ToolStripStatusLabel();
             this.mainTableLayout.SuspendLayout();
@@ -1376,12 +1377,21 @@ namespace FlashMeasurementSystem
             // statusStrip
             // 
             this.statusStrip.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.progressLabel,
             this.coordLabel,
             this.imageSizeLabel});
             this.statusStrip.Location = new System.Drawing.Point(0, 626);
             this.statusStrip.Name = "statusStrip";
             this.statusStrip.Size = new System.Drawing.Size(1100, 22);
             this.statusStrip.TabIndex = 1;
+            // 
+            // progressLabel
+            // 
+            this.progressLabel.Name = "progressLabel";
+            this.progressLabel.Size = new System.Drawing.Size(948, 17);
+            this.progressLabel.Spring = true;
+            this.progressLabel.Text = "Ready";
+            this.progressLabel.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
             // 
             // coordLabel
             // 
@@ -1538,6 +1548,7 @@ namespace FlashMeasurementSystem
         private System.Windows.Forms.Label templateLabel;
         private System.Windows.Forms.Button loadTestImageButton;
         private System.Windows.Forms.StatusStrip statusStrip;
+        private System.Windows.Forms.ToolStripStatusLabel progressLabel;
         private System.Windows.Forms.ToolStripStatusLabel coordLabel;
         private System.Windows.Forms.ToolStripStatusLabel imageSizeLabel;
     }

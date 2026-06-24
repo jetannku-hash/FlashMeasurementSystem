@@ -84,6 +84,8 @@ namespace FlashMeasurementSystem
             // 配方執行引擎：以既有 adapters 注入（邊緣 + 圓/線擬合 + 公差 + 座標映射）。
             _recipeRunner = new RecipeRunner(_edgeDetector, _circleFitter, _lineFitter, _distanceMeasurer, _angleMeasurer, _judger, _coordinateMapper);
             _workflow = new MeasurementWorkflow(_iqc, _templateMatcher, _recipeRunner, _judger, _reportWriter);
+            // 一鍵量測逐階段進度：StateChanged 在 UI 執行緒同步觸發，於 status bar 即時顯示。
+            _workflow.StateChanged += OnWorkflowStateChanged;
 
             // 三個下拉的選項由 designer 以 Items.AddRange 填入，但沒有設預設選取，
             // 導致畫面顯示空白、且 RunEdgeDetectionButton_Click 讀 SelectedItem.ToString()
@@ -297,6 +299,42 @@ namespace FlashMeasurementSystem
             _toolTip.SetToolTip(measureResultLabel, "Measurement result — OK (green) / NG (red). Or run '[Run Recipe]' or '[一鍵量測]' to execute a recipe");
         }
 
+        // ── 進度回饋（第四組）──────────────────────────────────────────
+        // 長操作期間 UI thread 阻塞於 HALCON 呼叫，無法處理一般訊息迴圈；
+        // 故設定 status 文字後立即 Refresh() 強制處理 WM_PAINT，讓使用者看到
+        // 目前進度。Refresh() 只處理繪圖訊息，不會造成按鈕重入。
+
+        private void SetProgress(string text)
+        {
+            progressLabel.Text = text;
+            statusStrip.Refresh();
+        }
+
+        private void ClearProgress()
+        {
+            progressLabel.Text = "Ready";
+            statusStrip.Refresh();
+        }
+
+        // 一鍵量測逐階段回呼：把 workflow state 映射成可讀文字。
+        private void OnWorkflowStateChanged(MeasurementState state)
+        {
+            string text;
+            switch (state)
+            {
+                case MeasurementState.CheckingImage: text = "一鍵量測：影像品質檢查中…"; break;
+                case MeasurementState.MatchingTemplate: text = "一鍵量測：模板匹配中…"; break;
+                case MeasurementState.TransformingRois: text = "一鍵量測：座標轉換中…"; break;
+                case MeasurementState.Measuring: text = "一鍵量測：量測中…"; break;
+                case MeasurementState.Evaluating: text = "一鍵量測：公差判定中…"; break;
+                case MeasurementState.Reporting: text = "一鍵量測：產生報表中…"; break;
+                case MeasurementState.Completed: text = "一鍵量測：完成"; break;
+                case MeasurementState.Failed: text = "一鍵量測：失敗"; break;
+                default: text = "一鍵量測：" + state; break;
+            }
+            SetProgress(text);
+        }
+
         private void LoadTemplateList()
         {
             templateFileCombo.Items.Clear();
@@ -402,6 +440,8 @@ namespace FlashMeasurementSystem
                 return;
             }
 
+            Cursor = Cursors.WaitCursor;
+            SetProgress("建立模板中…");
             try
             {
                 var parameters = new TemplateCreationParameters
@@ -449,6 +489,11 @@ namespace FlashMeasurementSystem
             {
                 MessageBox.Show($"Halcon error: {ex.Message}", "Error");
             }
+            finally
+            {
+                Cursor = Cursors.Default;
+                ClearProgress();
+            }
         }
 
         private void RunMatchingButton_Click(object sender, EventArgs e)
@@ -466,6 +511,8 @@ namespace FlashMeasurementSystem
                 return;
             }
 
+            Cursor = Cursors.WaitCursor;
+            SetProgress("模板匹配中…");
             try
             {
                 var parameters = new TemplateMatchingParameters
@@ -517,6 +564,11 @@ namespace FlashMeasurementSystem
                 _imageHelper.ClearOverlay();
                 matchResultTextBox.Text = $"Matching failed: {ex.Message}";
             }
+            finally
+            {
+                Cursor = Cursors.Default;
+                ClearProgress();
+            }
         }
 
         private void RunIqcButton_Click(object sender, EventArgs e)
@@ -556,6 +608,8 @@ namespace FlashMeasurementSystem
                 return;
             }
 
+            Cursor = Cursors.WaitCursor;
+            SetProgress("邊緣檢測中…");
             try
             {
                 EdgeDetectionRoi roi = CreateEdgeDetectionRoi(_imageHelper.GetCurrentRoi());
@@ -590,6 +644,11 @@ namespace FlashMeasurementSystem
                 // 任何 .NET 未預期例外（UI thread 衝突、null reference、HObject 生命週期等）
                 // 都吞進來，避免 leak 到 WinForms 主訊息迴圈導致 unhandled exception dialog。
                 SetEdgeStatus(false, "Edge detection failed (unexpected " + ex.GetType().Name + "): " + ex.Message);
+            }
+            finally
+            {
+                Cursor = Cursors.Default;
+                ClearProgress();
             }
         }
 
@@ -967,12 +1026,22 @@ namespace FlashMeasurementSystem
                 }
             }
 
-            System.Collections.Generic.List<ToolRunResult> results = _recipeRunner.Run(
-                _loadedRecipe, _imageHelper.CurrentImage,
-                _hasMatch, _lastMatchRow, _lastMatchCol, _lastMatchAngleDeg * Math.PI / 180.0,
-                pixelSizeUmX, pixelSizeUmY);
+            Cursor = Cursors.WaitCursor;
+            SetProgress("執行配方量測中…");
+            try
+            {
+                System.Collections.Generic.List<ToolRunResult> results = _recipeRunner.Run(
+                    _loadedRecipe, _imageHelper.CurrentImage,
+                    _hasMatch, _lastMatchRow, _lastMatchCol, _lastMatchAngleDeg * Math.PI / 180.0,
+                    pixelSizeUmX, pixelSizeUmY);
 
-            DrawRecipeResults(results, pixelSizeSource);
+                DrawRecipeResults(results, pixelSizeSource);
+            }
+            finally
+            {
+                Cursor = Cursors.Default;
+                ClearProgress();
+            }
         }
 
         // 抽出 RunRecipeButton_Click 的 overlay 繪製與結果表更新，供 Run Recipe 與一鍵量測共用。
@@ -1068,10 +1137,12 @@ namespace FlashMeasurementSystem
 
         private void OneClickMeasureButton_Click(object sender, EventArgs e)
         {
+            if (_loadedRecipe == null) { MessageBox.Show("請先載入配方 (.zcp)。", "Info"); return; }
+            if (_imageHelper == null || _imageHelper.CurrentImage == null) { MessageBox.Show("請先載入影像。", "Info"); return; }
+
+            Cursor = Cursors.WaitCursor;
             try
             {
-                if (_loadedRecipe == null) { MessageBox.Show("請先載入配方 (.zcp)。", "Info"); return; }
-                if (_imageHelper == null || _imageHelper.CurrentImage == null) { MessageBox.Show("請先載入影像。", "Info"); return; }
 
                 ResolvePixelSize(out double pxUmX, out double pxUmY, out string pixelSizeSource);
 
@@ -1114,8 +1185,13 @@ namespace FlashMeasurementSystem
             }
             catch (Exception ex)
             {
+                SetProgress("一鍵量測：失敗");
                 MessageBox.Show("一鍵量測異常：" + ex.ToString(), "Error",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                Cursor = Cursors.Default;
             }
         }
 
