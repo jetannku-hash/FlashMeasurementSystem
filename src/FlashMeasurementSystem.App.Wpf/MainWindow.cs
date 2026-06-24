@@ -100,6 +100,9 @@ namespace FlashMeasurementSystem
             _edgeScanLengthNumeric.ValueChanged += OnEdgeRoiNumericChanged;
             _edgeRoiWidthNumeric.ValueChanged += OnEdgeRoiNumericChanged;
 
+            // 結果表空狀態提示（第五組 #11）：無資料列時於表格中央繪製引導文字。
+            _edgeResultsGrid.Paint += EdgeResultsGrid_Paint;
+
             // Distance Measurement 的兩個下拉同樣沒設預設選取。contourModeCombo 尤其關鍵：
             // MeasureDistanceButton_Click 會無條件讀 contourModeCombo.SelectedItem.ToString()，
             // 若為空白則任何 Measure 都會 NullReferenceException。
@@ -333,6 +336,17 @@ namespace FlashMeasurementSystem
                 default: text = "一鍵量測：" + state; break;
             }
             SetProgress(text);
+        }
+
+        // 結果表空狀態提示（第五組 #11）：Rows.Clear/Add 會觸發重繪，
+        // 故無資料列時於此繪製置中引導文字。
+        private void EdgeResultsGrid_Paint(object sender, PaintEventArgs e)
+        {
+            if (_edgeResultsGrid.Rows.Count > 0) return;
+            TextRenderer.DrawText(e.Graphics, "尚無邊緣點 — 繪製 ROI 後按 Detect",
+                _edgeResultsGrid.Font, _edgeResultsGrid.ClientRectangle,
+                System.Drawing.SystemColors.GrayText,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
         }
 
         private void LoadTemplateList()

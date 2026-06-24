@@ -987,7 +987,8 @@ namespace FlashMeasurementSystem
                 ? Path.GetFileName(_savePath)
                 : "Untitled";
             string dirtyMark = _dirty ? " *" : "";
-            Text = "Recipe Editor - " + fileName + dirtyMark;
+            string toolCount = _tools.Count == 1 ? " (1 tool)" : " (" + _tools.Count + " tools)";
+            Text = "Recipe Editor - " + fileName + dirtyMark + toolCount;
             _filePathLabel.Text = !string.IsNullOrEmpty(_savePath)
                 ? _savePath + dirtyMark
                 : "New recipe (unsaved)";
@@ -1017,6 +1018,7 @@ namespace FlashMeasurementSystem
             _toolListBox.EndUpdate();
             if (prev >= 0 && prev < _tools.Count)
                 _toolListBox.SelectedIndex = prev;
+            UpdateTitle();
         }
 
         private void SetupToolTips()
