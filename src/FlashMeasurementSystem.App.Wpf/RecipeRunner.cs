@@ -261,8 +261,30 @@ namespace FlashMeasurementSystem
                 res.LineRow1 = line.Row1; res.LineCol1 = line.Column1;
                 res.LineRow2 = line.Row2; res.LineCol2 = line.Column2;
                 res.LineAngleDeg = line.AngleDeg;
-                res.IsOk = null;  // 元素不判定（B2a）
-                res.ValueText = string.Format(CultureInfo.InvariantCulture, "Ang={0:F2}deg", line.AngleDeg);
+
+                // C2：若 line 公差單位為 deg，對線角度做環狀公差判定。
+                //     否則維持純元素模式（IsOk = null）。
+                if (tool.Tolerance != null && tool.Tolerance.Unit == "deg")
+                {
+                    double norm = AngleNormalizer.ToHalfCircle(line.AngleDeg);
+                    double aligned = tool.Tolerance.Nominal
+                        + AngleNormalizer.CircularSignedDiffDeg(norm, tool.Tolerance.Nominal);
+                    var input = new ToleranceItemInput
+                    {
+                        ToolId = tool.Id,
+                        ToolName = tool.Name,
+                        MeasuredValue = aligned,
+                        Spec = tool.Tolerance
+                    };
+                    OverallJudgment overall = _judger.Judge(new List<ToleranceItemInput> { input });
+                    if (overall.Items.Count > 0) res.IsOk = overall.Items[0].IsOk;
+                    res.ValueText = string.Format(CultureInfo.InvariantCulture, "{0:F2} deg", aligned);
+                }
+                else
+                {
+                    res.IsOk = null;  // 元素不判定
+                    res.ValueText = string.Format(CultureInfo.InvariantCulture, "Ang={0:F2}deg", line.AngleDeg);
+                }
             }
             catch (HalconException ex)
             {
@@ -301,14 +323,6 @@ namespace FlashMeasurementSystem
                 res.ValueText = "參考元素未量測";
                 return;
             }
-            if (a.ToolType != "line" || b.ToolType != "line")
-            {
-                res.Measured = false;
-                res.ValueText = "僅支援 line↔line";
-                res.Message = "B2b 距離僅支援兩 line 元素";
-                return;
-            }
-
             try
             {
                 var dp = new DistanceMeasurementParameters
@@ -316,33 +330,99 @@ namespace FlashMeasurementSystem
                     PixelSizeUmX = pixelSizeUmX,
                     PixelSizeUmY = pixelSizeUmY
                 };
-                DistanceMeasurementResult dr = _distanceMeasurer.MeasureLineToLine(
-                    a.LineRow1, a.LineCol1, a.LineRow2, a.LineCol2,
-                    b.LineRow1, b.LineCol1, b.LineRow2, b.LineCol2, dp);
 
-                if (!dr.Success)
+                if (a.ToolType == "line" && b.ToolType == "line")
+                {
+                    DistanceMeasurementResult dr = _distanceMeasurer.MeasureLineToLine(
+                        a.LineRow1, a.LineCol1, a.LineRow2, a.LineCol2,
+                        b.LineRow1, b.LineCol1, b.LineRow2, b.LineCol2, dp);
+
+                    if (!dr.Success)
+                    {
+                        res.Measured = false;
+                        res.ValueText = "距離計算失敗";
+                        res.Message = dr.ErrorMessage;
+                        return;
+                    }
+
+                    res.Measured = true;
+                    res.DistMm = dr.DistanceMm;
+                    // 視覺化：量到的是兩線「垂直最近距離」(distance_ss min)。用「line A 中點 →
+                    // 該點在 line B 上的垂足」畫線段，使其與邊垂直、長度等於間距（避免中點對中點
+                    // 因兩 ROI 水平偏移而畫成斜線，誤導使用者）。
+                    double aMidRow = (a.LineRow1 + a.LineRow2) / 2.0;
+                    double aMidCol = (a.LineCol1 + a.LineCol2) / 2.0;
+                    ProjectPointOntoLine(aMidRow, aMidCol,
+                        b.LineRow1, b.LineCol1, b.LineRow2, b.LineCol2,
+                        out double footRow, out double footCol);
+                    res.DistRow1 = aMidRow;
+                    res.DistCol1 = aMidCol;
+                    res.DistRow2 = footRow;
+                    res.DistCol2 = footCol;
+                    res.ValueText = string.Format(CultureInfo.InvariantCulture, "D={0:F4}mm", res.DistMm);
+                }
+                else if (a.ToolType == "circle" && b.ToolType == "circle")
+                {
+                    // A1: 圓心對圓心距離
+                    DistanceMeasurementResult dr = _distanceMeasurer.MeasureCircleToCircle(
+                        a.FitCenterRow, a.FitCenterCol,
+                        b.FitCenterRow, b.FitCenterCol, dp);
+
+                    if (!dr.Success)
+                    {
+                        res.Measured = false;
+                        res.ValueText = "距離計算失敗";
+                        res.Message = dr.ErrorMessage;
+                        return;
+                    }
+
+                    res.Measured = true;
+                    res.DistMm = dr.DistanceMm;
+                    res.DistRow1 = a.FitCenterRow;
+                    res.DistCol1 = a.FitCenterCol;
+                    res.DistRow2 = b.FitCenterRow;
+                    res.DistCol2 = b.FitCenterCol;
+                    res.ValueText = string.Format(CultureInfo.InvariantCulture, "D={0:F4}mm", res.DistMm);
+                }
+                else if ((a.ToolType == "line" && b.ToolType == "circle") ||
+                         (a.ToolType == "circle" && b.ToolType == "line"))
+                {
+                    // A1: 圓心到線的垂直距離
+                    ToolRunResult lineElem = a.ToolType == "line" ? a : b;
+                    ToolRunResult circleElem = a.ToolType == "circle" ? a : b;
+
+                    DistanceMeasurementResult dr = _distanceMeasurer.MeasurePointToLine(
+                        circleElem.FitCenterRow, circleElem.FitCenterCol,
+                        lineElem.LineRow1, lineElem.LineCol1,
+                        lineElem.LineRow2, lineElem.LineCol2, dp);
+
+                    if (!dr.Success)
+                    {
+                        res.Measured = false;
+                        res.ValueText = "距離計算失敗";
+                        res.Message = dr.ErrorMessage;
+                        return;
+                    }
+
+                    res.Measured = true;
+                    res.DistMm = dr.DistanceMm;
+                    res.DistRow1 = circleElem.FitCenterRow;
+                    res.DistCol1 = circleElem.FitCenterCol;
+                    ProjectPointOntoLine(circleElem.FitCenterRow, circleElem.FitCenterCol,
+                        lineElem.LineRow1, lineElem.LineCol1,
+                        lineElem.LineRow2, lineElem.LineCol2,
+                        out double footRow, out double footCol);
+                    res.DistRow2 = footRow;
+                    res.DistCol2 = footCol;
+                    res.ValueText = string.Format(CultureInfo.InvariantCulture, "D={0:F4}mm", res.DistMm);
+                }
+                else
                 {
                     res.Measured = false;
-                    res.ValueText = "距離計算失敗";
-                    res.Message = dr.ErrorMessage;
+                    res.ValueText = "不支援的距離組合";
+                    res.Message = "距離僅支援 line↔line、circle↔circle、line↔circle";
                     return;
                 }
-
-                res.Measured = true;
-                res.DistMm = dr.DistanceMm;
-                // 視覺化：量到的是兩線「垂直最近距離」(distance_ss min)。用「line A 中點 →
-                // 該點在 line B 上的垂足」畫線段，使其與邊垂直、長度等於間距（避免中點對中點
-                // 因兩 ROI 水平偏移而畫成斜線，誤導使用者）。
-                double aMidRow = (a.LineRow1 + a.LineRow2) / 2.0;
-                double aMidCol = (a.LineCol1 + a.LineCol2) / 2.0;
-                ProjectPointOntoLine(aMidRow, aMidCol,
-                    b.LineRow1, b.LineCol1, b.LineRow2, b.LineCol2,
-                    out double footRow, out double footCol);
-                res.DistRow1 = aMidRow;
-                res.DistCol1 = aMidCol;
-                res.DistRow2 = footRow;
-                res.DistCol2 = footCol;
-                res.ValueText = string.Format(CultureInfo.InvariantCulture, "D={0:F4}mm", res.DistMm);
 
                 if (tool.Tolerance != null)
                 {

@@ -117,6 +117,8 @@ namespace FlashMeasurementSystem.Tests
             Console.WriteLine("DistanceMeasurementDomainTests passed");
             AngleMeasurementDomainTests.Run();
             Console.WriteLine("AngleMeasurementDomainTests passed");
+            AngleNormalizerTests.Run();
+            Console.WriteLine("AngleNormalizerTests passed");
             ToleranceDomainTests.Run();
             Console.WriteLine("ToleranceDomainTests passed");
             CoordinateSystemDomainTests.Run();
@@ -125,6 +127,8 @@ namespace FlashMeasurementSystem.Tests
             Console.WriteLine("CalibrationDomainTests passed");
             RoiDomainTests.Run();
             Console.WriteLine("RoiDomainTests passed");
+            WorkflowDomainTests.Run();
+            Console.WriteLine("WorkflowDomainTests passed");
             Console.WriteLine("EdgeDetectionDomainTests passed");
             return 0;
         }

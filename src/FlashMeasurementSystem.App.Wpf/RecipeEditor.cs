@@ -76,6 +76,7 @@ namespace FlashMeasurementSystem
         private NumericUpDown _lowerNumeric;
         private NumericUpDown _upperNumeric;
         private TextBox _unitTextBox;
+        private Label _angleHintLabel;
 
         // ── Constructors ──────────────────────────────────────────────
 
@@ -197,7 +198,7 @@ namespace FlashMeasurementSystem
             // visual top-to-bottom order then it shows reversed, so insert reversed:
             // we want Common, ROI, Edge, RefTool, Tolerance from top down.
             // With Dock=Top, the LAST added sits at top. Add in reverse.
-            _toleranceGroup = CreateGroupBox("Tolerance", parent, 155);
+            _toleranceGroup = CreateGroupBox("Tolerance", parent, 185);
             _refGroup = CreateGroupBox("Reference Tools", parent, 95);
             _edgeGroup = CreateGroupBox("Edge Detection", parent, 210);
             _roiGroup = CreateGroupBox("ROI Geometry", parent, 210);
@@ -331,6 +332,15 @@ namespace FlashMeasurementSystem
                     MarkDirty();
                 }
             };
+
+            _angleHintLabel = AddRow(t, "", ref r, new Label
+            {
+                Dock = DockStyle.Fill,
+                Text = "Unit = deg → angle tolerance judgment",
+                TextAlign = ContentAlignment.MiddleLeft,
+                ForeColor = SystemColors.GrayText,
+                Visible = false
+            });
 
             gb.Controls.Add(t);
         }
@@ -750,6 +760,7 @@ namespace FlashMeasurementSystem
                 _roiGroup.Visible = isElement;
                 _edgeGroup.Visible = isElement;
                 _refGroup.Visible = isComposite;
+                _angleHintLabel.Visible = tool.ToolType == "line";
 
                 if (isElement)
                 {
@@ -782,15 +793,20 @@ namespace FlashMeasurementSystem
             }
         }
 
-        // Both distance and angle only support line↔line in RecipeRunner, so list line tools only.
+        // distance supports line↔line, circle↔circle, line↔circle; angle only line↔line.
         private void PopulateRefCombos(MeasurementTool tool)
         {
             _ref1Combo.Items.Clear();
             _ref2Combo.Items.Clear();
 
+            bool allowLine = true;
+            bool allowCircle = tool.ToolType == "distance";
+
             foreach (var t in _tools)
             {
-                if (t.ToolType != "line") continue;
+                if (t.ToolType == "line" && !allowLine) continue;
+                if (t.ToolType == "circle" && !allowCircle) continue;
+                if (t.ToolType != "line" && t.ToolType != "circle") continue;
                 var item = new ToolRef
                 {
                     Id = t.Id,

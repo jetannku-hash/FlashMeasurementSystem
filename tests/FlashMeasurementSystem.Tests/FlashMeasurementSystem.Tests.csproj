@@ -58,10 +58,12 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="DistanceMeasurementDomainTests.cs" />
     <Compile Include="AngleMeasurementDomainTests.cs" />
+    <Compile Include="AngleNormalizerTests.cs" />
     <Compile Include="ToleranceDomainTests.cs" />
     <Compile Include="CoordinateSystemDomainTests.cs" />
     <Compile Include="CalibrationDomainTests.cs" />
     <Compile Include="RoiDomainTests.cs" />
+    <Compile Include="WorkflowDomainTests.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\FlashMeasurementSystem.Domain\FlashMeasurementSystem.Domain.csproj">

@@ -24,6 +24,8 @@ using FlashMeasurementSystem.Halcon.CoordinateSystem;
 using FlashMeasurementSystem.Infrastructure.Roi;
 using FlashMeasurementSystem.Infrastructure.Tolerance;
 using FlashMeasurementSystem.Infrastructure.Calibration;
+using FlashMeasurementSystem.Reporting.Csv;
+using FlashMeasurementSystem.Domain.Workflow;
 using HalconDotNet;
 namespace FlashMeasurementSystem
 {
@@ -57,7 +59,10 @@ namespace FlashMeasurementSystem
         // B1：配方執行引擎與其相依（量測 + 公差判定 + 校正載入）
         private readonly ToleranceJudger _judger = new ToleranceJudger();
         private readonly CalibrationStore _calibrationStore = new CalibrationStore();
+        private readonly CsvMeasurementReportWriter _reportWriter = new CsvMeasurementReportWriter();
         private RecipeRunner _recipeRunner;
+        private MeasurementWorkflow _workflow;
+        private CheckBox _skipIqcCheckBox;
 
         public MainWindow()
         {
@@ -76,6 +81,7 @@ namespace FlashMeasurementSystem
 
             // 配方執行引擎：以既有 adapters 注入（邊緣 + 圓/線擬合 + 公差 + 座標映射）。
             _recipeRunner = new RecipeRunner(_edgeDetector, _circleFitter, _lineFitter, _distanceMeasurer, _angleMeasurer, _judger, _coordinateMapper);
+            _workflow = new MeasurementWorkflow(_iqc, _templateMatcher, _recipeRunner, _judger, _reportWriter);
 
             // 三個下拉的選項由 designer 以 Items.AddRange 填入，但沒有設預設選取，
             // 導致畫面顯示空白、且 RunEdgeDetectionButton_Click 讀 SelectedItem.ToString()
@@ -117,13 +123,27 @@ namespace FlashMeasurementSystem
             // 配方編輯器（M3c-2）：建/編 .zcp。Load Recipe 為執行流程入口，兩者並存。
             var editRecipeButton = new Button { Text = "Edit Recipe", Width = 84, Height = 26 };
             editRecipeButton.Click += OpenRecipeEditor;
+            var oneClickButton = new Button { Text = "一鍵量測", Width = 84, Height = 26 };
+            oneClickButton.Click += OneClickMeasureButton_Click;
+            _skipIqcCheckBox = new CheckBox
+            {
+                Text = "略過IQC",
+                AutoSize = true,
+                Checked = false,
+                Margin = new Padding(4, 6, 4, 0)
+            };
             topToolbar.Controls.Add(calibButton);
             topToolbar.Controls.Add(loadRecipeButton);
             topToolbar.Controls.Add(setRefButton);
             topToolbar.Controls.Add(runRecipeButton);
             topToolbar.Controls.Add(editRecipeButton);
+            topToolbar.Controls.Add(oneClickButton);
+            topToolbar.Controls.Add(_skipIqcCheckBox);
             measurementTabPage.Controls.Add(topToolbar);
-            topToolbar.BringToFront();
+            // WinForms docking 依「反 z-order」處理：最後面(SendToBack)的先 dock 佔邊，
+            // 最前面(BringToFront)的後 dock 佔剩餘。故 Top 工具列要在後、Fill 內容要在前。
+            topToolbar.SendToBack();
+            measurementBox.BringToFront();
 
             _openImageDialog = new OpenFileDialog
             {
@@ -882,10 +902,15 @@ namespace FlashMeasurementSystem
                 _hasMatch, _lastMatchRow, _lastMatchCol, _lastMatchAngleDeg * Math.PI / 180.0,
                 pixelSizeUmX, pixelSizeUmY);
 
+            DrawRecipeResults(results, pixelSizeSource);
+        }
+
+        // 抽出 RunRecipeButton_Click 的 overlay 繪製與結果表更新，供 Run Recipe 與一鍵量測共用。
+        private void DrawRecipeResults(System.Collections.Generic.List<ToolRunResult> results, string pixelSizeSource)
+        {
             _imageHelper.SetPersistentOverlayAction(() =>
             {
                 OverlayAnnotator an = _imageHelper.Annotator;
-                // 匹配輪廓（綠），讓使用者看出 ROI 與工件的關係。
                 if (_hasMatch)
                 {
                     try
@@ -901,7 +926,6 @@ namespace FlashMeasurementSystem
                 var rows = new System.Collections.Generic.List<OverlayResultRow>();
                 foreach (ToolRunResult r in results)
                 {
-                    // 元素工具（line/circle）有 ROI → 畫框；複合工具（distance）r.Roi 為 null。
                     if (r.Roi != null)
                     {
                         an.DrawRectangle2(r.Roi.Row, r.Roi.Col, r.Roi.AngleRad, r.Roi.Length1, r.Roi.Length2, "orange");
@@ -924,7 +948,6 @@ namespace FlashMeasurementSystem
                     }
                     else if (r.Measured && r.ToolType == "angle")
                     {
-                        // 弧由線A端點方向(起點)起，延伸角度=AngleDeg(銳角)。
                         double extent = r.AngleDeg * Math.PI / 180.0;
                         an.DrawAngle(r.AngleCenterRow, r.AngleCenterCol, r.AngleRadiusPx, r.AngleStartRad, extent, r.ValueText, r.IsOk);
                     }
@@ -942,7 +965,105 @@ namespace FlashMeasurementSystem
             }
             measureResultLabel.Text = string.Format(CultureInfo.InvariantCulture,
                 "配方 '{0}'：{1} 工具，OK {2} / NG {3}（pixel size：{4}）",
-                _loadedRecipe.Name, results.Count, okCount, ngCount, pixelSizeSource);
+                _loadedRecipe != null ? _loadedRecipe.Name : "", results.Count, okCount, ngCount, pixelSizeSource);
+        }
+
+        // Pixel size 來源：配方 CalibrationProfileId 有設且檔案存在 → 用校正檔；否則退回量測分頁。
+        private void ResolvePixelSize(out double pxUmX, out double pxUmY, out string source)
+        {
+            pxUmX = (double)measurementPixelSizeXNumeric.Value;
+            pxUmY = (double)measurementPixelSizeYNumeric.Value;
+            source = "量測分頁";
+            if (!string.IsNullOrEmpty(_loadedRecipe.CalibrationProfileId))
+            {
+                try
+                {
+                    string calPath = Path.Combine(ResolveCalibrationsDir(), _loadedRecipe.CalibrationProfileId + ".json");
+                    if (File.Exists(calPath))
+                    {
+                        CalibrationProfile prof = _calibrationStore.Load(calPath);
+                        pxUmX = prof.PixelSizeUmX;
+                        pxUmY = prof.PixelSizeUmY;
+                        source = "校正檔 " + _loadedRecipe.CalibrationProfileId;
+                    }
+                }
+                catch
+                {
+                    // 載入校正檔失敗 → 沿用量測分頁數值
+                }
+            }
+        }
+
+        private void OneClickMeasureButton_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                if (_loadedRecipe == null) { MessageBox.Show("請先載入配方 (.zcp)。", "Info"); return; }
+                if (_imageHelper == null || _imageHelper.CurrentImage == null) { MessageBox.Show("請先載入影像。", "Info"); return; }
+
+                ResolvePixelSize(out double pxUmX, out double pxUmY, out string pixelSizeSource);
+
+                // 模板模型路徑：從下拉選單取目前選取檔案
+                string templatePath = null;
+                var templateFile = templateFileCombo.SelectedItem as FileItemWrapper;
+                if (templateFile != null && templateFile.IsRealFile)
+                    templatePath = templateFile.FullPath;
+
+                string reportDir = Path.Combine(ResolveDataDir(), "reports");
+
+                WorkflowResult wfResult = _workflow.RunOnce(
+                    _loadedRecipe, _imageHelper.CurrentImage,
+                    pxUmX, pxUmY,
+                    reportDir,
+                    templatePath, null, null,
+                    _skipIqcCheckBox != null && _skipIqcCheckBox.Checked,
+                    out System.Collections.Generic.List<ToolRunResult> results);
+
+                // 同步本次匹配狀態到 MainWindow 欄位，避免 DrawRecipeResults 畫出上一次匹配的殘留綠框。
+                // 無參考姿態的配方 HasMatch=false → 不畫匹配輪廓。
+                _hasMatch = wfResult.HasMatch;
+                if (wfResult.HasMatch)
+                {
+                    _lastMatchRow = wfResult.MatchRow;
+                    _lastMatchCol = wfResult.MatchCol;
+                    _lastMatchAngleDeg = wfResult.MatchAngleDeg;
+                }
+
+                DrawRecipeResults(results, pixelSizeSource);
+
+                string csvInfo = !string.IsNullOrEmpty(wfResult.ReportPath)
+                    ? " | CSV: " + wfResult.ReportPath
+                    : "";
+                measureResultLabel.Text += string.Format(CultureInfo.InvariantCulture,
+                    " | 一鍵：{0} OK {1}/NG {2}{3}{4}",
+                    wfResult.AllOk ? "PASS" : "FAIL", wfResult.OkCount, wfResult.NgCount,
+                    csvInfo,
+                    !wfResult.Success ? " (" + wfResult.Message + ")" : "");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("一鍵量測異常：" + ex.ToString(), "Error",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        // 由 app base directory 往上找 .sln，定位 data/ (root of data subdirs)。
+        private static string ResolveDataDir()
+        {
+            try
+            {
+                var current = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory);
+                while (current != null)
+                {
+                    if (File.Exists(Path.Combine(current.FullName, "FlashMeasurementSystem.sln")))
+                    {
+                        return Path.Combine(current.FullName, "data");
+                    }
+                    current = current.Parent;
+                }
+            }
+            catch { }
+            return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "data");
         }
 
         // 由 app base directory 往上找 .sln，定位 data/calibrations（與 CalibrationDialog 同邏輯）。
