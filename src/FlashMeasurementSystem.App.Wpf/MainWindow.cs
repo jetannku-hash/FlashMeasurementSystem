@@ -966,6 +966,8 @@ namespace FlashMeasurementSystem
             measureResultLabel.Text = string.Format(CultureInfo.InvariantCulture,
                 "配方 '{0}'：{1} 工具，OK {2} / NG {3}（pixel size：{4}）",
                 _loadedRecipe != null ? _loadedRecipe.Name : "", results.Count, okCount, ngCount, pixelSizeSource);
+            measureResultLabel.ForeColor = ngCount > 0 ? System.Drawing.Color.DarkRed
+                : (okCount > 0 ? System.Drawing.Color.DarkGreen : System.Drawing.SystemColors.ControlText);
         }
 
         // Pixel size 來源：配方 CalibrationProfileId 有設且檔案存在 → 用校正檔；否則退回量測分頁。

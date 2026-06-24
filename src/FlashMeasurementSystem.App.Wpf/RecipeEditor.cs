@@ -266,11 +266,11 @@ namespace FlashMeasurementSystem
             var t = NewTable();
             int r = 0;
 
-            _centerRowNumeric = AddNumericRow(t, "CenterRow", ref r, 0M, 1000000M, 2, 0M, 1M);
-            _centerColNumeric = AddNumericRow(t, "CenterCol", ref r, 0M, 1000000M, 2, 0M, 1M);
-            _length1Numeric = AddNumericRow(t, "Length1", ref r, 0M, 1000000M, 2, 100M, 1M);
-            _length2Numeric = AddNumericRow(t, "Length2", ref r, 0M, 1000000M, 2, 50M, 1M);
-            _angleRadNumeric = AddNumericRow(t, "AngleRad", ref r, -6.2832M, 6.2832M, 4, 0M, 0.1M);
+            _centerRowNumeric = AddNumericRow(t, "Center Row", ref r, 0M, 1000000M, 2, 0M, 1M);
+            _centerColNumeric = AddNumericRow(t, "Center Col", ref r, 0M, 1000000M, 2, 0M, 1M);
+            _length1Numeric = AddNumericRow(t, "Length1 (half)", ref r, 0M, 1000000M, 2, 100M, 1M);
+            _length2Numeric = AddNumericRow(t, "Length2 (half)", ref r, 0M, 1000000M, 2, 50M, 1M);
+            _angleRadNumeric = AddNumericRow(t, "Angle (rad)", ref r, -6.2832M, 6.2832M, 4, 0M, 0.1M);
 
             _captureRoiButton = new Button
             {
@@ -295,7 +295,7 @@ namespace FlashMeasurementSystem
             _selectorCombo = AddComboRow(t, "Selector", ref r, new[] { "all", "first", "last" });
             _interpolationCombo = AddComboRow(t, "Interpolation", ref r,
                 new[] { "nearest_neighbor", "bilinear", "bicubic" });
-            _measureModeCombo = AddComboRow(t, "MeasureMode", ref r,
+            _measureModeCombo = AddComboRow(t, "Measure Mode", ref r,
                 new[] { "single_edge", "edge_pair" });
 
             gb.Controls.Add(t);
@@ -336,7 +336,7 @@ namespace FlashMeasurementSystem
             _angleHintLabel = AddRow(t, "", ref r, new Label
             {
                 Dock = DockStyle.Fill,
-                Text = "Unit = deg → angle tolerance judgment",
+                Text = "Unit='deg': judges the line's angle, Unit='mm': judges distance",
                 TextAlign = ContentAlignment.MiddleLeft,
                 ForeColor = SystemColors.GrayText,
                 Visible = false

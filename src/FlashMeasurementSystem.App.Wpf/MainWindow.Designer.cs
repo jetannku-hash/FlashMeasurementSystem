@@ -462,19 +462,20 @@ namespace FlashMeasurementSystem
             this.imageQualityBox.Dock = System.Windows.Forms.DockStyle.Top;
             this.imageQualityBox.Location = new System.Drawing.Point(3, 3);
             this.imageQualityBox.Name = "imageQualityBox";
-            this.imageQualityBox.Size = new System.Drawing.Size(247, 74);
+            this.imageQualityBox.Size = new System.Drawing.Size(247, 110);
             this.imageQualityBox.TabIndex = 0;
             this.imageQualityBox.TabStop = false;
             this.imageQualityBox.Text = "Image Quality Check";
-            // 
+            //
             // iqcResultLabel
-            // 
-            this.iqcResultLabel.AutoSize = true;
-            this.iqcResultLabel.Location = new System.Drawing.Point(10, 46);
+            //
+            this.iqcResultLabel.AutoSize = false;
+            this.iqcResultLabel.Location = new System.Drawing.Point(10, 42);
             this.iqcResultLabel.Name = "iqcResultLabel";
-            this.iqcResultLabel.Size = new System.Drawing.Size(51, 12);
+            this.iqcResultLabel.Size = new System.Drawing.Size(227, 56);
             this.iqcResultLabel.TabIndex = 1;
             this.iqcResultLabel.Text = "Not tested";
+            this.iqcResultLabel.TextAlign = System.Drawing.ContentAlignment.TopLeft;
             // 
             // runIqcButton
             // 
