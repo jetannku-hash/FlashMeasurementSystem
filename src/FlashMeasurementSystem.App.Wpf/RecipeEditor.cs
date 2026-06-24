@@ -31,6 +31,7 @@ namespace FlashMeasurementSystem
         private readonly RecipeStore _recipeStore = new RecipeStore();
         private readonly List<MeasurementTool> _tools = new List<MeasurementTool>();
         private readonly Action<Recipe, string> _savedCallback;
+        private ToolTip _toolTip;
         // Working recipe metadata (pose/calibration/schema), isolated from caller's object.
         private Recipe _recipe = Recipe.Default();
         private MeasurementTool _selectedTool;
@@ -41,6 +42,15 @@ namespace FlashMeasurementSystem
 
         // ── Toolbar controls ──
         private Label _filePathLabel;
+        private Button _newButton;
+        private Button _loadButton;
+        private Button _addCircleButton;
+        private Button _addLineButton;
+        private Button _addDistanceButton;
+        private Button _addAngleButton;
+        private Button _deleteButton;
+        private Button _saveButton;
+        private Button _saveAsButton;
 
         // ── Left: tool list ──
         private ListBox _toolListBox;
@@ -92,6 +102,7 @@ namespace FlashMeasurementSystem
             MinimumSize = new Size(580, 440);
 
             BuildLayout();
+            SetupToolTips();
             SetPropertyPanelEnabled(false);
 
             if (recipe != null)
@@ -160,34 +171,34 @@ namespace FlashMeasurementSystem
                 AutoSize = true
             };
 
-            var newButton = new Button { Text = "New", Width = 50 };
-            newButton.Click += OnNewRecipe;
-            var loadButton = new Button { Text = "Load", Width = 50 };
-            loadButton.Click += OnLoadRecipe;
-            var addCircleButton = new Button { Text = "+ Circle", Width = 70 };
-            addCircleButton.Click += (s, e) => AddTool("circle");
-            var addLineButton = new Button { Text = "+ Line", Width = 65 };
-            addLineButton.Click += (s, e) => AddTool("line");
-            var addDistanceButton = new Button { Text = "+ Distance", Width = 80 };
-            addDistanceButton.Click += (s, e) => AddTool("distance");
-            var addAngleButton = new Button { Text = "+ Angle", Width = 70 };
-            addAngleButton.Click += (s, e) => AddTool("angle");
-            var deleteButton = new Button { Text = "Delete", Width = 60 };
-            deleteButton.Click += OnDeleteTool;
-            var saveButton = new Button { Text = "Save", Width = 50 };
-            saveButton.Click += OnSave;
-            var saveAsButton = new Button { Text = "Save As", Width = 65 };
-            saveAsButton.Click += OnSaveAs;
+            _newButton = new Button { Text = "New", Width = 50 };
+            _newButton.Click += OnNewRecipe;
+            _loadButton = new Button { Text = "Load", Width = 50 };
+            _loadButton.Click += OnLoadRecipe;
+            _addCircleButton = new Button { Text = "+ Circle", Width = 70 };
+            _addCircleButton.Click += (s, e) => AddTool("circle");
+            _addLineButton = new Button { Text = "+ Line", Width = 65 };
+            _addLineButton.Click += (s, e) => AddTool("line");
+            _addDistanceButton = new Button { Text = "+ Distance", Width = 80 };
+            _addDistanceButton.Click += (s, e) => AddTool("distance");
+            _addAngleButton = new Button { Text = "+ Angle", Width = 70 };
+            _addAngleButton.Click += (s, e) => AddTool("angle");
+            _deleteButton = new Button { Text = "Delete", Width = 60 };
+            _deleteButton.Click += OnDeleteTool;
+            _saveButton = new Button { Text = "Save", Width = 50 };
+            _saveButton.Click += OnSave;
+            _saveAsButton = new Button { Text = "Save As", Width = 65 };
+            _saveAsButton.Click += OnSaveAs;
 
-            bar.Controls.Add(newButton);
-            bar.Controls.Add(loadButton);
-            bar.Controls.Add(addCircleButton);
-            bar.Controls.Add(addLineButton);
-            bar.Controls.Add(addDistanceButton);
-            bar.Controls.Add(addAngleButton);
-            bar.Controls.Add(deleteButton);
-            bar.Controls.Add(saveButton);
-            bar.Controls.Add(saveAsButton);
+            bar.Controls.Add(_newButton);
+            bar.Controls.Add(_loadButton);
+            bar.Controls.Add(_addCircleButton);
+            bar.Controls.Add(_addLineButton);
+            bar.Controls.Add(_addDistanceButton);
+            bar.Controls.Add(_addAngleButton);
+            bar.Controls.Add(_deleteButton);
+            bar.Controls.Add(_saveButton);
+            bar.Controls.Add(_saveAsButton);
 
             return bar;
         }
@@ -838,12 +849,8 @@ namespace FlashMeasurementSystem
 
         private void SetPropertyPanelEnabled(bool enabled)
         {
-            _commonGroup.Enabled = enabled;
-            _roiGroup.Enabled = enabled;
-            _edgeGroup.Enabled = enabled;
-            _refGroup.Enabled = enabled;
-            _toleranceGroup.Enabled = enabled;
-
+            // Keep all controls enabled so ToolTips always work.
+            // Individual handlers already guard on _selectedTool == null.
             if (!enabled)
             {
                 _updatingControls = true;
@@ -1010,6 +1017,43 @@ namespace FlashMeasurementSystem
             _toolListBox.EndUpdate();
             if (prev >= 0 && prev < _tools.Count)
                 _toolListBox.SelectedIndex = prev;
+        }
+
+        private void SetupToolTips()
+        {
+            _toolTip = new ToolTip { AutoPopDelay = 8000, InitialDelay = 600, ReshowDelay = 300, ShowAlways = true };
+
+            _toolTip.SetToolTip(_newButton, "Start a new empty recipe (prompts to save current changes)");
+            _toolTip.SetToolTip(_loadButton, "Load a recipe from a .zcp file");
+            _toolTip.SetToolTip(_addCircleButton, "Add a circle measurement tool");
+            _toolTip.SetToolTip(_addLineButton, "Add a line measurement tool");
+            _toolTip.SetToolTip(_addDistanceButton, "Add a distance tool (between two line/circle tools)");
+            _toolTip.SetToolTip(_addAngleButton, "Add an angle tool (between two line tools)");
+            _toolTip.SetToolTip(_deleteButton, "Delete the currently selected tool");
+            _toolTip.SetToolTip(_saveButton, "Save the recipe to the current file");
+            _toolTip.SetToolTip(_saveAsButton, "Save the recipe to a new .zcp file");
+            _toolTip.SetToolTip(_nameTextBox, "Tool display name (appears in result table)");
+            _toolTip.SetToolTip(_idTextBox, "Unique tool ID (auto-generated, read-only)");
+            _toolTip.SetToolTip(_typeLabel, "Tool type: circle, line, distance, or angle");
+            _toolTip.SetToolTip(_centerRowNumeric, "ROI center row (pixels)");
+            _toolTip.SetToolTip(_centerColNumeric, "ROI center column (pixels)");
+            _toolTip.SetToolTip(_length1Numeric, "ROI half-length along major axis (pixels)");
+            _toolTip.SetToolTip(_length2Numeric, "ROI half-length perpendicular to major axis (pixels)");
+            _toolTip.SetToolTip(_angleRadNumeric, "ROI major axis angle in radians");
+            _toolTip.SetToolTip(_captureRoiButton, "Draw a rectangle on the main image to capture the ROI");
+            _toolTip.SetToolTip(_sigmaNumeric, "Gaussian smoothing sigma for edge detection");
+            _toolTip.SetToolTip(_thresholdNumeric, "Minimum edge amplitude threshold");
+            _toolTip.SetToolTip(_polarityCombo, "Edge polarity: all, positive (dark→bright), or negative (bright→dark)");
+            _toolTip.SetToolTip(_selectorCombo, "Which edge(s) to return: all, first, or last");
+            _toolTip.SetToolTip(_interpolationCombo, "Interpolation method for edge detection");
+            _toolTip.SetToolTip(_measureModeCombo, "Single edge or edge pair measurement mode");
+            _toolTip.SetToolTip(_ref1Combo, "First reference tool (for distance or angle)");
+            _toolTip.SetToolTip(_ref2Combo, "Second reference tool (for distance or angle)");
+            _toolTip.SetToolTip(_nominalNumeric, "Nominal (expected) measurement value");
+            _toolTip.SetToolTip(_lowerNumeric, "Lower tolerance (negative deviation from nominal)");
+            _toolTip.SetToolTip(_upperNumeric, "Upper tolerance (positive deviation from nominal)");
+            _toolTip.SetToolTip(_unitTextBox, "Tolerance unit: 'mm' for distance/diameter, 'deg' for angle");
+            _toolTip.SetToolTip(_angleHintLabel, "Line angle tolerance judgment: use Unit='deg' to judge the line's angle instead of length");
         }
 
         protected override void Dispose(bool disposing)

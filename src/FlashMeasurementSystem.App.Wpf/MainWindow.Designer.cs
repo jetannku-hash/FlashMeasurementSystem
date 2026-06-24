@@ -215,9 +215,9 @@ namespace FlashMeasurementSystem
             this.templateMatchingBox.Controls.Add(this.templateLabel);
             this.templateMatchingBox.Controls.Add(this.loadTestImageButton);
             this.templateMatchingBox.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.templateMatchingBox.Location = new System.Drawing.Point(3, 263);
+            this.templateMatchingBox.Location = new System.Drawing.Point(3, 299);
             this.templateMatchingBox.Name = "templateMatchingBox";
-            this.templateMatchingBox.Size = new System.Drawing.Size(247, 342);
+            this.templateMatchingBox.Size = new System.Drawing.Size(247, 306);
             this.templateMatchingBox.TabIndex = 3;
             this.templateMatchingBox.TabStop = false;
             this.templateMatchingBox.Text = "Template Matching";
@@ -231,17 +231,17 @@ namespace FlashMeasurementSystem
             this.matchResultTextBox.Multiline = true;
             this.matchResultTextBox.Name = "matchResultTextBox";
             this.matchResultTextBox.ReadOnly = true;
-            this.matchResultTextBox.Size = new System.Drawing.Size(227, 94);
+            this.matchResultTextBox.Size = new System.Drawing.Size(227, 58);
             this.matchResultTextBox.TabIndex = 6;
             // 
             // runMatchingButton
             // 
             this.runMatchingButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Left | System.Windows.Forms.AnchorStyles.Right)));
-            this.runMatchingButton.Location = new System.Drawing.Point(10, 128);
+            this.runMatchingButton.Location = new System.Drawing.Point(10, 110);
             this.runMatchingButton.Name = "runMatchingButton";
             this.runMatchingButton.Size = new System.Drawing.Size(227, 23);
             this.runMatchingButton.TabIndex = 5;
-            this.runMatchingButton.Text = "Run Matching";
+            this.runMatchingButton.Text = "Run &Matching";
             this.runMatchingButton.UseVisualStyleBackColor = true;
             this.runMatchingButton.Click += new System.EventHandler(this.RunMatchingButton_Click);
             // 
@@ -252,7 +252,7 @@ namespace FlashMeasurementSystem
             this.minScoreLabel.Name = "minScoreLabel";
             this.minScoreLabel.Size = new System.Drawing.Size(56, 12);
             this.minScoreLabel.TabIndex = 3;
-            this.minScoreLabel.Text = "Min Score:";
+            this.minScoreLabel.Text = "Min &Score:";
             // 
             // minScoreNumeric
             // 
@@ -282,7 +282,7 @@ namespace FlashMeasurementSystem
             this.templateFileCombo.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Left | System.Windows.Forms.AnchorStyles.Right)));
             this.templateFileCombo.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
             this.templateFileCombo.FormattingEnabled = true;
-            this.templateFileCombo.Location = new System.Drawing.Point(10, 52);
+            this.templateFileCombo.Location = new System.Drawing.Point(10, 34);
             this.templateFileCombo.Name = "templateFileCombo";
             this.templateFileCombo.Size = new System.Drawing.Size(227, 20);
             this.templateFileCombo.TabIndex = 2;
@@ -299,11 +299,11 @@ namespace FlashMeasurementSystem
             // loadTestImageButton
             // 
             this.loadTestImageButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Left | System.Windows.Forms.AnchorStyles.Right)));
-            this.loadTestImageButton.Location = new System.Drawing.Point(10, 13);
+            this.loadTestImageButton.Location = new System.Drawing.Point(10, -5);
             this.loadTestImageButton.Name = "loadTestImageButton";
             this.loadTestImageButton.Size = new System.Drawing.Size(227, 21);
             this.loadTestImageButton.TabIndex = 0;
-            this.loadTestImageButton.Text = "Load Test Image";
+            this.loadTestImageButton.Text = "Load &Test Image";
             this.loadTestImageButton.UseVisualStyleBackColor = true;
             this.loadTestImageButton.Click += new System.EventHandler(this.LoadTestImageButton_Click);
             // 
@@ -320,7 +320,7 @@ namespace FlashMeasurementSystem
             this.templateCreationBox.Controls.Add(this.angleStartLabel);
             this.templateCreationBox.Controls.Add(this.angleStartNumeric);
             this.templateCreationBox.Dock = System.Windows.Forms.DockStyle.Top;
-            this.templateCreationBox.Location = new System.Drawing.Point(3, 77);
+            this.templateCreationBox.Location = new System.Drawing.Point(3, 113);
             this.templateCreationBox.Name = "templateCreationBox";
             this.templateCreationBox.Size = new System.Drawing.Size(247, 186);
             this.templateCreationBox.TabIndex = 2;
@@ -329,22 +329,24 @@ namespace FlashMeasurementSystem
             // 
             // roiClearButton
             // 
+            this.roiClearButton.Anchor = System.Windows.Forms.AnchorStyles.Right;
             this.roiClearButton.Location = new System.Drawing.Point(120, 118);
             this.roiClearButton.Name = "roiClearButton";
             this.roiClearButton.Size = new System.Drawing.Size(60, 18);
             this.roiClearButton.TabIndex = 8;
-            this.roiClearButton.Text = "Clear ROI";
+            this.roiClearButton.Text = "Clear &ROI";
             this.roiClearButton.UseVisualStyleBackColor = true;
             this.roiClearButton.Click += new System.EventHandler(this.ClearRoiButton_Click);
             // 
             // roiModeCheck
             // 
+            this.roiModeCheck.Anchor = System.Windows.Forms.AnchorStyles.Left;
             this.roiModeCheck.AutoSize = true;
             this.roiModeCheck.Location = new System.Drawing.Point(10, 120);
             this.roiModeCheck.Name = "roiModeCheck";
             this.roiModeCheck.Size = new System.Drawing.Size(109, 16);
             this.roiModeCheck.TabIndex = 7;
-            this.roiModeCheck.Text = "Draw ROI Region";
+            this.roiModeCheck.Text = "&Draw ROI Region";
             this.roiModeCheck.UseVisualStyleBackColor = true;
             this.roiModeCheck.CheckedChanged += new System.EventHandler(this.RoiModeCheck_CheckedChanged);
             // 
@@ -353,9 +355,9 @@ namespace FlashMeasurementSystem
             this.createTemplateButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Left | System.Windows.Forms.AnchorStyles.Right)));
             this.createTemplateButton.Location = new System.Drawing.Point(10, 155);
             this.createTemplateButton.Name = "createTemplateButton";
-            this.createTemplateButton.Size = new System.Drawing.Size(126, 23);
+            this.createTemplateButton.Size = new System.Drawing.Size(227, 23);
             this.createTemplateButton.TabIndex = 6;
-            this.createTemplateButton.Text = "Create Template";
+            this.createTemplateButton.Text = "&Create Template";
             this.createTemplateButton.UseVisualStyleBackColor = true;
             this.createTemplateButton.Click += new System.EventHandler(this.CreateTemplateButton_Click);
             // 
@@ -366,7 +368,7 @@ namespace FlashMeasurementSystem
             this.loadRefImageButton.Name = "loadRefImageButton";
             this.loadRefImageButton.Size = new System.Drawing.Size(227, 21);
             this.loadRefImageButton.TabIndex = 0;
-            this.loadRefImageButton.Text = "Load Reference Image";
+            this.loadRefImageButton.Text = "&Load Reference Image";
             this.loadRefImageButton.UseVisualStyleBackColor = true;
             this.loadRefImageButton.Click += new System.EventHandler(this.LoadRefImageButton_Click);
             // 
@@ -381,6 +383,7 @@ namespace FlashMeasurementSystem
             // 
             // pyramidNumeric
             // 
+            this.pyramidNumeric.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Left | System.Windows.Forms.AnchorStyles.Right)));
             this.pyramidNumeric.Location = new System.Drawing.Point(96, 95);
             this.pyramidNumeric.Maximum = new decimal(new int[] {
             5,
@@ -412,6 +415,7 @@ namespace FlashMeasurementSystem
             // 
             // angleExtentNumeric
             // 
+            this.angleExtentNumeric.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Left | System.Windows.Forms.AnchorStyles.Right)));
             this.angleExtentNumeric.DecimalPlaces = 1;
             this.angleExtentNumeric.Location = new System.Drawing.Point(96, 71);
             this.angleExtentNumeric.Maximum = new decimal(new int[] {
@@ -439,6 +443,7 @@ namespace FlashMeasurementSystem
             // 
             // angleStartNumeric
             // 
+            this.angleStartNumeric.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Left | System.Windows.Forms.AnchorStyles.Right)));
             this.angleStartNumeric.DecimalPlaces = 1;
             this.angleStartNumeric.Location = new System.Drawing.Point(96, 47);
             this.angleStartNumeric.Minimum = new decimal(new int[] {
@@ -466,16 +471,14 @@ namespace FlashMeasurementSystem
             this.imageQualityBox.TabIndex = 0;
             this.imageQualityBox.TabStop = false;
             this.imageQualityBox.Text = "Image Quality Check";
-            //
+            // 
             // iqcResultLabel
-            //
-            this.iqcResultLabel.AutoSize = false;
+            // 
             this.iqcResultLabel.Location = new System.Drawing.Point(10, 42);
             this.iqcResultLabel.Name = "iqcResultLabel";
             this.iqcResultLabel.Size = new System.Drawing.Size(227, 56);
             this.iqcResultLabel.TabIndex = 1;
             this.iqcResultLabel.Text = "Not tested";
-            this.iqcResultLabel.TextAlign = System.Drawing.ContentAlignment.TopLeft;
             // 
             // runIqcButton
             // 
@@ -484,7 +487,7 @@ namespace FlashMeasurementSystem
             this.runIqcButton.Name = "runIqcButton";
             this.runIqcButton.Size = new System.Drawing.Size(227, 21);
             this.runIqcButton.TabIndex = 0;
-            this.runIqcButton.Text = "Run Image Quality Check";
+            this.runIqcButton.Text = "Run Image &Quality Check";
             this.runIqcButton.UseVisualStyleBackColor = true;
             this.runIqcButton.Click += new System.EventHandler(this.RunIqcButton_Click);
             // 
@@ -513,7 +516,6 @@ namespace FlashMeasurementSystem
             // 
             // edgeTableLayout
             // 
-            this.edgeTableLayout.Dock = System.Windows.Forms.DockStyle.Fill;
             this.edgeTableLayout.ColumnCount = 2;
             this.edgeTableLayout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 48F));
             this.edgeTableLayout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 52F));
@@ -545,6 +547,7 @@ namespace FlashMeasurementSystem
             this.edgeTableLayout.Controls.Add(this.lineFittingResultLabel, 0, 14);
             this.edgeTableLayout.Controls.Add(this.circleFittingResultLabel, 0, 15);
             this.edgeTableLayout.Controls.Add(this._edgeResultsGrid, 0, 16);
+            this.edgeTableLayout.Dock = System.Windows.Forms.DockStyle.Fill;
             this.edgeTableLayout.Location = new System.Drawing.Point(8, 33);
             this.edgeTableLayout.Name = "edgeTableLayout";
             this.edgeTableLayout.RowCount = 17;
@@ -929,7 +932,7 @@ namespace FlashMeasurementSystem
             this._runEdgeDetectionButton.Name = "_runEdgeDetectionButton";
             this._runEdgeDetectionButton.Size = new System.Drawing.Size(106, 20);
             this._runEdgeDetectionButton.TabIndex = 0;
-            this._runEdgeDetectionButton.Text = "Detect";
+            this._runEdgeDetectionButton.Text = "&Detect";
             this._runEdgeDetectionButton.UseVisualStyleBackColor = true;
             this._runEdgeDetectionButton.Click += new System.EventHandler(this.RunEdgeDetectionButton_Click);
             // 
@@ -940,7 +943,7 @@ namespace FlashMeasurementSystem
             this._clearEdgeDetectionButton.Name = "_clearEdgeDetectionButton";
             this._clearEdgeDetectionButton.Size = new System.Drawing.Size(107, 20);
             this._clearEdgeDetectionButton.TabIndex = 1;
-            this._clearEdgeDetectionButton.Text = "Clear";
+            this._clearEdgeDetectionButton.Text = "C&lear";
             this._clearEdgeDetectionButton.UseVisualStyleBackColor = true;
             this._clearEdgeDetectionButton.Click += new System.EventHandler(this.ClearEdgeDetectionButton_Click);
             // 
@@ -951,7 +954,7 @@ namespace FlashMeasurementSystem
             this.fitLineButton.Name = "fitLineButton";
             this.fitLineButton.Size = new System.Drawing.Size(106, 20);
             this.fitLineButton.TabIndex = 2;
-            this.fitLineButton.Text = "Fit Line";
+            this.fitLineButton.Text = "Fit &Line";
             this.fitLineButton.UseVisualStyleBackColor = true;
             this.fitLineButton.Click += new System.EventHandler(this.FitLineButton_Click);
             // 
@@ -962,7 +965,7 @@ namespace FlashMeasurementSystem
             this.fitCircleButton.Name = "fitCircleButton";
             this.fitCircleButton.Size = new System.Drawing.Size(107, 20);
             this.fitCircleButton.TabIndex = 3;
-            this.fitCircleButton.Text = "Fit Circle";
+            this.fitCircleButton.Text = "Fit &Circle";
             this.fitCircleButton.UseVisualStyleBackColor = true;
             this.fitCircleButton.Click += new System.EventHandler(this.FitCircleButton_Click);
             // 
@@ -1075,7 +1078,6 @@ namespace FlashMeasurementSystem
             // 
             // measurementTableLayout
             // 
-            this.measurementTableLayout.Dock = System.Windows.Forms.DockStyle.Fill;
             this.measurementTableLayout.ColumnCount = 2;
             this.measurementTableLayout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 42F));
             this.measurementTableLayout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 58F));
@@ -1095,6 +1097,7 @@ namespace FlashMeasurementSystem
             this.measurementTableLayout.Controls.Add(this.angleModeCombo, 1, 8);
             this.measurementTableLayout.Controls.Add(this.measureAngleButton, 0, 9);
             this.measurementTableLayout.Controls.Add(this.measureResultLabel, 0, 10);
+            this.measurementTableLayout.Dock = System.Windows.Forms.DockStyle.Fill;
             this.measurementTableLayout.Location = new System.Drawing.Point(8, 33);
             this.measurementTableLayout.Name = "measurementTableLayout";
             this.measurementTableLayout.RowCount = 11;
@@ -1282,7 +1285,7 @@ namespace FlashMeasurementSystem
             this.appendLineButton.Name = "appendLineButton";
             this.appendLineButton.Size = new System.Drawing.Size(75, 24);
             this.appendLineButton.TabIndex = 0;
-            this.appendLineButton.Text = "+ Line";
+            this.appendLineButton.Text = "+ &Line";
             this.appendLineButton.UseVisualStyleBackColor = true;
             this.appendLineButton.Click += new System.EventHandler(this.AppendLineButton_Click);
             // 
@@ -1294,7 +1297,7 @@ namespace FlashMeasurementSystem
             this.appendCircleButton.Name = "appendCircleButton";
             this.appendCircleButton.Size = new System.Drawing.Size(72, 24);
             this.appendCircleButton.TabIndex = 1;
-            this.appendCircleButton.Text = "+ Circle";
+            this.appendCircleButton.Text = "+ C&ircle";
             this.appendCircleButton.UseVisualStyleBackColor = true;
             this.appendCircleButton.Click += new System.EventHandler(this.AppendCircleButton_Click);
             // 
@@ -1306,7 +1309,7 @@ namespace FlashMeasurementSystem
             this.appendContourButton.Name = "appendContourButton";
             this.appendContourButton.Size = new System.Drawing.Size(76, 24);
             this.appendContourButton.TabIndex = 2;
-            this.appendContourButton.Text = "+ Contour";
+            this.appendContourButton.Text = "+ Con&tour";
             this.appendContourButton.UseVisualStyleBackColor = true;
             this.appendContourButton.Click += new System.EventHandler(this.AppendContourButton_Click);
             // 
@@ -1319,7 +1322,7 @@ namespace FlashMeasurementSystem
             this.measureDistanceButton.Name = "measureDistanceButton";
             this.measureDistanceButton.Size = new System.Drawing.Size(231, 28);
             this.measureDistanceButton.TabIndex = 10;
-            this.measureDistanceButton.Text = "Measure Distance";
+            this.measureDistanceButton.Text = "Measure &Distance";
             this.measureDistanceButton.UseVisualStyleBackColor = true;
             this.measureDistanceButton.Click += new System.EventHandler(this.MeasureDistanceButton_Click);
             // 
@@ -1357,7 +1360,7 @@ namespace FlashMeasurementSystem
             this.measureAngleButton.Name = "measureAngleButton";
             this.measureAngleButton.Size = new System.Drawing.Size(231, 28);
             this.measureAngleButton.TabIndex = 14;
-            this.measureAngleButton.Text = "Measure Angle";
+            this.measureAngleButton.Text = "Measure &Angle";
             this.measureAngleButton.UseVisualStyleBackColor = true;
             this.measureAngleButton.Click += new System.EventHandler(this.MeasureAngleButton_Click);
             // 
@@ -1415,7 +1418,6 @@ namespace FlashMeasurementSystem
             ((System.ComponentModel.ISupportInitialize)(this.angleExtentNumeric)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.angleStartNumeric)).EndInit();
             this.imageQualityBox.ResumeLayout(false);
-            this.imageQualityBox.PerformLayout();
             this.edgeDetectionTabPage.ResumeLayout(false);
             this._edgeDetectionBox.ResumeLayout(false);
             this.edgeTableLayout.ResumeLayout(false);

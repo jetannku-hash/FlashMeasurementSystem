@@ -63,6 +63,7 @@ namespace FlashMeasurementSystem
         private RecipeRunner _recipeRunner;
         private MeasurementWorkflow _workflow;
         private CheckBox _skipIqcCheckBox;
+        private ToolTip _toolTip;
 
         public MainWindow()
         {
@@ -74,6 +75,7 @@ namespace FlashMeasurementSystem
             base.OnLoad(e);
 
             NormalizeTemplateMatchingLayout();
+            SetupToolTips();
 
             _imageHelper = new HWindowControlHelper(hWindowControl);
             _imageHelper.MouseMoved += OnImageMouseMoved;
@@ -114,14 +116,14 @@ namespace FlashMeasurementSystem
             };
             var calibButton = new Button { Text = "校正...", Width = 64, Height = 26 };
             calibButton.Click += OpenCalibrationDialog;
-            var loadRecipeButton = new Button { Text = "Load Recipe", Width = 84, Height = 26 };
+            var loadRecipeButton = new Button { Text = "&Load Recipe", Width = 84, Height = 26 };
             loadRecipeButton.Click += LoadRecipeButton_Click;
-            var setRefButton = new Button { Text = "Set Ref", Width = 64, Height = 26 };
+            var setRefButton = new Button { Text = "&Set Ref", Width = 64, Height = 26 };
             setRefButton.Click += SetRefPoseButton_Click;
-            var runRecipeButton = new Button { Text = "Run Recipe", Width = 84, Height = 26 };
+            var runRecipeButton = new Button { Text = "&Run Recipe", Width = 84, Height = 26 };
             runRecipeButton.Click += RunRecipeButton_Click;
             // 配方編輯器（M3c-2）：建/編 .zcp。Load Recipe 為執行流程入口，兩者並存。
-            var editRecipeButton = new Button { Text = "Edit Recipe", Width = 84, Height = 26 };
+            var editRecipeButton = new Button { Text = "&Edit Recipe", Width = 84, Height = 26 };
             editRecipeButton.Click += OpenRecipeEditor;
             var oneClickButton = new Button { Text = "一鍵量測", Width = 84, Height = 26 };
             oneClickButton.Click += OneClickMeasureButton_Click;
@@ -132,6 +134,16 @@ namespace FlashMeasurementSystem
                 Checked = false,
                 Margin = new Padding(4, 6, 4, 0)
             };
+
+            // Toolbar tooltips
+            _toolTip.SetToolTip(calibButton, "Open pixel-size calibration dialog");
+            _toolTip.SetToolTip(loadRecipeButton, "Load a measurement recipe (.zcp)");
+            _toolTip.SetToolTip(setRefButton, "Set the current match pose as the recipe reference pose");
+            _toolTip.SetToolTip(runRecipeButton, "Run the loaded recipe on the current image");
+            _toolTip.SetToolTip(editRecipeButton, "Open recipe editor to create or modify recipes");
+            _toolTip.SetToolTip(oneClickButton, "Run full pipeline: IQC → Match → Measure → Evaluate → Report");
+            _toolTip.SetToolTip(_skipIqcCheckBox, "Skip image quality check (for testing with synthetic images)");
+
             topToolbar.Controls.Add(calibButton);
             topToolbar.Controls.Add(loadRecipeButton);
             topToolbar.Controls.Add(setRefButton);
@@ -225,6 +237,64 @@ namespace FlashMeasurementSystem
             {
                 templateMatchingBox.ResumeLayout(true);
             }
+        }
+
+        private void SetupToolTips()
+        {
+            _toolTip = new ToolTip { AutoPopDelay = 8000, InitialDelay = 600, ReshowDelay = 300, ShowAlways = true };
+
+            // ── Inspection: Image Quality Check ──
+            _toolTip.SetToolTip(runIqcButton, "Check image brightness, saturation, blur, and contrast");
+            _toolTip.SetToolTip(iqcResultLabel, "Image quality check result — PASS (green) or FAIL (red)");
+
+            // ── Inspection: Template Creation ──
+            _toolTip.SetToolTip(loadRefImageButton, "Load a reference image for template creation");
+            _toolTip.SetToolTip(angleStartNumeric, "Starting angle offset (degrees) for template search");
+            _toolTip.SetToolTip(angleExtentNumeric, "Angle search extent (degrees, ± from start)");
+            _toolTip.SetToolTip(pyramidNumeric, "Pyramid level (1–5). Higher = faster but less precise");
+            _toolTip.SetToolTip(roiModeCheck, "Enable to draw a rectangular ROI region");
+            _toolTip.SetToolTip(roiClearButton, "Clear the current ROI region");
+            _toolTip.SetToolTip(createTemplateButton, "Create a shape model (.shm) from the drawn ROI region");
+
+            // ── Inspection: Template Matching ──
+            _toolTip.SetToolTip(loadTestImageButton, "Load a test image for template matching");
+            _toolTip.SetToolTip(templateFileCombo, "Select a shape model (.shm) file");
+            _toolTip.SetToolTip(minScoreNumeric, "Minimum matching score (0.0–1.0, higher = stricter)");
+            _toolTip.SetToolTip(runMatchingButton, "Find the loaded template in the current image");
+
+            // ── Edge Detection ──
+            _toolTip.SetToolTip(_edgeMeasurePosRadio, "1D edge detection along scan lines (measure_pos)");
+            _toolTip.SetToolTip(_edgeSubPixRadio, "Sub-pixel edge detection (edges_sub_pix)");
+            _toolTip.SetToolTip(_edgeSigmaNumeric, "Gaussian smoothing sigma (higher = more noise reduction)");
+            _toolTip.SetToolTip(_edgeThresholdNumeric, "Minimum edge amplitude threshold (lower = more edges detected)");
+            _toolTip.SetToolTip(_edgePolarityCombo, "Edge polarity: all, positive (dark→bright), or negative (bright→dark)");
+            _toolTip.SetToolTip(_edgeSelectorCombo, "Which edge(s) to return: all, first, or last");
+            _toolTip.SetToolTip(_edgeSubpixelMethodCombo, "Subpixel interpolation method for edges_sub_pix");
+            _toolTip.SetToolTip(_edgeRoiWidthNumeric, "ROI half-width perpendicular to scan direction");
+            _toolTip.SetToolTip(_edgeScanLengthNumeric, "ROI half-length along scan direction");
+            _toolTip.SetToolTip(_edgeAngleNumeric, "ROI rotation angle in degrees");
+            _toolTip.SetToolTip(_edgeDrawRoiCheck, "Overlay the ROI rectangle on the image");
+            _toolTip.SetToolTip(_edgeMeasureModeCombo, "Single edge or edge pair measurement");
+            _toolTip.SetToolTip(_edgeInterpolationCombo, "Interpolation method for measure_pos");
+            _toolTip.SetToolTip(_runEdgeDetectionButton, "Run edge detection on the current ROI");
+            _toolTip.SetToolTip(_clearEdgeDetectionButton, "Clear edge detection results");
+            _toolTip.SetToolTip(fitLineButton, "Fit a straight line to the detected edge points");
+            _toolTip.SetToolTip(fitCircleButton, "Fit a circle to the detected edge points");
+            _toolTip.SetToolTip(_edgeResultsGrid, "Detected edge points (Row, Col, Amplitude, Distance)");
+            _toolTip.SetToolTip(_edgeStatusLabel, "Edge detection status — PASS (green) or FAIL (red)");
+            _toolTip.SetToolTip(lineFittingResultLabel, "Line fitting result");
+            _toolTip.SetToolTip(circleFittingResultLabel, "Circle fitting result");
+
+            // ── Measurement ──
+            _toolTip.SetToolTip(measurementPixelSizeXNumeric, "Pixel size in X direction (µm/pixel)");
+            _toolTip.SetToolTip(measurementPixelSizeYNumeric, "Pixel size in Y direction (µm/pixel)");
+            _toolTip.SetToolTip(measurementCoordInput, "Enter coordinates, one pair per line: row,col");
+            _toolTip.SetToolTip(appendLineButton, "Append the last fitted line endpoints to the coordinate input");
+            _toolTip.SetToolTip(appendCircleButton, "Append the last fitted circle center to the coordinate input");
+            _toolTip.SetToolTip(appendContourButton, "Append detected edge points to the coordinate input");
+            _toolTip.SetToolTip(measureDistanceButton, "Measure distance using coordinates above");
+            _toolTip.SetToolTip(measureAngleButton, "Measure angle using coordinates above");
+            _toolTip.SetToolTip(measureResultLabel, "Measurement result — OK (green) / NG (red). Or run '[Run Recipe]' or '[一鍵量測]' to execute a recipe");
         }
 
         private void LoadTemplateList()
