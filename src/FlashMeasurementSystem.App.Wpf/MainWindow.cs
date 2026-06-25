@@ -1438,7 +1438,15 @@ namespace FlashMeasurementSystem
             CircleFittingResult circle = _latestCircleFittingResult;
             if (circle != null && circle.Success)
             {
-                an.DrawCircle(circle.CenterRow, circle.CenterColumn, circle.RadiusPx, "green");
+                if (circle.IsClosed)
+                {
+                    an.DrawCircle(circle.CenterRow, circle.CenterColumn, circle.RadiusPx, "green");
+                }
+                else
+                {
+                    an.DrawArc(circle.CenterRow, circle.CenterColumn, circle.RadiusPx,
+                        circle.StartPhi, circle.EndPhi, circle.PointOrder, "green");
+                }
             }
 
             EllipseFittingResult ellipse = _latestEllipseFittingResult;
@@ -1494,11 +1502,18 @@ namespace FlashMeasurementSystem
             CircleFittingResult circleResult = _latestCircleFittingResult;
             if (circleResult != null && circleResult.Success)
             {
+                string prefix = circleResult.IsClosed ? "Circle" : "Arc";
                 rows.Add(new OverlayResultRow
                 {
-                    Name = "Circle",
-                    ValueText = string.Format(CultureInfo.InvariantCulture,
-                        "D={0:F1}px R={1:F1}px", circleResult.DiameterPx, circleResult.RadiusPx),
+                    Name = prefix,
+                    ValueText = circleResult.IsClosed
+                        ? string.Format(CultureInfo.InvariantCulture,
+                            "D={0:F1}px R={1:F1}px", circleResult.DiameterPx, circleResult.RadiusPx)
+                        : string.Format(CultureInfo.InvariantCulture,
+                            "R={0:F1}px {1:F1}°→{2:F1}°",
+                            circleResult.RadiusPx,
+                            circleResult.StartPhi * 180.0 / Math.PI,
+                            circleResult.EndPhi * 180.0 / Math.PI),
                     IsOk = null
                 });
             }
@@ -1582,16 +1597,21 @@ namespace FlashMeasurementSystem
                 return;
             }
 
+            string typeLabel = result.IsClosed ? "Circle" : "Arc";
             circleFittingResultLabel.Text = string.Format(
                 CultureInfo.InvariantCulture,
-                "Circle OK | C=({0:F2},{1:F2}) R={2:F2}px D={3:F2}px\nRMS={4:F4}px Round={5:F4}px Pts={6}",
+                typeLabel + " OK | C=({0:F2},{1:F2}) R={2:F2}px D={3:F2}px\n"
+                + (result.IsClosed ? "" : "Arc {7:F1}°→{8:F1}° | ")
+                + "RMS={4:F4}px Round={5:F4}px Pts={6}",
                 result.CenterRow,
                 result.CenterColumn,
                 result.RadiusPx,
                 result.DiameterPx,
                 result.ResidualRms,
                 result.Roundness,
-                result.UsedPoints);
+                result.UsedPoints,
+                result.StartPhi * 180.0 / Math.PI,
+                result.EndPhi * 180.0 / Math.PI);
             circleFittingResultLabel.ForeColor = Color.Green;
         }
 

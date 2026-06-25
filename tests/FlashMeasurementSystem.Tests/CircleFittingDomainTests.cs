@@ -41,6 +41,28 @@ namespace FlashMeasurementSystem.Tests
             AssertEqual(0, result.UsedPoints, "Default UsedPoints");
             AssertEqual(string.Empty, result.ErrorMessage, "Default ErrorMessage");
 
+            // Arc detection (IsClosed)
+            CircleFittingResult fullCircle = new CircleFittingResult
+            {
+                Success = true,
+                StartPhi = 0.0,
+                EndPhi = 2.0 * Math.PI,
+                PointOrder = "positive"
+            };
+            AssertEqual(true, fullCircle.IsClosed, "Full circle (0→2pi) should be closed");
+
+            CircleFittingResult arc = new CircleFittingResult
+            {
+                Success = true,
+                StartPhi = 0.0,
+                EndPhi = Math.PI,
+                PointOrder = "positive"
+            };
+            AssertEqual(false, arc.IsClosed, "180deg arc should not be closed");
+
+            CircleFittingResult defaultResult = new CircleFittingResult();
+            AssertEqual(false, defaultResult.IsClosed, "Default (0→0) should not be closed");
+
             ICircleFitter fitter = new FakeCircleFitter();
             CircleFittingResult fakeResult = fitter.FitCircle(new List<EdgePoint>(), parameters);
             AssertEqual(true, fakeResult.Success, "Fake circle fitter should satisfy interface contract");

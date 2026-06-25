@@ -84,6 +84,28 @@ namespace FlashMeasurementSystem
             HOperatorSet.DispCircle(_window, row, col, radius);
         }
 
+        // 用 gen_circle_contour_xld + disp_obj 畫弧段。StartPhi/EndPhi 與 PointOrder
+        // 直接餵給 gen_circle_contour_xld，由 HALCON 處理方向（L173620）。
+        public void DrawArc(double row, double col, double radius,
+            double startPhi, double endPhi, string pointOrder, string color = null)
+        {
+            HObject arcContour = null;
+            try
+            {
+                HOperatorSet.GenCircleContourXld(
+                    out arcContour, row, col, radius,
+                    startPhi, endPhi, pointOrder ?? "positive", 3.0);
+                HOperatorSet.SetColor(_window, color ?? "yellow");
+                HOperatorSet.SetLineWidth(_window, 2);
+                HOperatorSet.SetDraw(_window, "margin");
+                HOperatorSet.DispObj(arcContour, _window);
+            }
+            finally
+            {
+                arcContour?.Dispose();
+            }
+        }
+
         // disp_ellipse(Window, CenterRow, CenterCol, Phi, Radius1, Radius2)（reference L69967）。
         // Phi 為主軸方向（弧度），與 fit_ellipse_contour_xld 輸出的 Phi 慣例一致，直接帶入即可。
         public void DrawEllipse(double row, double col, double phi, double radius1, double radius2, string color = null)

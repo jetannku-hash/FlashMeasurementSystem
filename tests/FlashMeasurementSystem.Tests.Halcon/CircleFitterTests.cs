@@ -51,7 +51,46 @@ namespace FlashMeasurementSystem.Tests.Halcon
             Assert(Math.Abs(rOff.CenterColumn - 60.0) < 2.0, "offset: CenterCol ~60");
             Assert(Math.Abs(rOff.RadiusPx - 30.0) < 2.0, "offset: Radius ~30");
 
+            // ── 7. Arc (180° half circle, 24 pts) → Success, IsClosed=false ──
+            var arcPts = GenerateArcPoints(150, 150, 40, 0.0, Math.PI, 24);
+            CircleFittingResult rArc = fitter.FitCircle(arcPts, CircleFittingParameters.Default());
+            Assert(rArc.Success, "arc: Success");
+            Assert(!rArc.IsClosed, "arc: IsClosed should be false (180deg != 360)");
+            Assert(Math.Abs(rArc.CenterRow - 150.0) < 3.0, "arc: CenterRow ~150");
+            Assert(Math.Abs(rArc.CenterColumn - 150.0) < 3.0, "arc: CenterCol ~150");
+            Assert(Math.Abs(rArc.RadiusPx - 40.0) < 3.0, "arc: Radius ~40");
+
+            // ── 8. Full circle (360°, 36 pts) → IsClosed=true ──
+            var fullPts = GenerateCirclePoints(100, 100, 50, 36);
+            CircleFittingResult rFull = fitter.FitCircle(fullPts, CircleFittingParameters.Default());
+            Assert(rFull.Success, "full circle: Success");
+            Assert(rFull.IsClosed, "full circle: IsClosed should be true");
+            Assert(rFull.DiameterPx > 0, "full circle: DiameterPx > 0");
+
+            // ── 9. 90° arc → IsClosed=false ──
+            var arc90 = GenerateArcPoints(120, 80, 35, Math.PI / 4.0, Math.PI / 2.0, 16);
+            CircleFittingResult r90 = fitter.FitCircle(arc90, CircleFittingParameters.Default());
+            Assert(r90.Success, "90deg arc: Success");
+            Assert(!r90.IsClosed, "90deg arc: IsClosed should be false");
+
             Console.WriteLine("CircleFitterTests passed");
+        }
+
+        private static List<EdgePoint> GenerateArcPoints(
+            double cRow, double cCol, double radius, double startPhi, double extentRad, int n)
+        {
+            var list = new List<EdgePoint>();
+            for (int i = 0; i < n; i++)
+            {
+                double angle = startPhi + extentRad * i / (n - 1);
+                list.Add(new EdgePoint
+                {
+                    Row = cRow - radius * Math.Sin(angle),
+                    Column = cCol + radius * Math.Cos(angle),
+                    Amplitude = 50.0
+                });
+            }
+            return list;
         }
 
         private static List<EdgePoint> GenerateCirclePoints(double cRow, double cCol, double radius, int n)
