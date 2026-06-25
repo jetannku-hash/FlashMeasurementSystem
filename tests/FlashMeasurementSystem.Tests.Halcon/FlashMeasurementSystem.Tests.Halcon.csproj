@@ -62,6 +62,7 @@
     <Compile Include="EdgeDetectorTests.cs" />
     <Compile Include="LineFitterTests.cs" />
     <Compile Include="CircleFitterTests.cs" />
+    <Compile Include="EllipseFitterTests.cs" />
     <Compile Include="AngleMeasurerTests.cs" />
     <Compile Include="ImageQualityCheckerTests.cs" />
     <Compile Include="TemplateMatcherTests.cs" />

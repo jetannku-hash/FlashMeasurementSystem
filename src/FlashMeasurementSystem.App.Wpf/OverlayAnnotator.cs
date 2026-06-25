@@ -84,6 +84,16 @@ namespace FlashMeasurementSystem
             HOperatorSet.DispCircle(_window, row, col, radius);
         }
 
+        // disp_ellipse(Window, CenterRow, CenterCol, Phi, Radius1, Radius2)（reference L69967）。
+        // Phi 為主軸方向（弧度），與 fit_ellipse_contour_xld 輸出的 Phi 慣例一致，直接帶入即可。
+        public void DrawEllipse(double row, double col, double phi, double radius1, double radius2, string color = null)
+        {
+            HOperatorSet.SetColor(_window, color ?? "yellow");
+            HOperatorSet.SetLineWidth(_window, 2);
+            HOperatorSet.SetDraw(_window, "margin");
+            HOperatorSet.DispEllipse(_window, row, col, phi, radius1, radius2);
+        }
+
         public void DrawRoiRectangle(double row1, double col1, double row2, double col2)
         {
             HOperatorSet.SetColor(_window, "blue");

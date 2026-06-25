@@ -59,6 +59,7 @@
     <Compile Include="ImageQuality\HalconImageQualityChecker.cs" />
     <Compile Include="LineFitting\HalconLineFitter.cs" />
     <Compile Include="CircleFitting\HalconCircleFitter.cs" />
+    <Compile Include="EllipseFitting\HalconEllipseFitter.cs" />
     <Compile Include="TemplateMatching\HalconTemplateManager.cs" />
     <Compile Include="TemplateMatching\HalconTemplateMatcher.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

@@ -77,9 +77,11 @@ namespace FlashMeasurementSystem
             this._clearEdgeDetectionButton = new System.Windows.Forms.Button();
             this.fitLineButton = new System.Windows.Forms.Button();
             this.fitCircleButton = new System.Windows.Forms.Button();
+            this.fitEllipseButton = new System.Windows.Forms.Button();
             this._edgeStatusLabel = new System.Windows.Forms.Label();
             this.lineFittingResultLabel = new System.Windows.Forms.Label();
             this.circleFittingResultLabel = new System.Windows.Forms.Label();
+            this.ellipseFittingResultLabel = new System.Windows.Forms.Label();
             this._edgeResultsGrid = new System.Windows.Forms.DataGridView();
             this.edgeIndexColumn = new System.Windows.Forms.DataGridViewTextBoxColumn();
             this.edgeRowColumn = new System.Windows.Forms.DataGridViewTextBoxColumn();
@@ -547,11 +549,12 @@ namespace FlashMeasurementSystem
             this.edgeTableLayout.Controls.Add(this._edgeStatusLabel, 0, 13);
             this.edgeTableLayout.Controls.Add(this.lineFittingResultLabel, 0, 14);
             this.edgeTableLayout.Controls.Add(this.circleFittingResultLabel, 0, 15);
-            this.edgeTableLayout.Controls.Add(this._edgeResultsGrid, 0, 16);
+            this.edgeTableLayout.Controls.Add(this.ellipseFittingResultLabel, 0, 16);
+            this.edgeTableLayout.Controls.Add(this._edgeResultsGrid, 0, 17);
             this.edgeTableLayout.Dock = System.Windows.Forms.DockStyle.Fill;
             this.edgeTableLayout.Location = new System.Drawing.Point(8, 33);
             this.edgeTableLayout.Name = "edgeTableLayout";
-            this.edgeTableLayout.RowCount = 17;
+            this.edgeTableLayout.RowCount = 18;
             this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 44F));
             this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 26F));
             this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 26F));
@@ -566,6 +569,7 @@ namespace FlashMeasurementSystem
             this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 26F));
             this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 58F));
             this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 22F));
+            this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 48F));
             this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 48F));
             this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 48F));
             this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 100F));
@@ -922,12 +926,15 @@ namespace FlashMeasurementSystem
             this.edgeButtonPanel.Controls.Add(this._clearEdgeDetectionButton, 1, 0);
             this.edgeButtonPanel.Controls.Add(this.fitLineButton, 0, 1);
             this.edgeButtonPanel.Controls.Add(this.fitCircleButton, 1, 1);
+            this.edgeButtonPanel.SetColumnSpan(this.fitEllipseButton, 2);
+            this.edgeButtonPanel.Controls.Add(this.fitEllipseButton, 0, 2);
             this.edgeButtonPanel.Dock = System.Windows.Forms.DockStyle.Fill;
             this.edgeButtonPanel.Location = new System.Drawing.Point(3, 333);
             this.edgeButtonPanel.Name = "edgeButtonPanel";
-            this.edgeButtonPanel.RowCount = 2;
-            this.edgeButtonPanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 50F));
-            this.edgeButtonPanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 50F));
+            this.edgeButtonPanel.RowCount = 3;
+            this.edgeButtonPanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 33.33F));
+            this.edgeButtonPanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 33.33F));
+            this.edgeButtonPanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 33.34F));
             this.edgeButtonPanel.Size = new System.Drawing.Size(225, 52);
             this.edgeButtonPanel.TabIndex = 23;
             // 
@@ -974,9 +981,20 @@ namespace FlashMeasurementSystem
             this.fitCircleButton.Text = "Fit &Circle";
             this.fitCircleButton.UseVisualStyleBackColor = true;
             this.fitCircleButton.Click += new System.EventHandler(this.FitCircleButton_Click);
-            // 
+            //
+            // fitEllipseButton
+            //
+            this.fitEllipseButton.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.fitEllipseButton.Location = new System.Drawing.Point(3, 55);
+            this.fitEllipseButton.Name = "fitEllipseButton";
+            this.fitEllipseButton.Size = new System.Drawing.Size(219, 20);
+            this.fitEllipseButton.TabIndex = 4;
+            this.fitEllipseButton.Text = "Fit &Ellipse";
+            this.fitEllipseButton.UseVisualStyleBackColor = true;
+            this.fitEllipseButton.Click += new System.EventHandler(this.FitEllipseButton_Click);
+            //
             // _edgeStatusLabel
-            // 
+            //
             this.edgeTableLayout.SetColumnSpan(this._edgeStatusLabel, 2);
             this._edgeStatusLabel.Dock = System.Windows.Forms.DockStyle.Fill;
             this._edgeStatusLabel.Location = new System.Drawing.Point(3, 388);
@@ -1007,9 +1025,20 @@ namespace FlashMeasurementSystem
             this.circleFittingResultLabel.TabIndex = 26;
             this.circleFittingResultLabel.Text = "圓擬合: 尚未執行";
             this.circleFittingResultLabel.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
-            // 
+            //
+            // ellipseFittingResultLabel
+            //
+            this.edgeTableLayout.SetColumnSpan(this.ellipseFittingResultLabel, 2);
+            this.ellipseFittingResultLabel.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.ellipseFittingResultLabel.Location = new System.Drawing.Point(3, 506);
+            this.ellipseFittingResultLabel.Name = "ellipseFittingResultLabel";
+            this.ellipseFittingResultLabel.Size = new System.Drawing.Size(225, 48);
+            this.ellipseFittingResultLabel.TabIndex = 27;
+            this.ellipseFittingResultLabel.Text = "橢圓擬合: 尚未執行";
+            this.ellipseFittingResultLabel.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
+            //
             // _edgeResultsGrid
-            // 
+            //
             this._edgeResultsGrid.AllowUserToAddRows = false;
             this._edgeResultsGrid.AllowUserToDeleteRows = false;
             this._edgeResultsGrid.AutoSizeColumnsMode = System.Windows.Forms.DataGridViewAutoSizeColumnsMode.Fill;
@@ -1523,9 +1552,11 @@ namespace FlashMeasurementSystem
         private System.Windows.Forms.Button _clearEdgeDetectionButton;
         private System.Windows.Forms.Button fitLineButton;
         private System.Windows.Forms.Button fitCircleButton;
+        private System.Windows.Forms.Button fitEllipseButton;
         private System.Windows.Forms.Label _edgeStatusLabel;
         private System.Windows.Forms.Label lineFittingResultLabel;
         private System.Windows.Forms.Label circleFittingResultLabel;
+        private System.Windows.Forms.Label ellipseFittingResultLabel;
         private System.Windows.Forms.DataGridView _edgeResultsGrid;
         private System.Windows.Forms.DataGridViewTextBoxColumn edgeIndexColumn;
         private System.Windows.Forms.DataGridViewTextBoxColumn edgeRowColumn;

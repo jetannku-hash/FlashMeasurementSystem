@@ -55,6 +55,7 @@
     <Compile Include="EdgeDetectionDomainTests.cs" />
     <Compile Include="LineFittingDomainTests.cs" />
     <Compile Include="CircleFittingDomainTests.cs" />
+    <Compile Include="EllipseFittingDomainTests.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="DistanceMeasurementDomainTests.cs" />
     <Compile Include="AngleMeasurementDomainTests.cs" />

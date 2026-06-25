@@ -14,6 +14,8 @@ using FlashMeasurementSystem.Halcon.LineFitting;
 using FlashMeasurementSystem.Halcon.TemplateMatching;
 using FlashMeasurementSystem.Domain.CircleFitting;
 using FlashMeasurementSystem.Halcon.CircleFitting;
+using FlashMeasurementSystem.Domain.EllipseFitting;
+using FlashMeasurementSystem.Halcon.EllipseFitting;
 using FlashMeasurementSystem.Domain.DistanceMeasurement;
 using FlashMeasurementSystem.Halcon.DistanceMeasurement;
 using FlashMeasurementSystem.Domain.AngleMeasurement;
@@ -40,6 +42,7 @@ namespace FlashMeasurementSystem
         private readonly HalconEdgeDetector _edgeDetector = new HalconEdgeDetector();
         private readonly HalconLineFitter _lineFitter = new HalconLineFitter();
         private readonly HalconCircleFitter _circleFitter = new HalconCircleFitter();
+        private readonly HalconEllipseFitter _ellipseFitter = new HalconEllipseFitter();
         private readonly HalconDistanceMeasurer _distanceMeasurer = new HalconDistanceMeasurer();
         private readonly HalconAngleMeasurer _angleMeasurer = new HalconAngleMeasurer();
         private EdgeDetectionRoi _latestEdgeRoi;
@@ -47,6 +50,7 @@ namespace FlashMeasurementSystem
         private EdgeResult _latestEdgeResult;
         private LineFittingResult _latestLineFittingResult;
         private CircleFittingResult _latestCircleFittingResult;
+        private EllipseFittingResult _latestEllipseFittingResult;
         private bool _updatingEdgeRoiControls;
 
         // M3c-1：配方執行（Stage A：載入 + 設參考姿態 + 轉換並繪製跟隨工件的 ROI）
@@ -289,10 +293,12 @@ namespace FlashMeasurementSystem
             _toolTip.SetToolTip(_clearEdgeDetectionButton, "Clear edge detection results");
             _toolTip.SetToolTip(fitLineButton, "Fit a straight line to the detected edge points");
             _toolTip.SetToolTip(fitCircleButton, "Fit a circle to the detected edge points");
+            _toolTip.SetToolTip(fitEllipseButton, "Fit an ellipse to the detected edge points");
             _toolTip.SetToolTip(_edgeResultsGrid, "Detected edge points (Row, Col, Amplitude, Distance)");
             _toolTip.SetToolTip(_edgeStatusLabel, "Edge detection status — PASS (green) or FAIL (red)");
             _toolTip.SetToolTip(lineFittingResultLabel, "Line fitting result");
             _toolTip.SetToolTip(circleFittingResultLabel, "Circle fitting result");
+            _toolTip.SetToolTip(ellipseFittingResultLabel, "Ellipse fitting result");
 
             // ── Measurement ──
             _toolTip.SetToolTip(measurementPixelSizeXNumeric, "Pixel size in X direction (µm/pixel)");
@@ -673,8 +679,10 @@ namespace FlashMeasurementSystem
                 _latestEdgeResult = result;
                 _latestLineFittingResult = null;
                 _latestCircleFittingResult = null;
+                _latestEllipseFittingResult = null;
                 UpdateLineFittingResult(null);
                 UpdateCircleFittingResult(null);
+                UpdateEllipseFittingResult(null);
                 ShowFittingOverlay();
             }
             catch (HalconException ex)
@@ -775,6 +783,41 @@ namespace FlashMeasurementSystem
                 UpdateCircleFittingResult(new CircleFittingResult
                 {
                     ErrorMessage = "圓擬合失敗 (unexpected " + ex.GetType().Name + "): " + ex.Message
+                });
+            }
+        }
+
+        private void FitEllipseButton_Click(object sender, EventArgs e)
+        {
+            if (_latestEdgeResult == null || _latestEdgeResult.EdgePoints == null)
+            {
+                UpdateEllipseFittingResult(new EllipseFittingResult { ErrorMessage = "請先執行邊緣檢測" });
+                return;
+            }
+
+            try
+            {
+                EllipseFittingResult result = _ellipseFitter.FitEllipse(_latestEdgeResult.EdgePoints, EllipseFittingParameters.Default());
+                _latestEllipseFittingResult = result;
+                UpdateEllipseFittingResult(result);
+
+                if (result.Success)
+                {
+                    ShowFittingOverlay();
+                }
+            }
+            catch (HalconException ex)
+            {
+                UpdateEllipseFittingResult(new EllipseFittingResult
+                {
+                    ErrorMessage = "橢圓擬合失敗 [Halcon " + ex.GetErrorCode() + "]: " + ex.Message
+                });
+            }
+            catch (Exception ex)
+            {
+                UpdateEllipseFittingResult(new EllipseFittingResult
+                {
+                    ErrorMessage = "橢圓擬合失敗 (unexpected " + ex.GetType().Name + "): " + ex.Message
                 });
             }
         }
@@ -1355,6 +1398,13 @@ namespace FlashMeasurementSystem
                 an.DrawCircle(circle.CenterRow, circle.CenterColumn, circle.RadiusPx, "green");
             }
 
+            EllipseFittingResult ellipse = _latestEllipseFittingResult;
+            if (ellipse != null && ellipse.Success)
+            {
+                an.DrawEllipse(ellipse.CenterRow, ellipse.CenterColumn, ellipse.Phi,
+                    ellipse.Radius1Px, ellipse.Radius2Px, "green");
+            }
+
             // 結果表（4.13b/B）：顯示目前量測值與公差判定（OK/NG），由 M3c 配方流程接上。
             System.Collections.Generic.List<OverlayResultRow> resultRows = BuildResultRows();
             if (resultRows.Count > 0)
@@ -1399,6 +1449,18 @@ namespace FlashMeasurementSystem
                     Name = "Circle",
                     ValueText = string.Format(CultureInfo.InvariantCulture,
                         "D={0:F1}px R={1:F1}px", circleResult.DiameterPx, circleResult.RadiusPx),
+                    IsOk = null
+                });
+            }
+
+            EllipseFittingResult ellipseResult = _latestEllipseFittingResult;
+            if (ellipseResult != null && ellipseResult.Success)
+            {
+                rows.Add(new OverlayResultRow
+                {
+                    Name = "Ellipse",
+                    ValueText = string.Format(CultureInfo.InvariantCulture,
+                        "R1={0:F1}px R2={1:F1}px", ellipseResult.Radius1Px, ellipseResult.Radius2Px),
                     IsOk = null
                 });
             }
@@ -1471,14 +1533,45 @@ namespace FlashMeasurementSystem
             circleFittingResultLabel.ForeColor = Color.Green;
         }
 
+        private void UpdateEllipseFittingResult(EllipseFittingResult result)
+        {
+            if (result == null)
+            {
+                ellipseFittingResultLabel.Text = "橢圓擬合: 尚未執行";
+                ellipseFittingResultLabel.ForeColor = Color.Black;
+                return;
+            }
+
+            if (!result.Success)
+            {
+                ellipseFittingResultLabel.Text = "橢圓擬合失敗: " + result.ErrorMessage;
+                ellipseFittingResultLabel.ForeColor = Color.Red;
+                return;
+            }
+
+            ellipseFittingResultLabel.Text = string.Format(
+                CultureInfo.InvariantCulture,
+                "Ellipse OK | C=({0:F2},{1:F2}) R1={2:F2}px R2={3:F2}px\nPhi={4:F2}° RMS={5:F4}px Pts={6}",
+                result.CenterRow,
+                result.CenterColumn,
+                result.Radius1Px,
+                result.Radius2Px,
+                result.Phi * 180.0 / Math.PI,
+                result.ResidualRms,
+                result.UsedPoints);
+            ellipseFittingResultLabel.ForeColor = Color.Green;
+        }
+
         private void ClearFittingState()
         {
             _latestEdgeRoi = null;
             _latestEdgeResult = null;
             _latestLineFittingResult = null;
             _latestCircleFittingResult = null;
+            _latestEllipseFittingResult = null;
             UpdateLineFittingResult(null);
             UpdateCircleFittingResult(null);
+            UpdateEllipseFittingResult(null);
         }
 
         // 邊緣量測結果失效：清結果/擬合狀態與結果表，回到「等待 Detect」。
@@ -1488,8 +1581,10 @@ namespace FlashMeasurementSystem
             _latestEdgeResult = null;
             _latestLineFittingResult = null;
             _latestCircleFittingResult = null;
+            _latestEllipseFittingResult = null;
             UpdateLineFittingResult(null);
             UpdateCircleFittingResult(null);
+            UpdateEllipseFittingResult(null);
             RestoreDefaultEdgeGridColumns();
             _edgeResultsGrid.Rows.Clear();
             _edgeStatusLabel.Text = "Draw ROI, then Detect";
