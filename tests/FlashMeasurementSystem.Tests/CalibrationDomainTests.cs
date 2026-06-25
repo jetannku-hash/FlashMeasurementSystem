@@ -74,6 +74,41 @@ namespace FlashMeasurementSystem.Tests
             {
                 if (File.Exists(path)) File.Delete(path);
             }
+
+            // ─── Load 錯誤處理：缺檔擲明確例外（非 raw、非 null）──
+            string missing = Path.Combine(Path.GetTempPath(),
+                "fms_cal_missing_" + Guid.NewGuid().ToString("N").Substring(0, 8) + ".json");
+            AssertThrows(() => new CalibrationStore().Load(missing), "Load missing calibration throws");
+
+            // ─── Load 錯誤處理：損毀 JSON 擲明確例外 ──
+            string corrupt = Path.Combine(Path.GetTempPath(),
+                "fms_cal_corrupt_" + Guid.NewGuid().ToString("N").Substring(0, 8) + ".json");
+            File.WriteAllText(corrupt, "{ not valid calibration json ");
+            try { AssertThrows(() => new CalibrationStore().Load(corrupt), "Load corrupt calibration JSON throws"); }
+            finally { if (File.Exists(corrupt)) File.Delete(corrupt); }
+
+            // ─── 原子覆寫：覆寫既有檔後仍正確載回新內容，且不殘留 .tmp ──
+            string ovr = Path.Combine(Path.GetTempPath(),
+                "fms_cal_ovr_" + Guid.NewGuid().ToString("N").Substring(0, 8) + ".json");
+            try
+            {
+                ICalibrationStore s = new CalibrationStore();
+                s.Save(new CalibrationProfile { ProfileId = "C-V1", PixelSizeUmX = 11.0 }, ovr);
+                s.Save(new CalibrationProfile { ProfileId = "C-V2", PixelSizeUmX = 22.0 }, ovr); // 覆寫既有檔
+                CalibrationProfile reloaded = s.Load(ovr);
+                AssertEqual("C-V2", reloaded.ProfileId, "Atomic overwrite keeps latest ProfileId");
+                AssertClose(22.0, reloaded.PixelSizeUmX, 1e-9, "Atomic overwrite keeps latest value");
+                if (File.Exists(ovr + ".tmp"))
+                    throw new InvalidOperationException("Save should not leave a .tmp file behind");
+            }
+            finally { if (File.Exists(ovr)) File.Delete(ovr); }
+        }
+
+        private static void AssertThrows(Action action, string name)
+        {
+            try { action(); }
+            catch { return; }
+            throw new InvalidOperationException(name + " — expected an exception but none was thrown");
         }
 
         private static void AssertEqual<T>(T expected, T actual, string name)
