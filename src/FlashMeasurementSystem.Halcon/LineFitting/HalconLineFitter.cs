@@ -71,6 +71,10 @@ namespace FlashMeasurementSystem.Halcon.LineFitting
 
                     double deltaRow = result.Row2 - result.Row1;
                     double deltaCol = result.Column2 - result.Column1;
+                    // 慣例：影像座標系（Row 向下），故 AngleDeg 為「相對水平、順時針為正」。
+                    // 這與 HALCON angle_lx（數學慣例、逆時針為正）符號相反——勿與 HalconAngleMeasurer
+                    // 的輸出直接相加比較。本值僅用於 line 角度公差判定（量測值 vs nominal 同屬此慣例、
+                    // 由 AngleNormalizer 以 180° 週期比對），自洽無誤。
                     result.AngleDeg = Math.Atan2(deltaRow, deltaCol) * 180.0 / Math.PI;
                     result.Length = Math.Sqrt(deltaRow * deltaRow + deltaCol * deltaCol);
                     result.ResidualRms = CalculateResidualRms(edgePoints, result);

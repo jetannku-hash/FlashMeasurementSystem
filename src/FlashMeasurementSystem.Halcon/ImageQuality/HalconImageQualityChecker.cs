@@ -36,6 +36,12 @@ namespace FlashMeasurementSystem.Halcon.ImageQuality
                             result.SaturationRatio = totalPixels <= 0.0 ? 0.0 : (satArea.D / totalPixels) * 100.0;
                         }
 
+                        // 對焦度量：取絕對值 Laplace 響應的標準差（越高越銳利）。
+                        // 已知限制：Laplace("absolute") 對 byte 影像會把高頻響應 clamp 到 0..255，
+                        // 在亮/高對比影像上 deviation 被壓縮、略低估銳利度。改用非 clamp 型別
+                        // （signed/int16 或 derivate_gauss）可更穩定，但會改變 BlurScore 的數值尺度，
+                        // 需對真實影像重新校準 MinBlurScore 門檻——故此處先保留現行尺度，待有真實
+                        // 影像樣本時再一併調整門檻。
                         using (HImage laplace = workingImage.Laplace("absolute", 3, "n_4"))
                         {
                             HOperatorSet.Intensity(domain, laplace, out HTuple _, out HTuple blurDeviation);
