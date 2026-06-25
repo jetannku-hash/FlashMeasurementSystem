@@ -127,28 +127,7 @@ namespace FlashMeasurementSystem
             }
         }
 
-        // 由 app base directory 往上找 FlashMeasurementSystem.sln，定位專案根的 data/calibrations。
-        // 找不到則退回 base directory 下的 data/calibrations。
-        private static string ResolveCalibrationsDir()
-        {
-            try
-            {
-                var current = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory);
-                while (current != null)
-                {
-                    if (File.Exists(Path.Combine(current.FullName, "FlashMeasurementSystem.sln")))
-                    {
-                        return Path.Combine(current.FullName, "data", "calibrations");
-                    }
-                    current = current.Parent;
-                }
-            }
-            catch
-            {
-                // 任何路徑問題都退回 base directory
-            }
-            return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "data", "calibrations");
-        }
+        private static string ResolveCalibrationsDir() => DataPaths.SubDir("calibrations");
 
         private static string SanitizeFileName(string name)
         {

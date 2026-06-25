@@ -375,17 +375,7 @@ namespace FlashMeasurementSystem
             templateFileCombo.SelectedIndex = 0;
         }
 
-        private string FindTemplatesDirectory()
-        {
-            var current = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory);
-            while (current != null)
-            {
-                if (File.Exists(Path.Combine(current.FullName, "FlashMeasurementSystem.sln")))
-                    return Path.Combine(current.FullName, "data", "templates");
-                current = current.Parent;
-            }
-            return null;
-        }
+        private string FindTemplatesDirectory() => DataPaths.TemplatesDirOrNull();
 
         private void LoadRefImageButton_Click(object sender, EventArgs e)
         {
@@ -843,15 +833,7 @@ namespace FlashMeasurementSystem
             double l2 = (double)_edgeRoiWidthNumeric.Value / 2.0;
 
             _latestEdgeRoi = EdgeDetectionRoi.FromCenter(_editCenterRow, _editCenterCol, l1, l2, phi);
-            _latestEdgeResult = null;
-            _latestLineFittingResult = null;
-            _latestCircleFittingResult = null;
-            UpdateLineFittingResult(null);
-            UpdateCircleFittingResult(null);
-            RestoreDefaultEdgeGridColumns();
-            _edgeResultsGrid.Rows.Clear();
-            _edgeStatusLabel.Text = "Draw ROI, then Detect";
-            _edgeStatusLabel.ForeColor = Color.Black;
+            InvalidateEdgeState();
             ShowFittingOverlay();
             _imageHelper.BeginRect2Edit(_editCenterRow, _editCenterCol, phi, l1, l2, OnEdgeRect2Changed);
         }
@@ -1236,66 +1218,11 @@ namespace FlashMeasurementSystem
         }
 
         // 由 app base directory 往上找 .sln，定位 data/ (root of data subdirs)。
-        private static string ResolveDataDir()
-        {
-            try
-            {
-                var current = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory);
-                while (current != null)
-                {
-                    if (File.Exists(Path.Combine(current.FullName, "FlashMeasurementSystem.sln")))
-                    {
-                        return Path.Combine(current.FullName, "data");
-                    }
-                    current = current.Parent;
-                }
-            }
-            catch { }
-            return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "data");
-        }
+        private static string ResolveDataDir() => DataPaths.DataDir();
 
-        // 由 app base directory 往上找 .sln，定位 data/calibrations（與 CalibrationDialog 同邏輯）。
-        private static string ResolveCalibrationsDir()
-        {
-            try
-            {
-                var current = new System.IO.DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory);
-                while (current != null)
-                {
-                    if (System.IO.File.Exists(System.IO.Path.Combine(current.FullName, "FlashMeasurementSystem.sln")))
-                    {
-                        return System.IO.Path.Combine(current.FullName, "data", "calibrations");
-                    }
-                    current = current.Parent;
-                }
-            }
-            catch
-            {
-                // 退回 base directory
-            }
-            return System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "data", "calibrations");
-        }
+        private static string ResolveCalibrationsDir() => DataPaths.SubDir("calibrations");
 
-        private static string ResolveRecipesDir()
-        {
-            try
-            {
-                var current = new System.IO.DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory);
-                while (current != null)
-                {
-                    if (System.IO.File.Exists(System.IO.Path.Combine(current.FullName, "FlashMeasurementSystem.sln")))
-                    {
-                        return System.IO.Path.Combine(current.FullName, "data", "recipes");
-                    }
-                    current = current.Parent;
-                }
-            }
-            catch
-            {
-                // 退回 base directory
-            }
-            return System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "data", "recipes");
-        }
+        private static string ResolveRecipesDir() => DataPaths.SubDir("recipes");
 
         // 開啟簡易 pixel size 校正對話框（M3b / 4.10b）。帶入目前影像尺寸供 FOV 計算。
         private void OpenCalibrationDialog(object sender, EventArgs e)
@@ -1538,6 +1465,21 @@ namespace FlashMeasurementSystem
             UpdateCircleFittingResult(null);
         }
 
+        // 邊緣量測結果失效：清結果/擬合狀態與結果表，回到「等待 Detect」。
+        // 不動 _latestEdgeRoi（各呼叫端自行設定），也不動 overlay/編輯模式（呼叫端視情況處理）。
+        private void InvalidateEdgeState()
+        {
+            _latestEdgeResult = null;
+            _latestLineFittingResult = null;
+            _latestCircleFittingResult = null;
+            UpdateLineFittingResult(null);
+            UpdateCircleFittingResult(null);
+            RestoreDefaultEdgeGridColumns();
+            _edgeResultsGrid.Rows.Clear();
+            _edgeStatusLabel.Text = "Draw ROI, then Detect";
+            _edgeStatusLabel.ForeColor = Color.Black;
+        }
+
         private void SetEdgeStatus(bool success, string message)
         {
             _edgeStatusLabel.Text = success ? "PASS | " + message : "FAIL | " + message;
@@ -1570,15 +1512,7 @@ namespace FlashMeasurementSystem
                 (double)_edgeScanLengthNumeric.Value / 2.0,
                 (double)_edgeRoiWidthNumeric.Value / 2.0,
                 (double)_edgeAngleNumeric.Value * Math.PI / 180.0);
-            _latestEdgeResult = null;
-            _latestLineFittingResult = null;
-            _latestCircleFittingResult = null;
-            UpdateLineFittingResult(null);
-            UpdateCircleFittingResult(null);
-            RestoreDefaultEdgeGridColumns();
-            _edgeResultsGrid.Rows.Clear();
-            _edgeStatusLabel.Text = "Draw ROI, then Detect";
-            _edgeStatusLabel.ForeColor = Color.Black;
+            InvalidateEdgeState();
             _imageHelper.IsRoiMode = false;
             _edgeDrawRoiCheck.Checked = false;
             ShowFittingOverlay();
@@ -1604,15 +1538,7 @@ namespace FlashMeasurementSystem
             }
 
             _latestEdgeRoi = EdgeDetectionRoi.FromCenter(cr, cc, l1, l2, phi);
-            _latestEdgeResult = null;
-            _latestLineFittingResult = null;
-            _latestCircleFittingResult = null;
-            UpdateLineFittingResult(null);
-            UpdateCircleFittingResult(null);
-            RestoreDefaultEdgeGridColumns();
-            _edgeResultsGrid.Rows.Clear();
-            _edgeStatusLabel.Text = "Draw ROI, then Detect";
-            _edgeStatusLabel.ForeColor = Color.Black;
+            InvalidateEdgeState();
         }
 
         private static decimal ClampNumericValue(NumericUpDown numeric, decimal value)

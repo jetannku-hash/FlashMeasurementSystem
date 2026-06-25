@@ -76,6 +76,7 @@
       <DependentUpon>MainWindow.cs</DependentUpon>
     </Compile>
     <Compile Include="Program.cs" />
+    <Compile Include="DataPaths.cs" />
     <Compile Include="OverlayAnnotator.cs" />
     <Compile Include="CalibrationDialog.cs">
       <SubType>Form</SubType>
