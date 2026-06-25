@@ -53,23 +53,49 @@ namespace FlashMeasurementSystem.Reporting.Csv
                 }
             }
 
-            string content = sb.ToString();
-            if (!writeHeader)
+            string rows = sb.ToString();
+            string mainPayload = writeHeader ? Header + Environment.NewLine + rows : rows;
+            WriteWithFallback(filePath, mainPayload, rows);
+        }
+
+        // 寫入主檔；若被鎖（操作員以 Excel 開啟 CSV 很常見）先重試數次，仍失敗則寫到
+        // 同目錄附時間戳的 fallback 檔，避免遺失本次量測資料。fallback 為獨立新檔，必含 header。
+        private static void WriteWithFallback(string filePath, string mainPayload, string rowsOnly)
+        {
+            const int maxAttempts = 3;
+            for (int attempt = 1; ; attempt++)
             {
-                File.AppendAllText(filePath, content, Encoding.UTF8);
-            }
-            else
-            {
-                File.AppendAllText(filePath, Header + Environment.NewLine + content, Encoding.UTF8);
+                try
+                {
+                    File.AppendAllText(filePath, mainPayload, Encoding.UTF8);
+                    return;
+                }
+                catch (IOException) when (attempt < maxAttempts)
+                {
+                    System.Threading.Thread.Sleep(100);
+                }
+                catch (IOException)
+                {
+                    string dir = Path.GetDirectoryName(filePath);
+                    string stamp = DateTime.Now.ToString("yyyyMMdd_HHmmssfff", CultureInfo.InvariantCulture);
+                    string fallback = Path.Combine(
+                        string.IsNullOrEmpty(dir) ? "." : dir,
+                        Path.GetFileNameWithoutExtension(filePath) + ".locked-" + stamp + Path.GetExtension(filePath));
+                    File.AppendAllText(fallback, Header + Environment.NewLine + rowsOnly, Encoding.UTF8);
+                    return;
+                }
             }
         }
 
         private static string CsvEscape(string value)
         {
             if (string.IsNullOrEmpty(value)) return "";
-            if (value.Contains(",") || value.Contains("\"") || value.Contains("\n"))
-                return "\"" + value.Replace("\"", "\"\"") + "\"";
-            return value;
+            // CSV formula injection 防護：欄位以 = + - @（或 Tab/CR）開頭時，Excel/Sheets 會當公式執行。
+            // 加前綴單引號中和。數值欄位不經此函式，故不影響負數格式。
+            string v = "=+-@\t\r".IndexOf(value[0]) >= 0 ? "'" + value : value;
+            if (v.Contains(",") || v.Contains("\"") || v.Contains("\n") || v.Contains("\r"))
+                return "\"" + v.Replace("\"", "\"\"") + "\"";
+            return v;
         }
     }
 }

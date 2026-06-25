@@ -64,6 +64,7 @@
     <Compile Include="CalibrationDomainTests.cs" />
     <Compile Include="RoiDomainTests.cs" />
     <Compile Include="Rect2EditMathTests.cs" />
+    <Compile Include="CsvReportWriterTests.cs" />
     <Compile Include="WorkflowDomainTests.cs" />
   </ItemGroup>
   <ItemGroup>
@@ -78,6 +79,10 @@
     <ProjectReference Include="..\..\src\FlashMeasurementSystem.Infrastructure\FlashMeasurementSystem.Infrastructure.csproj">
       <Project>{33333333-3333-4333-8333-333333333333}</Project>
       <Name>FlashMeasurementSystem.Infrastructure</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\src\FlashMeasurementSystem.Reporting\FlashMeasurementSystem.Reporting.csproj">
+      <Project>{66666666-6666-4666-8666-666666666666}</Project>
+      <Name>FlashMeasurementSystem.Reporting</Name>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

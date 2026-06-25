@@ -117,6 +117,39 @@ namespace FlashMeasurementSystem.Tests
             {
                 if (File.Exists(path)) File.Delete(path);
             }
+
+            // ─── Load 錯誤處理：缺檔擲明確例外（非 raw、非 null）──
+            string missing = Path.Combine(Path.GetTempPath(),
+                "fms_missing_" + Guid.NewGuid().ToString("N").Substring(0, 8) + ".zcp");
+            AssertThrows(() => new RecipeStore().Load(missing), "Load missing recipe throws");
+
+            // ─── Load 錯誤處理：損毀 JSON 擲明確例外 ──
+            string corrupt = Path.Combine(Path.GetTempPath(),
+                "fms_corrupt_" + Guid.NewGuid().ToString("N").Substring(0, 8) + ".zcp");
+            File.WriteAllText(corrupt, "{ this is not valid json ");
+            try { AssertThrows(() => new RecipeStore().Load(corrupt), "Load corrupt recipe JSON throws"); }
+            finally { if (File.Exists(corrupt)) File.Delete(corrupt); }
+
+            // ─── 原子覆寫：覆寫既有檔後仍正確載回新內容，且不殘留 .tmp ──
+            string ovr = Path.Combine(Path.GetTempPath(),
+                "fms_ovr_" + Guid.NewGuid().ToString("N").Substring(0, 8) + ".zcp");
+            try
+            {
+                IRecipeStore s = new RecipeStore();
+                s.Save(new Recipe { RecipeId = "V1" }, ovr);
+                s.Save(new Recipe { RecipeId = "V2" }, ovr); // 覆寫既有檔
+                AssertEqual("V2", s.Load(ovr).RecipeId, "Atomic overwrite keeps latest content");
+                if (File.Exists(ovr + ".tmp"))
+                    throw new InvalidOperationException("Save should not leave a .tmp file behind");
+            }
+            finally { if (File.Exists(ovr)) File.Delete(ovr); }
+        }
+
+        private static void AssertThrows(Action action, string name)
+        {
+            try { action(); }
+            catch { return; }
+            throw new InvalidOperationException(name + " — expected an exception but none was thrown");
         }
 
         private static void AssertClose(double expected, double actual, double tol, string name)

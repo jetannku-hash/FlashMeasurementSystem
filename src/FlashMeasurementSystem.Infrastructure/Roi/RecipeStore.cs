@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using FlashMeasurementSystem.Application.Roi;
 using FlashMeasurementSystem.Domain.Roi;
@@ -20,13 +21,44 @@ namespace FlashMeasurementSystem.Infrastructure.Roi
             {
                 Directory.CreateDirectory(dir);
             }
-            File.WriteAllText(filePath, json);
+            // 原子寫入：先寫同目錄暫存檔再 rename 覆蓋，避免中途崩潰/斷電截斷既有好檔。
+            string tmp = filePath + ".tmp";
+            File.WriteAllText(tmp, json);
+            if (File.Exists(filePath))
+                File.Replace(tmp, filePath, null);
+            else
+                File.Move(tmp, filePath);
         }
 
         public Recipe Load(string filePath)
         {
-            string json = File.ReadAllText(filePath);
-            return JsonConvert.DeserializeObject<Recipe>(json);
+            if (!File.Exists(filePath))
+                throw new FileNotFoundException("找不到配方檔：" + filePath, filePath);
+
+            string json;
+            try
+            {
+                json = File.ReadAllText(filePath);
+            }
+            catch (IOException ex)
+            {
+                throw new InvalidOperationException("讀取配方檔失敗：" + filePath + " — " + ex.Message, ex);
+            }
+
+            Recipe recipe;
+            try
+            {
+                recipe = JsonConvert.DeserializeObject<Recipe>(json);
+            }
+            catch (JsonException ex)
+            {
+                throw new InvalidOperationException("配方檔格式錯誤（JSON 解析失敗）：" + filePath + " — " + ex.Message, ex);
+            }
+
+            if (recipe == null)
+                throw new InvalidOperationException("配方檔內容為空或無效：" + filePath);
+
+            return recipe;
         }
     }
 }
