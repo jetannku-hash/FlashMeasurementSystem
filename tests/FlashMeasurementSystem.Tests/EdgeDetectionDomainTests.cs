@@ -115,6 +115,8 @@ namespace FlashMeasurementSystem.Tests
             Console.WriteLine("CircleFittingDomainTests passed");
             EllipseFittingDomainTests.Run();
             Console.WriteLine("EllipseFittingDomainTests passed");
+            RectangleFittingDomainTests.Run();
+            Console.WriteLine("RectangleFittingDomainTests passed");
             DistanceMeasurementDomainTests.Run();
             Console.WriteLine("DistanceMeasurementDomainTests passed");
             AngleMeasurementDomainTests.Run();

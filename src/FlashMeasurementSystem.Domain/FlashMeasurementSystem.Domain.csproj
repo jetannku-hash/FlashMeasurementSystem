@@ -65,6 +65,8 @@
     <Compile Include="CircleFitting\CircleFittingResult.cs" />
     <Compile Include="EllipseFitting\EllipseFittingParameters.cs" />
     <Compile Include="EllipseFitting\EllipseFittingResult.cs" />
+    <Compile Include="RectangleFitting\RectangleFittingParameters.cs" />
+    <Compile Include="RectangleFitting\RectangleFittingResult.cs" />
     <Compile Include="TemplateMatching\TemplateMatchResult.cs" />
     <Compile Include="TemplateMatching\TemplateCreationParameters.cs" />
     <Compile Include="TemplateMatching\TemplateMatchingParameters.cs" />

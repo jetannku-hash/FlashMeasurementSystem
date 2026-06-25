@@ -14,6 +14,7 @@ namespace FlashMeasurementSystem.Tests.Halcon
                 LineFitterTests.Run,
                 CircleFitterTests.Run,
                 EllipseFitterTests.Run,
+                RectangleFitterTests.Run,
                 AngleMeasurerTests.Run,
                 ImageQualityCheckerTests.Run,
                 TemplateMatcherTests.Run,

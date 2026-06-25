@@ -57,6 +57,7 @@
     <Compile Include="LineFitting\ILineFitter.cs" />
     <Compile Include="CircleFitting\ICircleFitter.cs" />
     <Compile Include="EllipseFitting\IEllipseFitter.cs" />
+    <Compile Include="RectangleFitting\IRectangleFitter.cs" />
     <Compile Include="TemplateMatching\ITemplateManager.cs" />
     <Compile Include="TemplateMatching\ITemplateMatcher.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
