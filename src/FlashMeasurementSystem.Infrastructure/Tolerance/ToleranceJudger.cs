@@ -58,6 +58,18 @@ namespace FlashMeasurementSystem.Infrastructure.Tolerance
                     continue;
                 }
 
+                // 公差規格反向（Upper < Lower，多為上下公差填反的輸入錯誤）：此時無值可通過，
+                // margin 數學也會反號。標為 NG 並給明確訊息，不做後續邊界計算，避免靜默誤判。
+                if (upper < lower - Epsilon)
+                {
+                    j.IsOk = false;
+                    j.Message = string.Format(CultureInfo.InvariantCulture,
+                        "NG：公差規格無效（上限 {0:F4} < 下限 {1:F4}）", upper, lower);
+                    result.NgCount++;
+                    result.Items.Add(j);
+                    continue;
+                }
+
                 // 偏差百分比（避免除以零）
                 if (Math.Abs(spec.Nominal) > Epsilon)
                     j.DeviationPercent = j.Deviation / spec.Nominal * 100.0;

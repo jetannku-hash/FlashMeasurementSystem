@@ -116,6 +116,17 @@ namespace FlashMeasurementSystem.Tests
                 if (ir.Items[i].Message == null || ir.Items[i].Message.IndexOf("無效", StringComparison.Ordinal) < 0)
                     throw new InvalidOperationException("Invalid item " + i + " should report invalid-value message, got: " + ir.Items[i].Message);
             }
+
+            // 反向公差規格（Upper < Lower，上下公差填反）→ NG，訊息標示規格無效，不靜默誤判
+            var invertedSpec = new List<ToleranceItemInput>
+            {
+                MakeItem("INV", 50.0, 50.0, 0.010, -0.010), // LowerTol=+0.01, UpperTol=-0.01 → 下限>上限
+            };
+            OverallJudgment xr = judger.Judge(invertedSpec);
+            AssertEqual(0, xr.OkCount, "Inverted spec never OK");
+            AssertEqual(1, xr.NgCount, "Inverted spec is NG");
+            if (xr.Items[0].Message == null || xr.Items[0].Message.IndexOf("規格無效", StringComparison.Ordinal) < 0)
+                throw new InvalidOperationException("Inverted spec should report invalid-spec message, got: " + xr.Items[0].Message);
         }
 
         private static ToleranceItemInput MakeItem(

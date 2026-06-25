@@ -1033,28 +1033,9 @@ namespace FlashMeasurementSystem
                 return;
             }
 
-            // pixel size 來源（決策 A）：配方 CalibrationProfileId 有設且檔案存在 → 用校正檔；否則退回量測分頁。
-            double pixelSizeUmX = (double)measurementPixelSizeXNumeric.Value;
-            double pixelSizeUmY = (double)measurementPixelSizeYNumeric.Value;
-            string pixelSizeSource = "量測分頁";
-            if (!string.IsNullOrEmpty(_loadedRecipe.CalibrationProfileId))
-            {
-                try
-                {
-                    string calPath = System.IO.Path.Combine(ResolveCalibrationsDir(), _loadedRecipe.CalibrationProfileId + ".json");
-                    if (System.IO.File.Exists(calPath))
-                    {
-                        CalibrationProfile prof = _calibrationStore.Load(calPath);
-                        pixelSizeUmX = prof.PixelSizeUmX;
-                        pixelSizeUmY = prof.PixelSizeUmY;
-                        pixelSizeSource = "校正檔 " + _loadedRecipe.CalibrationProfileId;
-                    }
-                }
-                catch
-                {
-                    // 載入校正檔失敗 → 沿用量測分頁數值
-                }
-            }
+            // pixel size 來源（決策 A）：配方 CalibrationProfileId 有設且檔案存在 → 用校正檔；
+            // 否則退回量測分頁。與一鍵量測共用 ResolvePixelSize（含載入失敗揭露）。
+            ResolvePixelSize(out double pixelSizeUmX, out double pixelSizeUmY, out string pixelSizeSource);
 
             Cursor = Cursors.WaitCursor;
             SetProgress("執行配方量測中…");
@@ -1165,10 +1146,16 @@ namespace FlashMeasurementSystem
                         pxUmY = prof.PixelSizeUmY;
                         source = "校正檔 " + _loadedRecipe.CalibrationProfileId;
                     }
+                    else
+                    {
+                        // 配方指定了校正檔但檔案不存在 → 揭露，不可靜默退回
+                        source = "量測分頁（⚠️ 找不到校正檔 " + _loadedRecipe.CalibrationProfileId + "）";
+                    }
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // 載入校正檔失敗 → 沿用量測分頁數值
+                    // 載入校正檔失敗（損毀/讀取錯誤）→ 沿用量測分頁數值，但須讓操作員知道，不可靜默吞。
+                    source = "量測分頁（⚠️ 校正檔 " + _loadedRecipe.CalibrationProfileId + " 載入失敗：" + ex.Message + "）";
                 }
             }
         }
