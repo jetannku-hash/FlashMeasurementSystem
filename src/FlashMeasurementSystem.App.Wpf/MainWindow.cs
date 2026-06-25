@@ -1338,7 +1338,7 @@ namespace FlashMeasurementSystem
                 an.DrawCircle(circle.CenterRow, circle.CenterColumn, circle.RadiusPx, "green");
             }
 
-            // 結果表（4.13b/B）：顯示目前量測值；公差判定 (IsOk) 留白，待配方流程 (M3c) 接上 OK/NG。
+            // 結果表（4.13b/B）：顯示目前量測值與公差判定（OK/NG），由 M3c 配方流程接上。
             System.Collections.Generic.List<OverlayResultRow> resultRows = BuildResultRows();
             if (resultRows.Count > 0)
             {
@@ -1346,8 +1346,7 @@ namespace FlashMeasurementSystem
             }
         }
 
-        // 從目前的 _latest* 量測狀態建出結果表的列。IsOk 一律 null（此階段只顯示數值，
-        // 公差 OK/NG 待 M3c 配方載入 nominal/公差後再接 ToleranceJudger）。
+        // 從目前的 _latest* 量測狀態建出結果表的列，含公差判定 (M3c 已接上 ToleranceJudger)。
         private System.Collections.Generic.List<OverlayResultRow> BuildResultRows()
         {
             var rows = new System.Collections.Generic.List<OverlayResultRow>();

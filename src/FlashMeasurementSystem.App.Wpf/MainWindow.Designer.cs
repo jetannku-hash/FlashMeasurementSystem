@@ -906,6 +906,11 @@ namespace FlashMeasurementSystem
             this._edgeAngleNumeric.Name = "_edgeAngleNumeric";
             this._edgeAngleNumeric.Size = new System.Drawing.Size(115, 22);
             this._edgeAngleNumeric.TabIndex = 22;
+            this._edgeAngleNumeric.Value = new decimal(new int[] {
+            0,
+            0,
+            0,
+            0});
             // 
             // edgeButtonPanel
             // 
