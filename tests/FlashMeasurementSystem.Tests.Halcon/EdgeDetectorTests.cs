@@ -90,6 +90,42 @@ namespace FlashMeasurementSystem.Tests.Halcon
                 Console.WriteLine("  RGB: Success=" + eRgb.Success + " cnt=" + eRgb.EdgePoints.Count);
             }
 
+            // ── 9. Arc caliper: null image ──
+            EdgeResult arcNullImg = detector.DetectEdgesOnArc(null, new ArcMeasureRoi(), EdgeDetectionParameters.Default());
+            Assert(!arcNullImg.Success, "arc null image: !Success");
+
+            // ── 10. Arc caliper: null/invalid ROI ──
+            using (HImage edge = TestImageGenerator.CreateEdgeImage())
+            {
+                EdgeResult arcNullRoi = detector.DetectEdgesOnArc(edge, null, EdgeDetectionParameters.Default());
+                Assert(!arcNullRoi.Success, "arc null ROI: !Success");
+
+                EdgeResult arcBad = detector.DetectEdgesOnArc(edge, new ArcMeasureRoi(), EdgeDetectionParameters.Default());
+                Assert(!arcBad.Success, "arc undefined ROI: !Success");
+            }
+
+            // ── 11. Arc caliper: valid arc over edge image (horizontal sweep, 90°) ──
+            using (HImage edge = TestImageGenerator.CreateEdgeImage())
+            {
+                var arcRoi = new ArcMeasureRoi
+                {
+                    CenterRow = 128.0,
+                    CenterCol = 80.0,
+                    Radius = 50.0,
+                    AngleStart = -Math.PI / 4.0,
+                    AngleExtent = Math.PI / 2.0,
+                    AnnulusRadius = 15.0
+                };
+                var ep = EdgeDetectionParameters.Default();
+                ep.Threshold = 10.0;
+                EdgeResult arcOk = detector.DetectEdgesOnArc(edge, arcRoi, ep);
+                Console.WriteLine("  Arc caliper: Success=" + arcOk.Success + " cnt=" + arcOk.EdgePoints.Count);
+                if (!arcOk.Success) Console.WriteLine("    msg=" + arcOk.ErrorMessage);
+                // 弧跨過 vertical edge at col=128 時應該抓到邊點。
+                Assert(arcOk.Success, "arc caliper: Success");
+                Assert(arcOk.EdgePoints.Count > 0, "arc caliper: got edges");
+            }
+
             Console.WriteLine("EdgeDetectorTests passed");
         }
 

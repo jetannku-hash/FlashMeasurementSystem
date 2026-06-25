@@ -79,6 +79,21 @@ namespace FlashMeasurementSystem
             this.fitCircleButton = new System.Windows.Forms.Button();
             this.fitEllipseButton = new System.Windows.Forms.Button();
             this.fitRectangleButton = new System.Windows.Forms.Button();
+            this.arcMeasurePanel = new System.Windows.Forms.TableLayoutPanel();
+            this.arcMeasureHeader = new System.Windows.Forms.Label();
+            this.arcCenterRowLabel = new System.Windows.Forms.Label();
+            this._arcCenterRowNumeric = new System.Windows.Forms.NumericUpDown();
+            this.arcCenterColLabel = new System.Windows.Forms.Label();
+            this._arcCenterColNumeric = new System.Windows.Forms.NumericUpDown();
+            this.arcRadiusLabel = new System.Windows.Forms.Label();
+            this._arcRadiusNumeric = new System.Windows.Forms.NumericUpDown();
+            this.arcAngleStartLabel = new System.Windows.Forms.Label();
+            this._arcAngleStartNumeric = new System.Windows.Forms.NumericUpDown();
+            this.arcAngleExtentLabel = new System.Windows.Forms.Label();
+            this._arcAngleExtentNumeric = new System.Windows.Forms.NumericUpDown();
+            this.arcAnnulusLabel = new System.Windows.Forms.Label();
+            this._arcAnnulusNumeric = new System.Windows.Forms.NumericUpDown();
+            this.detectArcButton = new System.Windows.Forms.Button();
             this._edgeStatusLabel = new System.Windows.Forms.Label();
             this.lineFittingResultLabel = new System.Windows.Forms.Label();
             this.circleFittingResultLabel = new System.Windows.Forms.Label();
@@ -136,6 +151,13 @@ namespace FlashMeasurementSystem
             ((System.ComponentModel.ISupportInitialize)(this._edgeRoiWidthNumeric)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this._edgeScanLengthNumeric)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this._edgeAngleNumeric)).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)(this._arcCenterRowNumeric)).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)(this._arcCenterColNumeric)).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)(this._arcRadiusNumeric)).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)(this._arcAnnulusNumeric)).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)(this._arcAngleStartNumeric)).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)(this._arcAngleExtentNumeric)).BeginInit();
+            this.arcMeasurePanel.SuspendLayout();
             this.edgeButtonPanel.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this._edgeResultsGrid)).BeginInit();
             this.measurementTabPage.SuspendLayout();
@@ -547,17 +569,18 @@ namespace FlashMeasurementSystem
             this.edgeTableLayout.Controls.Add(this._edgeInterpolationCombo, 1, 10);
             this.edgeTableLayout.Controls.Add(this.edgeAngleLabel, 0, 11);
             this.edgeTableLayout.Controls.Add(this._edgeAngleNumeric, 1, 11);
-            this.edgeTableLayout.Controls.Add(this.edgeButtonPanel, 0, 12);
-            this.edgeTableLayout.Controls.Add(this._edgeStatusLabel, 0, 13);
-            this.edgeTableLayout.Controls.Add(this.lineFittingResultLabel, 0, 14);
-            this.edgeTableLayout.Controls.Add(this.circleFittingResultLabel, 0, 15);
-            this.edgeTableLayout.Controls.Add(this.ellipseFittingResultLabel, 0, 16);
-            this.edgeTableLayout.Controls.Add(this.rectangleFittingResultLabel, 0, 17);
-            this.edgeTableLayout.Controls.Add(this._edgeResultsGrid, 0, 18);
+            this.edgeTableLayout.Controls.Add(this.arcMeasurePanel, 0, 12);
+            this.edgeTableLayout.Controls.Add(this.edgeButtonPanel, 0, 13);
+            this.edgeTableLayout.Controls.Add(this._edgeStatusLabel, 0, 14);
+            this.edgeTableLayout.Controls.Add(this.lineFittingResultLabel, 0, 15);
+            this.edgeTableLayout.Controls.Add(this.circleFittingResultLabel, 0, 16);
+            this.edgeTableLayout.Controls.Add(this.ellipseFittingResultLabel, 0, 17);
+            this.edgeTableLayout.Controls.Add(this.rectangleFittingResultLabel, 0, 18);
+            this.edgeTableLayout.Controls.Add(this._edgeResultsGrid, 0, 19);
             this.edgeTableLayout.Dock = System.Windows.Forms.DockStyle.Fill;
             this.edgeTableLayout.Location = new System.Drawing.Point(8, 33);
             this.edgeTableLayout.Name = "edgeTableLayout";
-            this.edgeTableLayout.RowCount = 19;
+            this.edgeTableLayout.RowCount = 20;
             this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 44F));
             this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 26F));
             this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 26F));
@@ -570,7 +593,8 @@ namespace FlashMeasurementSystem
             this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 26F));
             this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 26F));
             this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 26F));
-            this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 58F));
+            this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 118F));
+            this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 84F));
             this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 22F));
             this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 48F));
             this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 48F));
@@ -920,8 +944,164 @@ namespace FlashMeasurementSystem
             0,
             0});
             // 
+            // arcMeasurePanel
+            //
+            this.arcMeasurePanel.ColumnCount = 4;
+            this.edgeTableLayout.SetColumnSpan(this.arcMeasurePanel, 2);
+            this.arcMeasurePanel.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 26F));
+            this.arcMeasurePanel.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 24F));
+            this.arcMeasurePanel.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 26F));
+            this.arcMeasurePanel.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 24F));
+            this.arcMeasurePanel.Controls.Add(this.arcMeasureHeader, 0, 0);
+            this.arcMeasurePanel.Controls.Add(this.arcCenterRowLabel, 0, 1);
+            this.arcMeasurePanel.Controls.Add(this._arcCenterRowNumeric, 1, 1);
+            this.arcMeasurePanel.Controls.Add(this.arcCenterColLabel, 2, 1);
+            this.arcMeasurePanel.Controls.Add(this._arcCenterColNumeric, 3, 1);
+            this.arcMeasurePanel.Controls.Add(this.arcRadiusLabel, 0, 2);
+            this.arcMeasurePanel.Controls.Add(this._arcRadiusNumeric, 1, 2);
+            this.arcMeasurePanel.Controls.Add(this.arcAnnulusLabel, 2, 2);
+            this.arcMeasurePanel.Controls.Add(this._arcAnnulusNumeric, 3, 2);
+            this.arcMeasurePanel.Controls.Add(this.arcAngleStartLabel, 0, 3);
+            this.arcMeasurePanel.Controls.Add(this._arcAngleStartNumeric, 1, 3);
+            this.arcMeasurePanel.Controls.Add(this.arcAngleExtentLabel, 2, 3);
+            this.arcMeasurePanel.Controls.Add(this._arcAngleExtentNumeric, 3, 3);
+            this.arcMeasurePanel.Controls.Add(this.detectArcButton, 3, 4);
+            this.arcMeasurePanel.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.arcMeasurePanel.Location = new System.Drawing.Point(3, 339);
+            this.arcMeasurePanel.Name = "arcMeasurePanel";
+            this.arcMeasurePanel.RowCount = 5;
+            this.arcMeasurePanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 20F));
+            this.arcMeasurePanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 20F));
+            this.arcMeasurePanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 20F));
+            this.arcMeasurePanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 20F));
+            this.arcMeasurePanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 20F));
+            this.arcMeasurePanel.Size = new System.Drawing.Size(225, 118);
+            this.arcMeasurePanel.TabIndex = 23;
+            //
+            // arcMeasureHeader
+            //
+            this.arcMeasurePanel.SetColumnSpan(this.arcMeasureHeader, 4);
+            this.arcMeasureHeader.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.arcMeasureHeader.Font = new System.Drawing.Font("Microsoft Sans Serif", 8F, System.Drawing.FontStyle.Bold);
+            this.arcMeasureHeader.Name = "arcMeasureHeader";
+            this.arcMeasureHeader.Text = "Arc Measure: 圓周放射特徵 (齒/孔/刻度, 非圓邊界)";
+            this.arcMeasureHeader.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
+            //
+            // arcCenterRowLabel
+            //
+            this.arcCenterRowLabel.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.arcCenterRowLabel.Name = "arcCenterRowLabel";
+            this.arcCenterRowLabel.Text = "Ctr Row";
+            this.arcCenterRowLabel.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
+            //
+            // _arcCenterRowNumeric
+            //
+            this._arcCenterRowNumeric.Dock = System.Windows.Forms.DockStyle.Fill;
+            this._arcCenterRowNumeric.DecimalPlaces = 1;
+            this._arcCenterRowNumeric.Increment = new decimal(new int[] { 10, 0, 0, 0 });
+            this._arcCenterRowNumeric.Maximum = new decimal(new int[] { 10000, 0, 0, 0 });
+            this._arcCenterRowNumeric.Name = "_arcCenterRowNumeric";
+            this._arcCenterRowNumeric.TabIndex = 1;
+            this._arcCenterRowNumeric.Value = new decimal(new int[] { 200, 0, 0, 0 });
+            //
+            // arcCenterColLabel
+            //
+            this.arcCenterColLabel.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.arcCenterColLabel.Name = "arcCenterColLabel";
+            this.arcCenterColLabel.Text = "Ctr Col";
+            this.arcCenterColLabel.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
+            //
+            // _arcCenterColNumeric
+            //
+            this._arcCenterColNumeric.Dock = System.Windows.Forms.DockStyle.Fill;
+            this._arcCenterColNumeric.DecimalPlaces = 1;
+            this._arcCenterColNumeric.Increment = new decimal(new int[] { 10, 0, 0, 0 });
+            this._arcCenterColNumeric.Maximum = new decimal(new int[] { 10000, 0, 0, 0 });
+            this._arcCenterColNumeric.Name = "_arcCenterColNumeric";
+            this._arcCenterColNumeric.TabIndex = 2;
+            this._arcCenterColNumeric.Value = new decimal(new int[] { 200, 0, 0, 0 });
+            //
+            // arcRadiusLabel
+            //
+            this.arcRadiusLabel.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.arcRadiusLabel.Name = "arcRadiusLabel";
+            this.arcRadiusLabel.Text = "Radius";
+            this.arcRadiusLabel.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
+            //
+            // _arcRadiusNumeric
+            //
+            this._arcRadiusNumeric.Dock = System.Windows.Forms.DockStyle.Fill;
+            this._arcRadiusNumeric.DecimalPlaces = 1;
+            this._arcRadiusNumeric.Increment = new decimal(new int[] { 10, 0, 0, 0 });
+            this._arcRadiusNumeric.Maximum = new decimal(new int[] { 10000, 0, 0, 0 });
+            this._arcRadiusNumeric.Minimum = new decimal(new int[] { 1, 0, 0, 0 });
+            this._arcRadiusNumeric.Name = "_arcRadiusNumeric";
+            this._arcRadiusNumeric.TabIndex = 3;
+            this._arcRadiusNumeric.Value = new decimal(new int[] { 100, 0, 0, 0 });
+            //
+            // arcAnnulusLabel
+            //
+            this.arcAnnulusLabel.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.arcAnnulusLabel.Name = "arcAnnulusLabel";
+            this.arcAnnulusLabel.Text = "Annulus";
+            this.arcAnnulusLabel.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
+            //
+            // _arcAnnulusNumeric
+            //
+            this._arcAnnulusNumeric.Dock = System.Windows.Forms.DockStyle.Fill;
+            this._arcAnnulusNumeric.DecimalPlaces = 1;
+            this._arcAnnulusNumeric.Increment = new decimal(new int[] { 5, 0, 0, 0 });
+            this._arcAnnulusNumeric.Maximum = new decimal(new int[] { 200, 0, 0, 0 });
+            this._arcAnnulusNumeric.Minimum = new decimal(new int[] { 1, 0, 0, 0 });
+            this._arcAnnulusNumeric.Name = "_arcAnnulusNumeric";
+            this._arcAnnulusNumeric.TabIndex = 4;
+            this._arcAnnulusNumeric.Value = new decimal(new int[] { 10, 0, 0, 0 });
+            //
+            // arcAngleStartLabel
+            //
+            this.arcAngleStartLabel.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.arcAngleStartLabel.Name = "arcAngleStartLabel";
+            this.arcAngleStartLabel.Text = "Start deg";
+            this.arcAngleStartLabel.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
+            //
+            // _arcAngleStartNumeric
+            //
+            this._arcAngleStartNumeric.Dock = System.Windows.Forms.DockStyle.Fill;
+            this._arcAngleStartNumeric.DecimalPlaces = 1;
+            this._arcAngleStartNumeric.Increment = new decimal(new int[] { 5, 0, 0, 0 });
+            this._arcAngleStartNumeric.Maximum = new decimal(new int[] { 360, 0, 0, 0 });
+            this._arcAngleStartNumeric.Name = "_arcAngleStartNumeric";
+            this._arcAngleStartNumeric.TabIndex = 5;
+            //
+            // arcAngleExtentLabel
+            //
+            this.arcAngleExtentLabel.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.arcAngleExtentLabel.Name = "arcAngleExtentLabel";
+            this.arcAngleExtentLabel.Text = "Ext deg";
+            this.arcAngleExtentLabel.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
+            //
+            // _arcAngleExtentNumeric
+            //
+            this._arcAngleExtentNumeric.Dock = System.Windows.Forms.DockStyle.Fill;
+            this._arcAngleExtentNumeric.DecimalPlaces = 1;
+            this._arcAngleExtentNumeric.Increment = new decimal(new int[] { 5, 0, 0, 0 });
+            this._arcAngleExtentNumeric.Maximum = new decimal(new int[] { 360, 0, 0, 0 });
+            this._arcAngleExtentNumeric.Minimum = new decimal(new int[] { 360, 0, 0, -2147483648 });
+            this._arcAngleExtentNumeric.Name = "_arcAngleExtentNumeric";
+            this._arcAngleExtentNumeric.TabIndex = 6;
+            this._arcAngleExtentNumeric.Value = new decimal(new int[] { 180, 0, 0, 0 });
+            //
+            // detectArcButton
+            //
+            this.detectArcButton.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.detectArcButton.Name = "detectArcButton";
+            this.detectArcButton.TabIndex = 7;
+            this.detectArcButton.Text = "Detect &Arc";
+            this.detectArcButton.UseVisualStyleBackColor = true;
+            this.detectArcButton.Click += new System.EventHandler(this.DetectArcButton_Click);
+            //
             // edgeButtonPanel
-            // 
+            //
             this.edgeButtonPanel.ColumnCount = 2;
             this.edgeTableLayout.SetColumnSpan(this.edgeButtonPanel, 2);
             this.edgeButtonPanel.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 50F));
@@ -930,19 +1110,16 @@ namespace FlashMeasurementSystem
             this.edgeButtonPanel.Controls.Add(this._clearEdgeDetectionButton, 1, 0);
             this.edgeButtonPanel.Controls.Add(this.fitLineButton, 0, 1);
             this.edgeButtonPanel.Controls.Add(this.fitCircleButton, 1, 1);
-            this.edgeButtonPanel.SetColumnSpan(this.fitEllipseButton, 2);
             this.edgeButtonPanel.Controls.Add(this.fitEllipseButton, 0, 2);
-            this.edgeButtonPanel.SetColumnSpan(this.fitRectangleButton, 2);
-            this.edgeButtonPanel.Controls.Add(this.fitRectangleButton, 0, 3);
+            this.edgeButtonPanel.Controls.Add(this.fitRectangleButton, 1, 2);
             this.edgeButtonPanel.Dock = System.Windows.Forms.DockStyle.Fill;
             this.edgeButtonPanel.Location = new System.Drawing.Point(3, 333);
             this.edgeButtonPanel.Name = "edgeButtonPanel";
-            this.edgeButtonPanel.RowCount = 4;
-            this.edgeButtonPanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 25F));
-            this.edgeButtonPanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 25F));
-            this.edgeButtonPanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 25F));
-            this.edgeButtonPanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 25F));
-            this.edgeButtonPanel.Size = new System.Drawing.Size(225, 52);
+            this.edgeButtonPanel.RowCount = 3;
+            this.edgeButtonPanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 33.34F));
+            this.edgeButtonPanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 33.33F));
+            this.edgeButtonPanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 33.33F));
+            this.edgeButtonPanel.Size = new System.Drawing.Size(225, 84);
             this.edgeButtonPanel.TabIndex = 23;
             // 
             // _runEdgeDetectionButton
@@ -1501,6 +1678,13 @@ namespace FlashMeasurementSystem
             ((System.ComponentModel.ISupportInitialize)(this._edgeRoiWidthNumeric)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this._edgeScanLengthNumeric)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this._edgeAngleNumeric)).EndInit();
+            ((System.ComponentModel.ISupportInitialize)(this._arcCenterRowNumeric)).EndInit();
+            ((System.ComponentModel.ISupportInitialize)(this._arcCenterColNumeric)).EndInit();
+            ((System.ComponentModel.ISupportInitialize)(this._arcRadiusNumeric)).EndInit();
+            ((System.ComponentModel.ISupportInitialize)(this._arcAnnulusNumeric)).EndInit();
+            ((System.ComponentModel.ISupportInitialize)(this._arcAngleStartNumeric)).EndInit();
+            ((System.ComponentModel.ISupportInitialize)(this._arcAngleExtentNumeric)).EndInit();
+            this.arcMeasurePanel.ResumeLayout(false);
             this.edgeButtonPanel.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)(this._edgeResultsGrid)).EndInit();
             this.measurementTabPage.ResumeLayout(false);
@@ -1583,6 +1767,21 @@ namespace FlashMeasurementSystem
         private System.Windows.Forms.Button fitCircleButton;
         private System.Windows.Forms.Button fitEllipseButton;
         private System.Windows.Forms.Button fitRectangleButton;
+        private System.Windows.Forms.TableLayoutPanel arcMeasurePanel;
+        private System.Windows.Forms.Label arcMeasureHeader;
+        private System.Windows.Forms.Label arcCenterRowLabel;
+        private System.Windows.Forms.NumericUpDown _arcCenterRowNumeric;
+        private System.Windows.Forms.Label arcCenterColLabel;
+        private System.Windows.Forms.NumericUpDown _arcCenterColNumeric;
+        private System.Windows.Forms.Label arcRadiusLabel;
+        private System.Windows.Forms.NumericUpDown _arcRadiusNumeric;
+        private System.Windows.Forms.Label arcAngleStartLabel;
+        private System.Windows.Forms.NumericUpDown _arcAngleStartNumeric;
+        private System.Windows.Forms.Label arcAngleExtentLabel;
+        private System.Windows.Forms.NumericUpDown _arcAngleExtentNumeric;
+        private System.Windows.Forms.Label arcAnnulusLabel;
+        private System.Windows.Forms.NumericUpDown _arcAnnulusNumeric;
+        private System.Windows.Forms.Button detectArcButton;
         private System.Windows.Forms.Label _edgeStatusLabel;
         private System.Windows.Forms.Label lineFittingResultLabel;
         private System.Windows.Forms.Label circleFittingResultLabel;

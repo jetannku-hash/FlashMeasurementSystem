@@ -55,6 +55,7 @@ namespace FlashMeasurementSystem
         private CircleFittingResult _latestCircleFittingResult;
         private EllipseFittingResult _latestEllipseFittingResult;
         private RectangleFittingResult _latestRectangleFittingResult;
+        private ArcMeasureRoi _latestArcRoi;
         private bool _updatingEdgeRoiControls;
 
         // M3c-1：配方執行（Stage A：載入 + 設參考姿態 + 轉換並繪製跟隨工件的 ROI）
@@ -707,6 +708,81 @@ namespace FlashMeasurementSystem
             {
                 Cursor = Cursors.Default;
                 ClearProgress();
+            }
+        }
+
+        private void DetectArcButton_Click(object sender, EventArgs e)
+        {
+            if (_imageHelper == null || _imageHelper.CurrentImage == null)
+            {
+                _edgeStatusLabel.Text = "Arc: 請先載入影像";
+                _edgeStatusLabel.ForeColor = Color.Red;
+                return;
+            }
+
+            var arcRoi = new ArcMeasureRoi
+            {
+                CenterRow = (double)_arcCenterRowNumeric.Value,
+                CenterCol = (double)_arcCenterColNumeric.Value,
+                Radius = (double)_arcRadiusNumeric.Value,
+                AngleStart = (double)_arcAngleStartNumeric.Value * Math.PI / 180.0,
+                AngleExtent = (double)_arcAngleExtentNumeric.Value * Math.PI / 180.0,
+                AnnulusRadius = (double)_arcAnnulusNumeric.Value
+            };
+
+            string validation = arcRoi.ValidationError;
+            if (validation != null)
+            {
+                _edgeStatusLabel.Text = "Arc ROI 無效: " + validation;
+                _edgeStatusLabel.ForeColor = Color.Red;
+                return;
+            }
+
+            string interp = _edgeInterpolationCombo.SelectedItem?.ToString() ?? "nearest_neighbor";
+            string polarity = _edgePolarityCombo.SelectedItem?.ToString() ?? "all";
+            string selector = _edgeSelectorCombo.SelectedItem?.ToString() ?? "all";
+            double sigma = (double)_edgeSigmaNumeric.Value;
+            double threshold = (double)_edgeThresholdNumeric.Value;
+
+            var parameters = new EdgeDetectionParameters
+            {
+                Sigma = sigma,
+                Threshold = threshold,
+                Polarity = polarity,
+                EdgeSelector = selector,
+                Interpolation = interp
+            };
+
+            try
+            {
+                Cursor = Cursors.WaitCursor;
+                EdgeResult result = _edgeDetector.DetectEdgesOnArc(_imageHelper.CurrentImage, arcRoi, parameters);
+                _latestArcRoi = arcRoi;
+                _latestEdgeRoi = null;
+                _latestEdgeResult = result;
+                _latestLineFittingResult = null;
+                _latestCircleFittingResult = null;
+                _latestEllipseFittingResult = null;
+                _latestRectangleFittingResult = null;
+                UpdateLineFittingResult(null);
+                UpdateCircleFittingResult(null);
+                UpdateEllipseFittingResult(null);
+                UpdateRectangleFittingResult(null);
+
+                RestoreDefaultEdgeGridColumns();
+                BindEdgeResult(result);
+                SetEdgeStatus(result.Success, result.Success
+                    ? string.Format("Arc edges: {0} found", result.EdgePoints.Count)
+                    : result.ErrorMessage);
+                ShowFittingOverlay();
+            }
+            catch (Exception ex)
+            {
+                SetEdgeStatus(false, "Arc detect failed: " + ex.Message);
+            }
+            finally
+            {
+                Cursor = Cursors.Default;
             }
         }
 
@@ -1385,6 +1461,25 @@ namespace FlashMeasurementSystem
         private void DrawFittingLayers(OverlayAnnotator an)
         {
             EdgeDetectionRoi roi = _latestEdgeRoi;
+            ArcMeasureRoi arcRoi = _latestArcRoi;
+            if (arcRoi != null && arcRoi.IsDefined)
+            {
+                // 弧形卡尺量測帶：畫內弧(R-Annulus)、中弧(R)、外弧(R+Annulus)，
+                // 讓使用者清楚看到實際掃描的環帶範圍是否壓在特徵邊緣上。
+                // 內外弧用橘色(邊界)、中弧用黃色，並在中心畫十字標出弧心。
+                double cr = arcRoi.CenterRow, cc = arcRoi.CenterCol;
+                double a0 = arcRoi.AngleStart;
+                double a1 = arcRoi.AngleStart + arcRoi.AngleExtent;
+                string order = arcRoi.AngleExtent > 0 ? "positive" : "negative";
+                double rIn = Math.Max(1.0, arcRoi.Radius - arcRoi.AnnulusRadius);
+                double rOut = arcRoi.Radius + arcRoi.AnnulusRadius;
+
+                an.DrawArc(cr, cc, rIn, a0, a1, order, "orange");
+                an.DrawArc(cr, cc, rOut, a0, a1, order, "orange");
+                an.DrawArc(cr, cc, arcRoi.Radius, a0, a1, order, "yellow");
+                an.DrawCross(cr, cc, 15, "orange");
+            }
+
             if (roi != null && _latestEdgeResult != null)
             {
                 // 邊緣檢測後：畫旋轉的量測 ROI (Rectangle2)
@@ -1676,6 +1771,7 @@ namespace FlashMeasurementSystem
         private void ClearFittingState()
         {
             _latestEdgeRoi = null;
+            _latestArcRoi = null;
             _latestEdgeResult = null;
             _latestLineFittingResult = null;
             _latestCircleFittingResult = null;
@@ -1692,6 +1788,7 @@ namespace FlashMeasurementSystem
         private void InvalidateEdgeState()
         {
             _latestEdgeResult = null;
+            _latestArcRoi = null;
             _latestLineFittingResult = null;
             _latestCircleFittingResult = null;
             _latestEllipseFittingResult = null;

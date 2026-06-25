@@ -60,8 +60,13 @@ namespace FlashMeasurementSystem.Tests.Halcon
             Assert(Math.Abs(rArc.CenterColumn - 150.0) < 3.0, "arc: CenterCol ~150");
             Assert(Math.Abs(rArc.RadiusPx - 40.0) < 3.0, "arc: Radius ~40");
 
-            // ── 8. Full circle (360°, 36 pts) → IsClosed=true ──
+            // ── 8. Full circle (360°) → IsClosed=true ──
+            // 真實整圓的 edges_sub_pix 輪廓是「閉合」的(末點回到首點)。
+            // GenerateCirclePoints 產生開放點集(末點停在 ~350°)，fit_circle_contour_xld 會
+            // 把它當 350° 弧 → IsClosed=false。故此處補上閉合點(末=首)模擬真實閉合輪廓，
+            // fit_circle 才會回 StartPhi=0/EndPhi=2π(已用 raw 驗證)。
             var fullPts = GenerateCirclePoints(100, 100, 50, 36);
+            fullPts.Add(new EdgePoint { Row = fullPts[0].Row, Column = fullPts[0].Column, Amplitude = 50.0 });
             CircleFittingResult rFull = fitter.FitCircle(fullPts, CircleFittingParameters.Default());
             Assert(rFull.Success, "full circle: Success");
             Assert(rFull.IsClosed, "full circle: IsClosed should be true");

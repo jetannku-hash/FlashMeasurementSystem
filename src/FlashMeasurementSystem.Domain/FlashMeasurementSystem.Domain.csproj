@@ -57,6 +57,7 @@
     <Compile Include="EdgeDetection\EdgeDetectionParameters.cs" />
     <Compile Include="EdgeDetection\EdgeDetectionRoi.cs" />
     <Compile Include="EdgeDetection\EdgePair.cs" />
+    <Compile Include="EdgeDetection\ArcMeasureRoi.cs" />
     <Compile Include="ImageQuality\ImageQualityResult.cs" />
     <Compile Include="ImageQuality\ImageQualityThresholds.cs" />
     <Compile Include="LineFitting\LineFittingParameters.cs" />

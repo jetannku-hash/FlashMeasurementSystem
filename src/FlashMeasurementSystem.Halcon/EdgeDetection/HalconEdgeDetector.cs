@@ -212,6 +212,115 @@ namespace FlashMeasurementSystem.Halcon.EdgeDetection
             return result;
         }
 
+        /// <summary>
+        /// 弧形卡尺（gen_measure_arc + measure_pos）：沿環形弧佈設量測線、
+        /// 抓垂直於弧的邊，回傳邊點清單。用於圓周上等分特徵、齒、孔位量測。
+        /// </summary>
+        public EdgeResult DetectEdgesOnArc(HImage image, ArcMeasureRoi arcRoi, EdgeDetectionParameters parameters)
+        {
+            var result = new EdgeResult();
+            EdgeDetectionParameters effective = parameters ?? EdgeDetectionParameters.Default();
+
+            if (image == null)
+            {
+                result.ErrorMessage = "請先載入影像";
+                Log("DetectEdgesOnArc EARLY-EXIT msg=" + result.ErrorMessage);
+                return result;
+            }
+
+            if (arcRoi == null || !arcRoi.IsDefined)
+            {
+                result.ErrorMessage = "請先定義弧形 ROI（" + (arcRoi?.ValidationError ?? "null") + "）";
+                Log("DetectEdgesOnArc EARLY-EXIT " + arcRoi?.ValidationError);
+                return result;
+            }
+
+            if (!EdgeDetectionParameters.IsSupportedInterpolation(effective.Interpolation))
+            {
+                result.ErrorMessage = "不支援的插值模式: " + effective.Interpolation;
+                return result;
+            }
+
+            HOperatorSet.GetImageSize(image, out HTuple width, out HTuple height);
+            int channels = TryGetChannels(image);
+            HImage convertedImage = EnsureSingleChannel(image, channels, "DetectEdgesOnArc");
+            HImage workingImage = convertedImage ?? image;
+
+            try
+            {
+                string interp = effective.Interpolation;
+
+                HTuple measureHandle = null;
+                try
+                {
+                    // gen_measure_arc 不傳 Width/Height 為 HTuple：HALCON 17.12 的
+                    // HalconDotNet 接受 int，直接傳 imageWidth/imageHeight。
+                    HOperatorSet.GenMeasureArc(
+                        arcRoi.CenterRow, arcRoi.CenterCol, arcRoi.Radius,
+                        arcRoi.AngleStart, arcRoi.AngleExtent, arcRoi.AnnulusRadius,
+                        width.I, height.I, interp, out measureHandle);
+
+                    HOperatorSet.MeasurePos(workingImage, measureHandle,
+                        new HTuple(effective.Sigma), new HTuple(effective.Threshold),
+                        new HTuple(effective.Polarity), new HTuple(effective.EdgeSelector),
+                        out HTuple edgeRow, out HTuple edgeCol,
+                        out HTuple edgeAmplitude, out HTuple edgeDistance);
+
+                    int lenRow = edgeRow?.Length ?? 0;
+                    Log(string.Format(CultureInfo.InvariantCulture,
+                        "DetectEdgesOnArc GEN_MEASURE_ARC R={0:F1} phi={1:F4}→{2:F4} annulus={3:F1} edges={4}",
+                        arcRoi.Radius, arcRoi.AngleStart, arcRoi.AngleExtent, arcRoi.AnnulusRadius, lenRow));
+
+                    for (int i = 0; i < lenRow; i++)
+                    {
+                        result.EdgePoints.Add(new EdgePoint
+                        {
+                            Row = edgeRow[i].D,
+                            Column = edgeCol[i].D,
+                            Amplitude = (i < (edgeAmplitude?.Length ?? 0)) ? edgeAmplitude[i].D : 0.0,
+                            Distance = (i < (edgeDistance?.Length ?? 0)) ? edgeDistance[i].D : 0.0
+                        });
+                    }
+
+                    result.Success = result.EdgePoints.Count > 0;
+                    result.ErrorMessage = result.Success
+                        ? string.Empty
+                        : string.Format(CultureInfo.InvariantCulture,
+                            "弧形卡尺未偵測到邊緣。注意：gen_measure_arc 沿圓周「切線方向」掃描，" +
+                            "只偵測「放射狀(radial)」特徵(齒、孔、刻度、輻條)，" +
+                            "不會偵測圓/弧本身的邊界(切線方向、量不到)。" +
+                            "若要量圓的邊界/直徑請改用 Fit Circle。" +
+                            "目前掃描環帶 半徑 {0:F0}±{1:F0} ({2:F0}~{3:F0})、弧心 (R={4:F0},C={5:F0}) | {6}",
+                            arcRoi.Radius, arcRoi.AnnulusRadius,
+                            arcRoi.Radius - arcRoi.AnnulusRadius, arcRoi.Radius + arcRoi.AnnulusRadius,
+                            arcRoi.CenterRow, arcRoi.CenterCol,
+                            DescribeParams(effective));
+                }
+                finally
+                {
+                    if (measureHandle != null) HOperatorSet.CloseMeasure(measureHandle);
+                }
+            }
+            catch (HalconException ex)
+            {
+                result.Success = false;
+                result.ErrorMessage = string.Format(CultureInfo.InvariantCulture,
+                    "弧形卡尺異常 [{0}]: {1} | {2}",
+                    ex.GetErrorCode(), ex.Message, DescribeParams(effective));
+                Log("DetectEdgesOnArc EXCEPTION " + result.ErrorMessage);
+            }
+            finally
+            {
+                convertedImage?.Dispose();
+            }
+
+            Log(string.Format(CultureInfo.InvariantCulture,
+                "DetectEdgesOnArc END success={0} edges={1}",
+                result.Success, result.EdgePoints.Count));
+
+            return result;
+        }
+
         private struct MeasureAttempt
         {
             public List<EdgePoint> Edges;
