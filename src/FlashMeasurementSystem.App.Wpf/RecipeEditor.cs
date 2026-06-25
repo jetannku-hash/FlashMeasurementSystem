@@ -109,6 +109,7 @@ namespace FlashMeasurementSystem
                 LoadFromRecipe(recipe);
 
             FormClosing += OnFormClosing;
+            this.FormClosed += (s, e) => _imageHelper.EndRect2Edit();
         }
 
         // ─── Layout builders ───────────────────────────────────────────
@@ -451,6 +452,12 @@ namespace FlashMeasurementSystem
             _selectedTool.Roi.Length1 = (double)_length1Numeric.Value;
             _selectedTool.Roi.Length2 = (double)_length2Numeric.Value;
             _selectedTool.Roi.AngleRad = (double)_angleRadNumeric.Value;
+            if (_imageHelper.IsEditingRect2)
+            {
+                _imageHelper.BeginRect2Edit(_selectedTool.Roi.CenterRow, _selectedTool.Roi.CenterCol,
+                    _selectedTool.Roi.AngleRad, _selectedTool.Roi.Length1, _selectedTool.Roi.Length2,
+                    OnToolRect2Changed);
+            }
             MarkDirty();
         }
 
@@ -747,12 +754,53 @@ namespace FlashMeasurementSystem
             {
                 _selectedTool = null;
                 SetPropertyPanelEnabled(false);
+                _imageHelper.EndRect2Edit();
                 return;
             }
 
             _selectedTool = _tools[idx];
             SetPropertyPanelEnabled(true);
             PopulateFromTool(_selectedTool);
+            ShowRoiEdit();
+        }
+
+        // 對 circle/line 工具：清掉 MainWindow 殘留 overlay，進入 rect2 互動編輯。
+        private void ShowRoiEdit()
+        {
+            if (_selectedTool == null) { _imageHelper.EndRect2Edit(); return; }
+            bool isElement = _selectedTool.ToolType == "circle" || _selectedTool.ToolType == "line";
+            if (!isElement) { _imageHelper.EndRect2Edit(); return; }
+
+            _imageHelper.ClearOverlay();
+            var roi = _selectedTool.Roi;
+            _imageHelper.BeginRect2Edit(roi.CenterRow, roi.CenterCol, roi.AngleRad,
+                roi.Length1, roi.Length2, OnToolRect2Changed);
+        }
+
+        // 滑鼠互動編輯回呼：回寫 RoiGeometry（弧度）與數值框，標記 dirty。
+        private void OnToolRect2Changed(double cr, double cc, double phi, double l1, double l2)
+        {
+            if (_selectedTool == null) return;
+            _selectedTool.Roi.CenterRow = cr;
+            _selectedTool.Roi.CenterCol = cc;
+            _selectedTool.Roi.AngleRad = phi;
+            _selectedTool.Roi.Length1 = l1;
+            _selectedTool.Roi.Length2 = l2;
+
+            _updatingControls = true;
+            try
+            {
+                _centerRowNumeric.Value = ClampDecimal(cr, _centerRowNumeric.Minimum, _centerRowNumeric.Maximum);
+                _centerColNumeric.Value = ClampDecimal(cc, _centerColNumeric.Minimum, _centerColNumeric.Maximum);
+                _length1Numeric.Value = ClampDecimal(l1, _length1Numeric.Minimum, _length1Numeric.Maximum);
+                _length2Numeric.Value = ClampDecimal(l2, _length2Numeric.Minimum, _length2Numeric.Maximum);
+                _angleRadNumeric.Value = ClampDecimal(phi, _angleRadNumeric.Minimum, _angleRadNumeric.Maximum);
+            }
+            finally
+            {
+                _updatingControls = false;
+            }
+            MarkDirty();
         }
 
         private void PopulateFromTool(MeasurementTool tool)
@@ -941,6 +989,7 @@ namespace FlashMeasurementSystem
                 _updatingControls = false;
             }
             MarkDirty();
+            ShowRoiEdit();
         }
 
         // ─── Dirty tracking ────────────────────────────────────────────

@@ -1,5 +1,6 @@
 using System;
 using System.Windows.Forms;
+using FlashMeasurementSystem.Domain.Roi;
 using HalconDotNet;
 
 namespace FlashMeasurementSystem
@@ -19,6 +20,7 @@ namespace FlashMeasurementSystem
         public double MouseRow { get; private set; }
         public double MouseCol { get; private set; }
         public OverlayAnnotator Annotator { get; }
+        public bool IsEditingRect2 => _editActive;
 
         public event Action<double, double, double, double> RoiSelected;
         public event Action<double, double> MouseMoved;
@@ -31,6 +33,11 @@ namespace FlashMeasurementSystem
         private bool _isResizing;
         private Action _persistentOverlayAction;
         private Action<double, double, double, double> _roiCallback;
+        private bool _editActive;
+        private double _editCenterRow, _editCenterCol, _editPhi, _editLen1, _editLen2;
+        private double _editLastRow, _editLastCol;
+        private Rect2Handle _editMode = Rect2Handle.None;
+        private Action<double, double, double, double, double> _editCallback;
 
         public HWindowControlHelper(HWindowControl control)
         {
@@ -50,6 +57,9 @@ namespace FlashMeasurementSystem
         public void DisplayImage(HImage image)
         {
             _persistentOverlayAction = null;
+            _editActive = false;
+            _editMode = Rect2Handle.None;
+            _editCallback = null;
             CurrentImage?.Dispose();
             CurrentImage = image;
             HOperatorSet.GetImageSize(image, out HTuple w, out HTuple h);
@@ -105,12 +115,20 @@ namespace FlashMeasurementSystem
             }
 
             _persistentOverlayAction?.Invoke();
-            // 非拖曳中、且沒有 persistent overlay 時才畫 raw ROI 框。
+            // 非拖曳中、且沒有 persistent overlay、且非編輯模式時才畫 raw ROI 框。
             // persistent overlay（例如 DrawFittingLayers）有自己的 ROI 繪製邏輯，
-            // 兩者同時畫會出現兩個重疊的藍色矩形。
-            if (HasRoi && _persistentOverlayAction == null)
+            // 兩者同時畫會出現兩個重疊的藍色矩形；編輯模式則由下方綠色編輯框取代。
+            if (HasRoi && _persistentOverlayAction == null && !_editActive)
             {
                 Annotator.DrawRoiRectangle(_roiStartRow, _roiStartCol, _roiEndRow, _roiEndCol);
+            }
+
+            if (_editActive)
+            {
+                double half = ScreenPxToImage(5);
+                double knobGap = ScreenPxToImage(22);
+                Annotator.DrawEditRect2(_editCenterRow, _editCenterCol, _editPhi,
+                    _editLen1, _editLen2, half, knobGap);
             }
         }
 
@@ -127,6 +145,9 @@ namespace FlashMeasurementSystem
             _roiEndRow = 0;
             _roiEndCol = 0;
             IsRoiMode = false;
+            _editActive = false;
+            _editMode = Rect2Handle.None;
+            _editCallback = null;
             ClearOverlay();
         }
 
@@ -147,6 +168,37 @@ namespace FlashMeasurementSystem
         public void SetPersistentOverlayAction(Action action)
         {
             _persistentOverlayAction = action;
+            Redraw();
+        }
+
+        /// <summary>螢幕像素 → 影像像素（依目前縮放），用於把手大小與命中容差。</summary>
+        public double ScreenPxToImage(double px)
+        {
+            if (_control.Width <= 0) return px;
+            return px * (_imgCol2 - _imgCol1) / _control.Width;
+        }
+
+        /// <summary>開始/取代可編輯 rect2，進入編輯模式並重繪。onChanged 為本次編輯的回呼擁有者。</summary>
+        public void BeginRect2Edit(double cr, double cc, double phi, double l1, double l2,
+            Action<double, double, double, double, double> onChanged)
+        {
+            _editCenterRow = cr;
+            _editCenterCol = cc;
+            _editPhi = phi;
+            _editLen1 = l1;
+            _editLen2 = l2;
+            _editCallback = onChanged;
+            _editMode = Rect2Handle.None;
+            _editActive = true;
+            Redraw();
+        }
+
+        /// <summary>結束編輯模式（隱藏把手），清回呼並重繪。</summary>
+        public void EndRect2Edit()
+        {
+            _editActive = false;
+            _editMode = Rect2Handle.None;
+            _editCallback = null;
             Redraw();
         }
 
@@ -182,6 +234,23 @@ namespace FlashMeasurementSystem
         {
             if (CurrentImage == null) return;
             if (e.Button == MouseButtons.Right) { _isPanning = true; _panStartX = e.X; _panStartY = e.Y; return; }
+
+            if (e.Button == MouseButtons.Left && _editActive && !IsRoiMode)
+            {
+                PixelToImage(e.X, e.Y, out double pr, out double pc);
+                double tol = ScreenPxToImage(8);
+                double knobGap = ScreenPxToImage(22);
+                Rect2Handle h = Rect2EditMath.HitTest(pr, pc, _editCenterRow, _editCenterCol,
+                    _editPhi, _editLen1, _editLen2, tol, knobGap);
+                if (h != Rect2Handle.None)
+                {
+                    _editMode = h;
+                    _editLastRow = pr;
+                    _editLastCol = pc;
+                    return;
+                }
+            }
+
             if (e.Button == MouseButtons.Left && IsRoiMode)
             {
                 _isDrawingRoi = true;
@@ -212,11 +281,37 @@ namespace FlashMeasurementSystem
                 PixelToImage(e.X, e.Y, out _roiEndRow, out _roiEndCol);
                 Redraw();
             }
+            else if (_editMode != Rect2Handle.None)
+            {
+                if (_editMode == Rect2Handle.Body)
+                {
+                    _editCenterRow += row - _editLastRow;
+                    _editCenterCol += col - _editLastCol;
+                    _editLastRow = row;
+                    _editLastCol = col;
+                }
+                else if (_editMode == Rect2Handle.Rotate)
+                {
+                    _editPhi = Rect2EditMath.Rotate(row, col, _editCenterRow, _editCenterCol);
+                }
+                else
+                {
+                    Rect2EditMath.ApplyResize(_editMode, row, col, _editCenterRow, _editCenterCol,
+                        _editPhi, ref _editLen1, ref _editLen2);
+                }
+                _editCallback?.Invoke(_editCenterRow, _editCenterCol, _editPhi, _editLen1, _editLen2);
+                Redraw();
+            }
         }
 
         private void OnMouseUp(object sender, MouseEventArgs e)
         {
             _isPanning = false;
+            if (_editMode != Rect2Handle.None)
+            {
+                _editMode = Rect2Handle.None;
+                return;
+            }
             if (_isDrawingRoi)
             {
                 _isDrawingRoi = false;

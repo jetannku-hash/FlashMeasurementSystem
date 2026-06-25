@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using FlashMeasurementSystem.Domain.Roi;
 using HalconDotNet;
 
 namespace FlashMeasurementSystem
@@ -29,6 +30,43 @@ namespace FlashMeasurementSystem
             // 邊緣後，量測卻發生在鏡像方向，導致斜邊永遠掃不到。DrawMatchResult 的 match 角度是另一個
             // 慣例（需 -phi 顯示），與此處無關，不要照抄。
             HOperatorSet.DispRectangle2(_window, row, col, phi, length1, length2);
+        }
+
+        /// <summary>
+        /// 互動編輯外觀：綠色 rect2 外框 + 8 個把手方塊（4 角 + 4 邊中點）+ 旋轉圓鈕與連接桿。
+        /// handleHalf 與 knobGapImg 皆為影像像素（由 helper 依縮放換算，確保螢幕上恆定大小）。
+        /// </summary>
+        public void DrawEditRect2(double cr, double cc, double phi, double l1, double l2,
+            double handleHalf, double knobGapImg)
+        {
+            HOperatorSet.SetColor(_window, "green");
+            HOperatorSet.SetLineWidth(_window, 2);
+            HOperatorSet.SetDraw(_window, "margin");
+            HOperatorSet.DispRectangle2(_window, cr, cc, phi, l1, l2);
+
+            Rect2EditMath.Axes(phi, out double e1r, out double e1c, out double e2r, out double e2c);
+
+            double endR = cr + l1 * e1r, endC = cc + l1 * e1c;
+            Rect2EditMath.RotateKnobPos(cr, cc, phi, l1, knobGapImg, out double kr, out double kc);
+            HOperatorSet.DispLine(_window, endR, endC, kr, kc);
+
+            HOperatorSet.SetDraw(_window, "fill");
+            DrawHandleSquare(cr + l1 * e1r + l2 * e2r, cc + l1 * e1c + l2 * e2c, handleHalf);
+            DrawHandleSquare(cr + l1 * e1r - l2 * e2r, cc + l1 * e1c - l2 * e2c, handleHalf);
+            DrawHandleSquare(cr - l1 * e1r + l2 * e2r, cc - l1 * e1c + l2 * e2c, handleHalf);
+            DrawHandleSquare(cr - l1 * e1r - l2 * e2r, cc - l1 * e1c - l2 * e2c, handleHalf);
+            DrawHandleSquare(cr + l1 * e1r, cc + l1 * e1c, handleHalf);
+            DrawHandleSquare(cr - l1 * e1r, cc - l1 * e1c, handleHalf);
+            DrawHandleSquare(cr + l2 * e2r, cc + l2 * e2c, handleHalf);
+            DrawHandleSquare(cr - l2 * e2r, cc - l2 * e2c, handleHalf);
+            HOperatorSet.DispCircle(_window, kr, kc, handleHalf);
+
+            HOperatorSet.SetDraw(_window, "margin");
+        }
+
+        private void DrawHandleSquare(double r, double c, double half)
+        {
+            HOperatorSet.DispRectangle1(_window, r - half, c - half, r + half, c + half);
         }
 
         public void DrawLine(double row1, double col1, double row2, double col2, string color = null)

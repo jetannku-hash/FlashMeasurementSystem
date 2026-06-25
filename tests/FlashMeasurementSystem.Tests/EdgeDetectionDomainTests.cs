@@ -129,6 +129,8 @@ namespace FlashMeasurementSystem.Tests
             Console.WriteLine("RoiDomainTests passed");
             WorkflowDomainTests.Run();
             Console.WriteLine("WorkflowDomainTests passed");
+            Rect2EditMathTests.Run();
+            Console.WriteLine("Rect2EditMathTests passed");
             Console.WriteLine("EdgeDetectionDomainTests passed");
             return 0;
         }
