@@ -43,6 +43,7 @@ namespace FlashMeasurementSystem
         private readonly HalconDistanceMeasurer _distanceMeasurer = new HalconDistanceMeasurer();
         private readonly HalconAngleMeasurer _angleMeasurer = new HalconAngleMeasurer();
         private EdgeDetectionRoi _latestEdgeRoi;
+        private double _editCenterRow, _editCenterCol;
         private EdgeResult _latestEdgeResult;
         private LineFittingResult _latestLineFittingResult;
         private CircleFittingResult _latestCircleFittingResult;
@@ -425,6 +426,14 @@ namespace FlashMeasurementSystem
             iqcResultLabel.Text = "Not tested";
             iqcResultLabel.ForeColor = Color.Black;
             measureResultLabel.Text = string.Empty;
+
+            // 換圖必須清掉匹配姿態，否則 Run Recipe 守門（HasReferencePose && !_hasMatch）
+            // 會放行，並用前一張影像的 _lastMatch* 對新影像做 ROI 變換，畫出錯誤的 OK/NG。
+            // （DisplayImage 已清 persistent overlay，這裡只需清 C# 狀態。）
+            _hasMatch = false;
+            _lastMatchRow = 0;
+            _lastMatchCol = 0;
+            _lastMatchAngleDeg = 0;
         }
 
         private void RoiModeCheck_CheckedChanged(object sender, EventArgs e)
@@ -465,35 +474,43 @@ namespace FlashMeasurementSystem
                     PyramidLevel = (int)pyramidNumeric.Value
                 };
 
-                HRegion templateRegion;
-                if (_imageHelper.HasRoi)
+                HRegion templateRegion = null;
+                try
                 {
-                    var roi = _imageHelper.GetCurrentRoi();
-                    templateRegion = new HRegion(roi.Row1, roi.Col1, roi.Row2, roi.Col2);
+                    if (_imageHelper.HasRoi)
+                    {
+                        var roi = _imageHelper.GetCurrentRoi();
+                        templateRegion = new HRegion(roi.Row1, roi.Col1, roi.Row2, roi.Col2);
+                    }
+                    else
+                    {
+                        templateRegion = _imageHelper.CurrentImage.GetDomain();
+                    }
+
+                    string modelPath = Path.Combine(
+                        FindTemplatesDirectory() ?? Path.GetTempPath(),
+                        $"template_{DateTime.Now:yyyyMMdd_HHmmss}.shm");
+
+                    _templateManager.CreateAndSave(_imageHelper.CurrentImage, templateRegion, modelPath, parameters);
+
+                    if (templateRegion != null)
+                    {
+                        HOperatorSet.SmallestRectangle1(templateRegion,
+                            out HTuple r1, out HTuple c1, out HTuple r2, out HTuple c2);
+                        _imageHelper.Redraw();
+                        _imageHelper.Annotator.DrawRoiRectangle(r1, c1, r2, c2);
+                        _imageHelper.Annotator.DrawText("Model saved", (int)r1 - 5, (int)c1);
+                    }
+
+                    LoadTemplateList();
+                    matchResultTextBox.Text = $"Template created: {modelPath}";
                 }
-                else
+                finally
                 {
-                    templateRegion = _imageHelper.CurrentImage.GetDomain();
+                    // CreateAndSave / SmallestRectangle1 / 繪製任一步擲例外，templateRegion
+                    // 都須釋放，避免每次失敗建模洩漏一個 HRegion。
+                    templateRegion?.Dispose();
                 }
-
-                string modelPath = Path.Combine(
-                    FindTemplatesDirectory() ?? Path.GetTempPath(),
-                    $"template_{DateTime.Now:yyyyMMdd_HHmmss}.shm");
-
-                _templateManager.CreateAndSave(_imageHelper.CurrentImage, templateRegion, modelPath, parameters);
-
-                if (templateRegion != null)
-                {
-                    HOperatorSet.SmallestRectangle1(templateRegion,
-                        out HTuple r1, out HTuple c1, out HTuple r2, out HTuple c2);
-                    _imageHelper.Redraw();
-                    _imageHelper.Annotator.DrawRoiRectangle(r1, c1, r2, c2);
-                    _imageHelper.Annotator.DrawText("Model saved", (int)r1 - 5, (int)c1);
-                }
-
-                templateRegion?.Dispose();
-                LoadTemplateList();
-                matchResultTextBox.Text = $"Template created: {modelPath}";
             }
             catch (InvalidOperationException ex)
             {
@@ -616,7 +633,7 @@ namespace FlashMeasurementSystem
                 return;
             }
 
-            if (!_imageHelper.HasRoi)
+            if (_latestEdgeRoi == null)
             {
                 SetEdgeStatus(false, "Please draw an ROI region first.");
                 return;
@@ -626,7 +643,7 @@ namespace FlashMeasurementSystem
             SetProgress("邊緣檢測中…");
             try
             {
-                EdgeDetectionRoi roi = CreateEdgeDetectionRoi(_imageHelper.GetCurrentRoi());
+                EdgeDetectionRoi roi = _latestEdgeRoi;
                 EdgeDetectionParameters parameters = CreateEdgeDetectionParameters();
                 EdgeResult result = _edgeSubPixRadio.Checked
                     ? _edgeDetector.DetectEdgesSubPix(_imageHelper.CurrentImage, roi, parameters)
@@ -795,18 +812,16 @@ namespace FlashMeasurementSystem
 
         private void OnEdgeRoiNumericChanged(object sender, EventArgs e)
         {
-            if (_updatingEdgeRoiControls || _imageHelper == null || _imageHelper.CurrentImage == null || !_imageHelper.HasRoi)
+            if (_updatingEdgeRoiControls || _imageHelper == null || _imageHelper.CurrentImage == null || !_imageHelper.IsEditingRect2)
             {
                 return;
             }
 
-            RegionInfo currentRoi = _imageHelper.GetCurrentRoi();
-            if (currentRoi == null)
-            {
-                return;
-            }
+            double phi = (double)_edgeAngleNumeric.Value * Math.PI / 180.0;
+            double l1 = (double)_edgeScanLengthNumeric.Value / 2.0;
+            double l2 = (double)_edgeRoiWidthNumeric.Value / 2.0;
 
-            _latestEdgeRoi = CreateEdgeDetectionRoiFromNumeric(currentRoi);
+            _latestEdgeRoi = EdgeDetectionRoi.FromCenter(_editCenterRow, _editCenterCol, l1, l2, phi);
             _latestEdgeResult = null;
             _latestLineFittingResult = null;
             _latestCircleFittingResult = null;
@@ -817,6 +832,7 @@ namespace FlashMeasurementSystem
             _edgeStatusLabel.Text = "Draw ROI, then Detect";
             _edgeStatusLabel.ForeColor = Color.Black;
             ShowFittingOverlay();
+            _imageHelper.BeginRect2Edit(_editCenterRow, _editCenterCol, phi, l1, l2, OnEdgeRect2Changed);
         }
 
         // 若下拉有選項但尚未選取，預設選第一項。避免空白顯示與 SelectedItem 為 null 的崩潰。
@@ -1050,6 +1066,14 @@ namespace FlashMeasurementSystem
                     pixelSizeUmX, pixelSizeUmY);
 
                 DrawRecipeResults(results, pixelSizeSource);
+            }
+            catch (Exception ex)
+            {
+                // RecipeRunner.Run 內部只接 HalconException；座標變換/繪製的非-Halcon 例外
+                // 會逸出處理常式 → WinForms 靜默終止。在此攔截並向操作員顯示失敗原因。
+                SetProgress("配方量測：失敗");
+                MessageBox.Show("配方量測異常：" + ex.Message, "Error",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
             {
@@ -1553,7 +1577,40 @@ namespace FlashMeasurementSystem
             _edgeResultsGrid.Rows.Clear();
             _edgeStatusLabel.Text = "Draw ROI, then Detect";
             _edgeStatusLabel.ForeColor = Color.Black;
+            _imageHelper.IsRoiMode = false;
+            _edgeDrawRoiCheck.Checked = false;
             ShowFittingOverlay();
+            _imageHelper.BeginRect2Edit(_latestEdgeRoi.CenterRow, _latestEdgeRoi.CenterCol,
+                _latestEdgeRoi.AngleRad, _latestEdgeRoi.Length1, _latestEdgeRoi.Length2, OnEdgeRect2Changed);
+        }
+
+        // 滑鼠互動編輯 rect2 的回呼：回寫數值框（度）與 _latestEdgeRoi，並使結果失效。
+        private void OnEdgeRect2Changed(double cr, double cc, double phi, double l1, double l2)
+        {
+            _editCenterRow = cr;
+            _editCenterCol = cc;
+            _updatingEdgeRoiControls = true;
+            try
+            {
+                _edgeScanLengthNumeric.Value = ClampNumericValue(_edgeScanLengthNumeric, (decimal)(l1 * 2.0));
+                _edgeRoiWidthNumeric.Value = ClampNumericValue(_edgeRoiWidthNumeric, (decimal)(l2 * 2.0));
+                _edgeAngleNumeric.Value = ClampNumericValue(_edgeAngleNumeric, (decimal)(phi * 180.0 / Math.PI));
+            }
+            finally
+            {
+                _updatingEdgeRoiControls = false;
+            }
+
+            _latestEdgeRoi = EdgeDetectionRoi.FromCenter(cr, cc, l1, l2, phi);
+            _latestEdgeResult = null;
+            _latestLineFittingResult = null;
+            _latestCircleFittingResult = null;
+            UpdateLineFittingResult(null);
+            UpdateCircleFittingResult(null);
+            RestoreDefaultEdgeGridColumns();
+            _edgeResultsGrid.Rows.Clear();
+            _edgeStatusLabel.Text = "Draw ROI, then Detect";
+            _edgeStatusLabel.ForeColor = Color.Black;
         }
 
         private static decimal ClampNumericValue(NumericUpDown numeric, decimal value)
@@ -2134,15 +2191,22 @@ namespace FlashMeasurementSystem
             if (contour1Points.Count < 2 || contour2Points.Count < 2)
                 return new DistanceMeasurementResult { ErrorMessage = "Each contour needs at least 2 points." };
 
+            HXLDCont cont1 = null, cont2 = null;
             try
             {
-                HXLDCont cont1 = EdgePointsToContour(contour1Points);
-                HXLDCont cont2 = EdgePointsToContour(contour2Points);
+                cont1 = EdgePointsToContour(contour1Points);
+                cont2 = EdgePointsToContour(contour2Points);
                 return _distanceMeasurer.MeasureContourMaxMin(cont1, cont2, parameters);
             }
             catch (HalconException ex)
             {
                 return new DistanceMeasurementResult { ErrorMessage = "Halcon error: " + ex.Message };
+            }
+            finally
+            {
+                // 每次 ContourMaxMin 量測都 new 兩個 HXLDCont，須釋放避免非託管記憶體累積。
+                cont1?.Dispose();
+                cont2?.Dispose();
             }
         }
 

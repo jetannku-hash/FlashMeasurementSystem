@@ -39,6 +39,7 @@ namespace FlashMeasurementSystem.Halcon.TemplateMatching
 
                 HOperatorSet.WriteShapeModel(modelID, modelFilePath);
                 HOperatorSet.ClearShapeModel(modelID);
+                modelID = null; // 已釋放，避免 finally 重複 clear
 
                 return modelFilePath;
             }
@@ -49,6 +50,11 @@ namespace FlashMeasurementSystem.Halcon.TemplateMatching
             finally
             {
                 reduced?.Dispose();
+                // WriteShapeModel / CreateDirectory 等若擲例外，modelID 仍持有非託管 shape model
+                // 句柄，須在此釋放避免洩漏（成功路徑已設為 null）。
+                bool leakPrevented = modelID != null;
+                if (leakPrevented)
+                    HOperatorSet.ClearShapeModel(modelID);
             }
         }
     }

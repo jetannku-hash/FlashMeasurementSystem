@@ -99,6 +99,23 @@ namespace FlashMeasurementSystem.Tests
             OverallJudgment zr = judger.Judge(zeroTol);
             AssertEqual(1, zr.OkCount, "Zero tolerance exact hit is OK");
             AssertEqual(false, zr.Items[0].IsNearBoundary, "Zero tolerance no near-boundary flag");
+
+            // 無效實測值（NaN / Infinity）→ NG，且不可誤報「超出上限」
+            var invalidItems = new List<ToleranceItemInput>
+            {
+                MakeItem("NaN", double.NaN, 50.0, -0.010, 0.010),
+                MakeItem("PosInf", double.PositiveInfinity, 50.0, -0.010, 0.010),
+                MakeItem("NegInf", double.NegativeInfinity, 50.0, -0.010, 0.010),
+            };
+            OverallJudgment ir = judger.Judge(invalidItems);
+            AssertEqual(0, ir.OkCount, "Invalid measurements never OK");
+            AssertEqual(3, ir.NgCount, "Invalid measurements all NG");
+            for (int i = 0; i < ir.Items.Count; i++)
+            {
+                AssertEqual(false, ir.Items[i].IsOk, "Invalid item " + i + " IsOk false");
+                if (ir.Items[i].Message == null || ir.Items[i].Message.IndexOf("無效", StringComparison.Ordinal) < 0)
+                    throw new InvalidOperationException("Invalid item " + i + " should report invalid-value message, got: " + ir.Items[i].Message);
+            }
         }
 
         private static ToleranceItemInput MakeItem(

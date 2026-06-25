@@ -47,6 +47,17 @@ namespace FlashMeasurementSystem.Infrastructure.Tolerance
                     Deviation = v - spec.Nominal
                 };
 
+                // 無效實測值（上游量測失敗常產生 NaN/Infinity）：NaN 的所有比較皆為 false，
+                // 若不攔截會落入 else 分支誤報「超出上限」。在此標為 NG 並給明確訊息後跳過數值計算。
+                if (double.IsNaN(v) || double.IsInfinity(v))
+                {
+                    j.IsOk = false;
+                    j.Message = "NG：無效量測值（NaN/Infinity）";
+                    result.NgCount++;
+                    result.Items.Add(j);
+                    continue;
+                }
+
                 // 偏差百分比（避免除以零）
                 if (Math.Abs(spec.Nominal) > Epsilon)
                     j.DeviationPercent = j.Deviation / spec.Nominal * 100.0;
