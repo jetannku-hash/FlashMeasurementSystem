@@ -10,11 +10,22 @@ namespace FlashMeasurementSystem.Halcon.TemplateMatching
         private HTuple _modelID;
         private double _modelAngleStartRad;
         private double _modelAngleExtentRad;
+        private string _loadedModelPath;
 
         public void LoadModel(string modelFilePath)
         {
+            // 同一路徑已載入則略過重載：連續量測每個 part 都呼叫 LoadModel，否則每次都
+            // ReadShapeModel（磁碟讀取 + 反序列化），是逐 part 的主要成本。注意：模板檔每次
+            // 由 CreateTemplate 寫到新的時間戳路徑，故同路徑不會被改寫，快取不會取到舊模型。
+            if (_modelID != null &&
+                string.Equals(_loadedModelPath, modelFilePath, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
             DisposeModel();
             HOperatorSet.ReadShapeModel(modelFilePath, out _modelID);
+            _loadedModelPath = modelFilePath;
 
             HOperatorSet.GetShapeModelParams(_modelID,
                 out HTuple _,
@@ -137,6 +148,7 @@ namespace FlashMeasurementSystem.Halcon.TemplateMatching
             }
             _modelAngleStartRad = 0.0;
             _modelAngleExtentRad = 0.0;
+            _loadedModelPath = null;
         }
     }
 }

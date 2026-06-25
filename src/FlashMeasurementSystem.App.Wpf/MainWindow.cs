@@ -57,6 +57,9 @@ namespace FlashMeasurementSystem
         private OpenFileDialog _openRecipeDialog;
         private double _lastMatchRow, _lastMatchCol, _lastMatchAngleDeg;
         private bool _hasMatch;
+        // 匹配輪廓快取：匹配姿態變更時算一次（transform_shape_model_contours），之後每次
+        // pan/zoom/redraw 直接 DispObj，避免每個 redraw 都重算造成卡頓。生命週期由 RefreshMatchContour 管理。
+        private HObject _matchContour;
         // B1：配方執行引擎與其相依（量測 + 公差判定 + 校正載入）
         private readonly ToleranceJudger _judger = new ToleranceJudger();
         private readonly CalibrationStore _calibrationStore = new CalibrationStore();
@@ -434,6 +437,25 @@ namespace FlashMeasurementSystem
             _lastMatchRow = 0;
             _lastMatchCol = 0;
             _lastMatchAngleDeg = 0;
+            RefreshMatchContour(); // _hasMatch=false → 釋放並清空快取輪廓
+        }
+
+        // 重算快取匹配輪廓：先釋放舊的，若目前有匹配則依 _lastMatch* 算一次新的。
+        // 在匹配成功 / 一鍵量測同步 / 換圖清狀態時呼叫；redraw 不呼叫（直接用快取）。
+        private void RefreshMatchContour()
+        {
+            _matchContour?.Dispose();
+            _matchContour = null;
+            if (!_hasMatch) return;
+            try
+            {
+                _matchContour = _templateMatcher.GetMatchContour(_lastMatchRow, _lastMatchCol, _lastMatchAngleDeg);
+            }
+            catch (Exception)
+            {
+                // 無模板載入（InvalidOperationException）或 HALCON 錯誤 → 略過輪廓，不影響量測。
+                _matchContour = null;
+            }
         }
 
         private void RoiModeCheck_CheckedChanged(object sender, EventArgs e)
@@ -566,13 +588,12 @@ namespace FlashMeasurementSystem
                     _lastMatchCol = result.Column;
                     _lastMatchAngleDeg = result.AngleDeg;
                     _hasMatch = true;
+                    RefreshMatchContour(); // 算一次快取輪廓，overlay action 每次 redraw 直接用
 
                     _imageHelper.SetPersistentOverlayAction(() =>
                     {
-                        using (var contour = _templateMatcher.GetMatchContour(capturedRow, capturedCol, capturedAngle))
-                        {
-                            _imageHelper.Annotator.DrawMatchContour(contour, capturedRow, capturedCol, capturedAngle, capturedScore);
-                        }
+                        if (_matchContour != null)
+                            _imageHelper.Annotator.DrawMatchContour(_matchContour, capturedRow, capturedCol, capturedAngle, capturedScore);
                     });
                     matchResultTextBox.Text = string.Join(Environment.NewLine, new[]
                     {
@@ -1069,16 +1090,9 @@ namespace FlashMeasurementSystem
             _imageHelper.SetPersistentOverlayAction(() =>
             {
                 OverlayAnnotator an = _imageHelper.Annotator;
-                if (_hasMatch)
+                if (_hasMatch && _matchContour != null)
                 {
-                    try
-                    {
-                        using (HObject contour = _templateMatcher.GetMatchContour(_lastMatchRow, _lastMatchCol, _lastMatchAngleDeg))
-                        {
-                            an.DrawMatchContour(contour, _lastMatchRow, _lastMatchCol, _lastMatchAngleDeg, 1.0);
-                        }
-                    }
-                    catch (HalconException) { /* 無模板載入則略過輪廓 */ }
+                    an.DrawMatchContour(_matchContour, _lastMatchRow, _lastMatchCol, _lastMatchAngleDeg, 1.0);
                 }
 
                 var rows = new System.Collections.Generic.List<OverlayResultRow>();
@@ -1196,6 +1210,7 @@ namespace FlashMeasurementSystem
                     _lastMatchCol = wfResult.MatchCol;
                     _lastMatchAngleDeg = wfResult.MatchAngleDeg;
                 }
+                RefreshMatchContour(); // 依本次匹配姿態更新快取輪廓（無匹配則清空）
 
                 DrawRecipeResults(results, pixelSizeSource);
 
@@ -1609,6 +1624,8 @@ namespace FlashMeasurementSystem
 
         protected override void OnFormClosed(FormClosedEventArgs e)
         {
+            _matchContour?.Dispose();
+            _matchContour = null;
             _templateMatcher.Dispose();
             _imageHelper?.Dispose();
             base.OnFormClosed(e);

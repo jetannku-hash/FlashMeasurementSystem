@@ -257,12 +257,21 @@ namespace FlashMeasurementSystem
 
         public void Clear() { HOperatorSet.ClearWindow(_window); }
 
+        // 已解析字型名快取（依字級）。同一視窗的可用字型清單執行期不變，故每個字級只需
+        // QueryFont 列舉一次；否則每筆文字/結果表每列都列舉全系統字型，是 pan/zoom 卡頓主因之一。
+        private readonly System.Collections.Generic.Dictionary<int, string> _fontCache =
+            new System.Collections.Generic.Dictionary<int, string>();
+
         private void SetAvailableFont(int requestedSize)
         {
             try
             {
-                HOperatorSet.QueryFont(_window, out HTuple availableFonts);
-                string font = SelectAvailableFont(availableFonts, requestedSize);
+                if (!_fontCache.TryGetValue(requestedSize, out string font))
+                {
+                    HOperatorSet.QueryFont(_window, out HTuple availableFonts);
+                    font = SelectAvailableFont(availableFonts, requestedSize);
+                    _fontCache[requestedSize] = font;
+                }
                 if (!string.IsNullOrEmpty(font))
                 {
                     HOperatorSet.SetFont(_window, font);
