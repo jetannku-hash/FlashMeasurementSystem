@@ -857,15 +857,23 @@ namespace FlashMeasurementSystem
             _edgeResultsGrid.Rows.Clear();
             int total = result.EdgePoints.Count;
             int displayCount = Math.Min(total, MaxGridRows);
-            for (int i = 0; i < displayCount; i++)
+            _edgeResultsGrid.SuspendLayout();
+            try
             {
-                EdgePoint edge = result.EdgePoints[i];
-                _edgeResultsGrid.Rows.Add(
-                    i + 1,
-                    edge.Row.ToString("F2", CultureInfo.InvariantCulture),
-                    edge.Column.ToString("F2", CultureInfo.InvariantCulture),
-                    edge.Amplitude.ToString("F1", CultureInfo.InvariantCulture),
-                    edge.Distance.ToString("F2", CultureInfo.InvariantCulture));
+                for (int i = 0; i < displayCount; i++)
+                {
+                    EdgePoint edge = result.EdgePoints[i];
+                    _edgeResultsGrid.Rows.Add(
+                        i + 1,
+                        edge.Row.ToString("F2", CultureInfo.InvariantCulture),
+                        edge.Column.ToString("F2", CultureInfo.InvariantCulture),
+                        edge.Amplitude.ToString("F1", CultureInfo.InvariantCulture),
+                        edge.Distance.ToString("F2", CultureInfo.InvariantCulture));
+                }
+            }
+            finally
+            {
+                _edgeResultsGrid.ResumeLayout();
             }
 
             string mode = _edgeSubPixRadio.Checked ? "EdgesSubPix" : "MeasurePos";
@@ -887,33 +895,42 @@ namespace FlashMeasurementSystem
 
         private void BindEdgePairResult(EdgeResult result)
         {
-            _edgeResultsGrid.Columns.Clear();
-            AddEdgeGridColumn("#");
-            AddEdgeGridColumn("Row1");
-            AddEdgeGridColumn("Col1");
-            AddEdgeGridColumn("Amp1");
-            AddEdgeGridColumn("Row2");
-            AddEdgeGridColumn("Col2");
-            AddEdgeGridColumn("Amp2");
-            AddEdgeGridColumn("IntraDist");
-            AddEdgeGridColumn("InterDist");
-
-            _edgeResultsGrid.Rows.Clear();
             int total = result.EdgePairs == null ? 0 : result.EdgePairs.Count;
             int displayCount = Math.Min(total, MaxGridRows);
-            for (int i = 0; i < displayCount; i++)
+
+            _edgeResultsGrid.SuspendLayout();
+            try
             {
-                EdgePair pair = result.EdgePairs[i];
-                _edgeResultsGrid.Rows.Add(
-                    i + 1,
-                    pair.FirstRow.ToString("F2", CultureInfo.InvariantCulture),
-                    pair.FirstColumn.ToString("F2", CultureInfo.InvariantCulture),
-                    pair.FirstAmplitude.ToString("F1", CultureInfo.InvariantCulture),
-                    pair.SecondRow.ToString("F2", CultureInfo.InvariantCulture),
-                    pair.SecondColumn.ToString("F2", CultureInfo.InvariantCulture),
-                    pair.SecondAmplitude.ToString("F1", CultureInfo.InvariantCulture),
-                    pair.IntraDistance.ToString("F2", CultureInfo.InvariantCulture),
-                    pair.InterDistance.ToString("F2", CultureInfo.InvariantCulture));
+                _edgeResultsGrid.Columns.Clear();
+                AddEdgeGridColumn("#");
+                AddEdgeGridColumn("Row1");
+                AddEdgeGridColumn("Col1");
+                AddEdgeGridColumn("Amp1");
+                AddEdgeGridColumn("Row2");
+                AddEdgeGridColumn("Col2");
+                AddEdgeGridColumn("Amp2");
+                AddEdgeGridColumn("IntraDist");
+                AddEdgeGridColumn("InterDist");
+
+                _edgeResultsGrid.Rows.Clear();
+                for (int i = 0; i < displayCount; i++)
+                {
+                    EdgePair pair = result.EdgePairs[i];
+                    _edgeResultsGrid.Rows.Add(
+                        i + 1,
+                        pair.FirstRow.ToString("F2", CultureInfo.InvariantCulture),
+                        pair.FirstColumn.ToString("F2", CultureInfo.InvariantCulture),
+                        pair.FirstAmplitude.ToString("F1", CultureInfo.InvariantCulture),
+                        pair.SecondRow.ToString("F2", CultureInfo.InvariantCulture),
+                        pair.SecondColumn.ToString("F2", CultureInfo.InvariantCulture),
+                        pair.SecondAmplitude.ToString("F1", CultureInfo.InvariantCulture),
+                        pair.IntraDistance.ToString("F2", CultureInfo.InvariantCulture),
+                        pair.InterDistance.ToString("F2", CultureInfo.InvariantCulture));
+                }
+            }
+            finally
+            {
+                _edgeResultsGrid.ResumeLayout();
             }
 
             string message;
