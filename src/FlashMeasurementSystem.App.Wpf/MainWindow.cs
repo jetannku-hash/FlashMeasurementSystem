@@ -57,6 +57,7 @@ namespace FlashMeasurementSystem
         private RectangleFittingResult _latestRectangleFittingResult;
         private ArcMeasureRoi _latestArcRoi;
         private bool _updatingEdgeRoiControls;
+        private bool _updatingArcControls;
 
         // M3c-1：配方執行（Stage A：載入 + 設參考姿態 + 轉換並繪製跟隨工件的 ROI）
         private readonly HalconCoordinateMapper _coordinateMapper = new HalconCoordinateMapper();
@@ -112,6 +113,13 @@ namespace FlashMeasurementSystem
             _edgeAngleNumeric.ValueChanged += OnEdgeRoiNumericChanged;
             _edgeScanLengthNumeric.ValueChanged += OnEdgeRoiNumericChanged;
             _edgeRoiWidthNumeric.ValueChanged += OnEdgeRoiNumericChanged;
+
+            _arcCenterRowNumeric.ValueChanged += OnArcNumericChanged;
+            _arcCenterColNumeric.ValueChanged += OnArcNumericChanged;
+            _arcRadiusNumeric.ValueChanged += OnArcNumericChanged;
+            _arcAnnulusNumeric.ValueChanged += OnArcNumericChanged;
+            _arcAngleStartNumeric.ValueChanged += OnArcNumericChanged;
+            _arcAngleExtentNumeric.ValueChanged += OnArcNumericChanged;
 
             // 結果表空狀態提示（第五組 #11）：無資料列時於表格中央繪製引導文字。
             _edgeResultsGrid.Paint += EdgeResultsGrid_Paint;
@@ -713,6 +721,20 @@ namespace FlashMeasurementSystem
             }
         }
 
+        // 由六個弧形數值框組出 ArcMeasureRoi（角度轉弧度）。供偵測、即時預覽、互動編輯共用。
+        private ArcMeasureRoi BuildArcRoiFromControls()
+        {
+            return new ArcMeasureRoi
+            {
+                CenterRow = (double)_arcCenterRowNumeric.Value,
+                CenterCol = (double)_arcCenterColNumeric.Value,
+                Radius = (double)_arcRadiusNumeric.Value,
+                AngleStart = (double)_arcAngleStartNumeric.Value * Math.PI / 180.0,
+                AngleExtent = (double)_arcAngleExtentNumeric.Value * Math.PI / 180.0,
+                AnnulusRadius = (double)_arcAnnulusNumeric.Value
+            };
+        }
+
         private void DetectArcButton_Click(object sender, EventArgs e)
         {
             if (_imageHelper == null || _imageHelper.CurrentImage == null)
@@ -722,15 +744,7 @@ namespace FlashMeasurementSystem
                 return;
             }
 
-            var arcRoi = new ArcMeasureRoi
-            {
-                CenterRow = (double)_arcCenterRowNumeric.Value,
-                CenterCol = (double)_arcCenterColNumeric.Value,
-                Radius = (double)_arcRadiusNumeric.Value,
-                AngleStart = (double)_arcAngleStartNumeric.Value * Math.PI / 180.0,
-                AngleExtent = (double)_arcAngleExtentNumeric.Value * Math.PI / 180.0,
-                AnnulusRadius = (double)_arcAnnulusNumeric.Value
-            };
+            var arcRoi = BuildArcRoiFromControls();
 
             string validation = arcRoi.ValidationError;
             if (validation != null)
@@ -1838,6 +1852,10 @@ namespace FlashMeasurementSystem
                 (double)_edgeRoiWidthNumeric.Value / 2.0,
                 (double)_edgeAngleNumeric.Value * Math.PI / 180.0);
             InvalidateEdgeState();
+            // 畫新的邊緣 rect ROI = 改用邊緣 ROI，對稱於 ArcEditCheck：清掉殘留的圓弧帶並
+            // 同步取消「互動編輯」勾選（BeginRect2Edit 已關掉 arc 編輯把手，這裡只補狀態/UI）。
+            _latestArcRoi = null;
+            if (_arcEditCheck.Checked) _arcEditCheck.Checked = false;
             _imageHelper.IsRoiMode = false;
             _edgeDrawRoiCheck.Checked = false;
             ShowFittingOverlay();
@@ -1864,6 +1882,100 @@ namespace FlashMeasurementSystem
 
             _latestEdgeRoi = EdgeDetectionRoi.FromCenter(cr, cc, l1, l2, phi);
             InvalidateEdgeState();
+        }
+
+        // 弧形數值框變更：更新 _latestArcRoi 並即時重畫環帶預覽；若正在互動編輯，刷新把手位置。
+        // 由 OnArcRoiChanged 回寫數值時以 _updatingArcControls 抑制，避免回授迴圈。
+        private void OnArcNumericChanged(object sender, EventArgs e)
+        {
+            if (_updatingArcControls || _imageHelper == null || _imageHelper.CurrentImage == null)
+                return;
+
+            _latestArcRoi = BuildArcRoiFromControls();
+            if (!_latestArcRoi.IsDefined)
+                return;
+
+            ShowFittingOverlay();
+            if (_imageHelper.IsEditingArc)
+            {
+                _imageHelper.BeginArcEdit(_latestArcRoi.CenterRow, _latestArcRoi.CenterCol,
+                    _latestArcRoi.Radius, _latestArcRoi.AngleStart, _latestArcRoi.AngleExtent,
+                    _latestArcRoi.AnnulusRadius, OnArcRoiChanged);
+            }
+        }
+
+        // 滑鼠互動編輯弧形的回呼：回寫六個數值框（角度轉度，起角正規化到 0..360）與 _latestArcRoi。
+        private void OnArcRoiChanged(double cr, double cc, double radius, double a0, double extent, double annulus)
+        {
+            double a0Deg = a0 * 180.0 / Math.PI;
+            a0Deg -= 360.0 * Math.Floor(a0Deg / 360.0); // 正規化到 [0, 360)，配合數值框 Minimum=0
+            double extentDeg = extent * 180.0 / Math.PI;
+
+            _updatingArcControls = true;
+            try
+            {
+                _arcCenterRowNumeric.Value = ClampNumericValue(_arcCenterRowNumeric, (decimal)cr);
+                _arcCenterColNumeric.Value = ClampNumericValue(_arcCenterColNumeric, (decimal)cc);
+                _arcRadiusNumeric.Value = ClampNumericValue(_arcRadiusNumeric, (decimal)radius);
+                _arcAnnulusNumeric.Value = ClampNumericValue(_arcAnnulusNumeric, (decimal)annulus);
+                _arcAngleStartNumeric.Value = ClampNumericValue(_arcAngleStartNumeric, (decimal)a0Deg);
+                _arcAngleExtentNumeric.Value = ClampNumericValue(_arcAngleExtentNumeric, (decimal)extentDeg);
+            }
+            finally
+            {
+                _updatingArcControls = false;
+            }
+
+            _latestArcRoi = new ArcMeasureRoi
+            {
+                CenterRow = cr,
+                CenterCol = cc,
+                Radius = radius,
+                AngleStart = a0,
+                AngleExtent = extent,
+                AnnulusRadius = annulus
+            };
+        }
+
+        // 互動編輯弧形開關：勾選 -> 以目前數值框內容進入拖曳編輯；取消 -> 離開編輯（保留數值與環帶）。
+        private void ArcEditCheck_CheckedChanged(object sender, EventArgs e)
+        {
+            if (_imageHelper == null) return;
+
+            if (_arcEditCheck.Checked)
+            {
+                if (_imageHelper.CurrentImage == null)
+                {
+                    _updatingArcControls = true;
+                    try { _arcEditCheck.Checked = false; } finally { _updatingArcControls = false; }
+                    _edgeStatusLabel.Text = "Arc: 請先載入影像";
+                    _edgeStatusLabel.ForeColor = Color.Red;
+                    return;
+                }
+
+                _latestArcRoi = BuildArcRoiFromControls();
+                if (!_latestArcRoi.IsDefined)
+                {
+                    _updatingArcControls = true;
+                    try { _arcEditCheck.Checked = false; } finally { _updatingArcControls = false; }
+                    _edgeStatusLabel.Text = "Arc ROI 無效: " + _latestArcRoi.ValidationError;
+                    _edgeStatusLabel.ForeColor = Color.Red;
+                    return;
+                }
+
+                // 進入互動編輯 = 改用圓弧 ROI，比照 Detect Arc 清掉殘留的邊緣 rect ROI，
+                // 否則 DrawFittingLayers 仍會畫出舊的藍色 Rectangle2，與圓弧帶同時殘留在畫面上。
+                _latestEdgeRoi = null;
+
+                ShowFittingOverlay();
+                _imageHelper.BeginArcEdit(_latestArcRoi.CenterRow, _latestArcRoi.CenterCol,
+                    _latestArcRoi.Radius, _latestArcRoi.AngleStart, _latestArcRoi.AngleExtent,
+                    _latestArcRoi.AnnulusRadius, OnArcRoiChanged);
+            }
+            else
+            {
+                _imageHelper.EndArcEdit();
+            }
         }
 
         private static decimal ClampNumericValue(NumericUpDown numeric, decimal value)

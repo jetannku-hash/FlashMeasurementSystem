@@ -135,6 +135,8 @@ namespace FlashMeasurementSystem.Tests
             Console.WriteLine("WorkflowDomainTests passed");
             Rect2EditMathTests.Run();
             Console.WriteLine("Rect2EditMathTests passed");
+            ArcEditMathTests.Run();
+            Console.WriteLine("ArcEditMathTests passed");
             CsvReportWriterTests.Run();
             Console.WriteLine("CsvReportWriterTests passed");
             Console.WriteLine("EdgeDetectionDomainTests passed");

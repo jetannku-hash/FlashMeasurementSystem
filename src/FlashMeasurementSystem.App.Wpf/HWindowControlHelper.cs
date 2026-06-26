@@ -21,6 +21,7 @@ namespace FlashMeasurementSystem
         public double MouseCol { get; private set; }
         public OverlayAnnotator Annotator { get; }
         public bool IsEditingRect2 => _editActive;
+        public bool IsEditingArc => _arcEditActive;
 
         public event Action<double, double, double, double> RoiSelected;
         public event Action<double, double> MouseMoved;
@@ -38,6 +39,12 @@ namespace FlashMeasurementSystem
         private double _editLastRow, _editLastCol;
         private Rect2Handle _editMode = Rect2Handle.None;
         private Action<double, double, double, double, double> _editCallback;
+        // 弧形互動編輯狀態（與 rect2 編輯互斥；同一時間只會有一個 active）。
+        private bool _arcEditActive;
+        private ArcHandle _arcEditMode = ArcHandle.None;
+        private double _arcCr, _arcCc, _arcRadius, _arcA0, _arcExtent, _arcAnnulus;
+        private double _arcLastRow, _arcLastCol;
+        private Action<double, double, double, double, double, double> _arcEditCallback;
 
         public HWindowControlHelper(HWindowControl control)
         {
@@ -130,6 +137,12 @@ namespace FlashMeasurementSystem
                 Annotator.DrawEditRect2(_editCenterRow, _editCenterCol, _editPhi,
                     _editLen1, _editLen2, half, knobGap);
             }
+
+            if (_arcEditActive)
+            {
+                double half = ScreenPxToImage(5);
+                Annotator.DrawEditArc(_arcCr, _arcCc, _arcRadius, _arcA0, _arcExtent, _arcAnnulus, half);
+            }
         }
 
         public void ClearOverlay()
@@ -148,6 +161,9 @@ namespace FlashMeasurementSystem
             _editActive = false;
             _editMode = Rect2Handle.None;
             _editCallback = null;
+            _arcEditActive = false;
+            _arcEditMode = ArcHandle.None;
+            _arcEditCallback = null;
             ClearOverlay();
         }
 
@@ -190,6 +206,7 @@ namespace FlashMeasurementSystem
             _editCallback = onChanged;
             _editMode = Rect2Handle.None;
             _editActive = true;
+            _arcEditActive = false;
             Redraw();
         }
 
@@ -199,6 +216,29 @@ namespace FlashMeasurementSystem
             _editActive = false;
             _editMode = Rect2Handle.None;
             _editCallback = null;
+            Redraw();
+        }
+
+        /// <summary>開始/取代可編輯弧形，進入弧形編輯模式並重繪。與 rect2 編輯互斥。</summary>
+        public void BeginArcEdit(double cr, double cc, double radius, double a0, double extent,
+            double annulus, Action<double, double, double, double, double, double> onChanged)
+        {
+            _editActive = false;                 // 關閉 rect2 編輯，避免兩種模式同時 active
+            _editMode = Rect2Handle.None;
+            _arcCr = cr; _arcCc = cc; _arcRadius = radius;
+            _arcA0 = a0; _arcExtent = extent; _arcAnnulus = annulus;
+            _arcEditCallback = onChanged;
+            _arcEditMode = ArcHandle.None;
+            _arcEditActive = true;
+            Redraw();
+        }
+
+        /// <summary>結束弧形編輯模式（隱藏把手），清回呼並重繪。</summary>
+        public void EndArcEdit()
+        {
+            _arcEditActive = false;
+            _arcEditMode = ArcHandle.None;
+            _arcEditCallback = null;
             Redraw();
         }
 
@@ -247,6 +287,21 @@ namespace FlashMeasurementSystem
                     _editMode = h;
                     _editLastRow = pr;
                     _editLastCol = pc;
+                    return;
+                }
+            }
+
+            if (e.Button == MouseButtons.Left && _arcEditActive && !IsRoiMode)
+            {
+                PixelToImage(e.X, e.Y, out double pr, out double pc);
+                double tol = ScreenPxToImage(8);
+                ArcHandle h = ArcEditMath.HitTest(pr, pc, _arcCr, _arcCc,
+                    _arcRadius, _arcA0, _arcExtent, _arcAnnulus, tol);
+                if (h != ArcHandle.None)
+                {
+                    _arcEditMode = h;
+                    _arcLastRow = pr;
+                    _arcLastCol = pc;
                     return;
                 }
             }
@@ -302,6 +357,23 @@ namespace FlashMeasurementSystem
                 _editCallback?.Invoke(_editCenterRow, _editCenterCol, _editPhi, _editLen1, _editLen2);
                 Redraw();
             }
+            else if (_arcEditMode != ArcHandle.None)
+            {
+                if (_arcEditMode == ArcHandle.Center)
+                {
+                    _arcCr += row - _arcLastRow;
+                    _arcCc += col - _arcLastCol;
+                    _arcLastRow = row;
+                    _arcLastCol = col;
+                }
+                else
+                {
+                    ArcEditMath.ApplyDrag(_arcEditMode, row, col, _arcCr, _arcCc,
+                        ref _arcRadius, ref _arcA0, ref _arcExtent, ref _arcAnnulus);
+                }
+                _arcEditCallback?.Invoke(_arcCr, _arcCc, _arcRadius, _arcA0, _arcExtent, _arcAnnulus);
+                Redraw();
+            }
         }
 
         private void OnMouseUp(object sender, MouseEventArgs e)
@@ -310,6 +382,11 @@ namespace FlashMeasurementSystem
             if (_editMode != Rect2Handle.None)
             {
                 _editMode = Rect2Handle.None;
+                return;
+            }
+            if (_arcEditMode != ArcHandle.None)
+            {
+                _arcEditMode = ArcHandle.None;
                 return;
             }
             if (_isDrawingRoi)

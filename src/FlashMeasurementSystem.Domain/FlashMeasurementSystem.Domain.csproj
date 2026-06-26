@@ -87,6 +87,7 @@
     <Compile Include="Calibration\CalibrationProfile.cs" />
     <Compile Include="Roi\RoiGeometry.cs" />
     <Compile Include="Roi\Rect2EditMath.cs" />
+    <Compile Include="Roi\ArcEditMath.cs" />
     <Compile Include="Roi\MeasurementTool.cs" />
     <Compile Include="Roi\Recipe.cs" />
     <Compile Include="Workflow\MeasurementState.cs" />
