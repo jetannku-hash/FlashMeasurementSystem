@@ -15,6 +15,7 @@ using FlashMeasurementSystem.Domain.DistanceMeasurement;
 using FlashMeasurementSystem.Domain.EdgeDetection;
 using FlashMeasurementSystem.Domain.LineFitting;
 using FlashMeasurementSystem.Domain.Roi;
+using FlashMeasurementSystem.Domain.Geometry;
 using FlashMeasurementSystem.Domain.Tolerance;
 using HalconDotNet;
 
@@ -51,6 +52,7 @@ namespace FlashMeasurementSystem
         public bool? IsOk;             // 公差判定；null = 無判定
         public string ValueText;       // 結果表顯示文字
         public string Message;         // 失敗/說明
+        public GeometricPrimitive OutputPrimitive;  // A5：此工具的幾何輸出（resolver / 下游消費）
     }
 
     /// <summary>
@@ -135,6 +137,11 @@ namespace FlashMeasurementSystem
                 {
                     MeasureLine(image, res, tool, row, col, ang, g.Length1, g.Length2);
                 }
+
+                if (res.Measured && tool.ToolType == "circle")
+                    res.OutputPrimitive = GeometricPrimitive.Circle(res.FitCenterRow, res.FitCenterCol, res.FitRadiusPx);
+                else if (res.Measured && tool.ToolType == "line")
+                    res.OutputPrimitive = GeometricPrimitive.Line(res.LineRow1, res.LineCol1, res.LineRow2, res.LineCol2);
 
                 results.Add(res);
                 if (!string.IsNullOrEmpty(tool.Id)) byId[tool.Id] = res;
