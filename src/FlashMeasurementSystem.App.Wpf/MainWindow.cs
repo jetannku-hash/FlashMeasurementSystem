@@ -1959,6 +1959,10 @@ namespace FlashMeasurementSystem
                     return;
                 }
 
+                // 進入互動編輯 = 改用圓弧 ROI，比照 Detect Arc 清掉殘留的邊緣 rect ROI，
+                // 否則 DrawFittingLayers 仍會畫出舊的藍色 Rectangle2，與圓弧帶同時殘留在畫面上。
+                _latestEdgeRoi = null;
+
                 ShowFittingOverlay();
                 _imageHelper.BeginArcEdit(_latestArcRoi.CenterRow, _latestArcRoi.CenterCol,
                     _latestArcRoi.Radius, _latestArcRoi.AngleStart, _latestArcRoi.AngleExtent,
