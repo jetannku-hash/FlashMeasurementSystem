@@ -66,6 +66,7 @@
     <Compile Include="CalibrationDomainTests.cs" />
     <Compile Include="RoiDomainTests.cs" />
     <Compile Include="Rect2EditMathTests.cs" />
+    <Compile Include="ArcEditMathTests.cs" />
     <Compile Include="CsvReportWriterTests.cs" />
     <Compile Include="WorkflowDomainTests.cs" />
   </ItemGroup>
