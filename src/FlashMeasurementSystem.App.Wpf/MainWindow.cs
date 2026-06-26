@@ -57,6 +57,7 @@ namespace FlashMeasurementSystem
         private RectangleFittingResult _latestRectangleFittingResult;
         private ArcMeasureRoi _latestArcRoi;
         private bool _updatingEdgeRoiControls;
+        private bool _updatingArcControls;
 
         // M3c-1：配方執行（Stage A：載入 + 設參考姿態 + 轉換並繪製跟隨工件的 ROI）
         private readonly HalconCoordinateMapper _coordinateMapper = new HalconCoordinateMapper();
@@ -713,6 +714,20 @@ namespace FlashMeasurementSystem
             }
         }
 
+        // 由六個弧形數值框組出 ArcMeasureRoi（角度轉弧度）。供偵測、即時預覽、互動編輯共用。
+        private ArcMeasureRoi BuildArcRoiFromControls()
+        {
+            return new ArcMeasureRoi
+            {
+                CenterRow = (double)_arcCenterRowNumeric.Value,
+                CenterCol = (double)_arcCenterColNumeric.Value,
+                Radius = (double)_arcRadiusNumeric.Value,
+                AngleStart = (double)_arcAngleStartNumeric.Value * Math.PI / 180.0,
+                AngleExtent = (double)_arcAngleExtentNumeric.Value * Math.PI / 180.0,
+                AnnulusRadius = (double)_arcAnnulusNumeric.Value
+            };
+        }
+
         private void DetectArcButton_Click(object sender, EventArgs e)
         {
             if (_imageHelper == null || _imageHelper.CurrentImage == null)
@@ -722,15 +737,7 @@ namespace FlashMeasurementSystem
                 return;
             }
 
-            var arcRoi = new ArcMeasureRoi
-            {
-                CenterRow = (double)_arcCenterRowNumeric.Value,
-                CenterCol = (double)_arcCenterColNumeric.Value,
-                Radius = (double)_arcRadiusNumeric.Value,
-                AngleStart = (double)_arcAngleStartNumeric.Value * Math.PI / 180.0,
-                AngleExtent = (double)_arcAngleExtentNumeric.Value * Math.PI / 180.0,
-                AnnulusRadius = (double)_arcAnnulusNumeric.Value
-            };
+            var arcRoi = BuildArcRoiFromControls();
 
             string validation = arcRoi.ValidationError;
             if (validation != null)
@@ -1864,6 +1871,59 @@ namespace FlashMeasurementSystem
 
             _latestEdgeRoi = EdgeDetectionRoi.FromCenter(cr, cc, l1, l2, phi);
             InvalidateEdgeState();
+        }
+
+        // 弧形數值框變更：更新 _latestArcRoi 並即時重畫環帶預覽；若正在互動編輯，刷新把手位置。
+        // 由 OnArcRoiChanged 回寫數值時以 _updatingArcControls 抑制，避免回授迴圈。
+        private void OnArcNumericChanged(object sender, EventArgs e)
+        {
+            if (_updatingArcControls || _imageHelper == null || _imageHelper.CurrentImage == null)
+                return;
+
+            _latestArcRoi = BuildArcRoiFromControls();
+            if (!_latestArcRoi.IsDefined)
+                return;
+
+            ShowFittingOverlay();
+            if (_imageHelper.IsEditingArc)
+            {
+                _imageHelper.BeginArcEdit(_latestArcRoi.CenterRow, _latestArcRoi.CenterCol,
+                    _latestArcRoi.Radius, _latestArcRoi.AngleStart, _latestArcRoi.AngleExtent,
+                    _latestArcRoi.AnnulusRadius, OnArcRoiChanged);
+            }
+        }
+
+        // 滑鼠互動編輯弧形的回呼：回寫六個數值框（角度轉度，起角正規化到 0..360）與 _latestArcRoi。
+        private void OnArcRoiChanged(double cr, double cc, double radius, double a0, double extent, double annulus)
+        {
+            double a0Deg = a0 * 180.0 / Math.PI;
+            a0Deg -= 360.0 * Math.Floor(a0Deg / 360.0); // 正規化到 [0, 360)，配合數值框 Minimum=0
+            double extentDeg = extent * 180.0 / Math.PI;
+
+            _updatingArcControls = true;
+            try
+            {
+                _arcCenterRowNumeric.Value = ClampNumericValue(_arcCenterRowNumeric, (decimal)cr);
+                _arcCenterColNumeric.Value = ClampNumericValue(_arcCenterColNumeric, (decimal)cc);
+                _arcRadiusNumeric.Value = ClampNumericValue(_arcRadiusNumeric, (decimal)radius);
+                _arcAnnulusNumeric.Value = ClampNumericValue(_arcAnnulusNumeric, (decimal)annulus);
+                _arcAngleStartNumeric.Value = ClampNumericValue(_arcAngleStartNumeric, (decimal)a0Deg);
+                _arcAngleExtentNumeric.Value = ClampNumericValue(_arcAngleExtentNumeric, (decimal)extentDeg);
+            }
+            finally
+            {
+                _updatingArcControls = false;
+            }
+
+            _latestArcRoi = new ArcMeasureRoi
+            {
+                CenterRow = cr,
+                CenterCol = cc,
+                Radius = radius,
+                AngleStart = a0,
+                AngleExtent = extent,
+                AnnulusRadius = annulus
+            };
         }
 
         private static decimal ClampNumericValue(NumericUpDown numeric, decimal value)
