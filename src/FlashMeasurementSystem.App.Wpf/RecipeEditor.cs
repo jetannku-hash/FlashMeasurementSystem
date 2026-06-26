@@ -48,6 +48,9 @@ namespace FlashMeasurementSystem
         private Button _addLineButton;
         private Button _addDistanceButton;
         private Button _addAngleButton;
+        private Button _addIntersectionButton;
+        private Button _addMidlineButton;
+        private Button _addProjectionButton;
         private Button _deleteButton;
         private Button _saveButton;
         private Button _saveAsButton;
@@ -184,6 +187,12 @@ namespace FlashMeasurementSystem
             _addDistanceButton.Click += (s, e) => AddTool("distance");
             _addAngleButton = new Button { Text = "+ Angle", Width = 70 };
             _addAngleButton.Click += (s, e) => AddTool("angle");
+            _addIntersectionButton = new Button { Text = "+ 交點", Width = 70 };
+            _addIntersectionButton.Click += (s, e) => AddTool("intersection");
+            _addMidlineButton = new Button { Text = "+ 中線", Width = 70 };
+            _addMidlineButton.Click += (s, e) => AddTool("midline");
+            _addProjectionButton = new Button { Text = "+ 投影", Width = 70 };
+            _addProjectionButton.Click += (s, e) => AddTool("projection");
             _deleteButton = new Button { Text = "Delete", Width = 60 };
             _deleteButton.Click += OnDeleteTool;
             _saveButton = new Button { Text = "Save", Width = 50 };
@@ -197,6 +206,9 @@ namespace FlashMeasurementSystem
             bar.Controls.Add(_addLineButton);
             bar.Controls.Add(_addDistanceButton);
             bar.Controls.Add(_addAngleButton);
+            bar.Controls.Add(_addIntersectionButton);
+            bar.Controls.Add(_addMidlineButton);
+            bar.Controls.Add(_addProjectionButton);
             bar.Controls.Add(_deleteButton);
             bar.Controls.Add(_saveButton);
             bar.Controls.Add(_saveAsButton);
@@ -813,12 +825,14 @@ namespace FlashMeasurementSystem
                 _typeLabel.Text = tool.ToolType ?? "-";
 
                 bool isElement = tool.ToolType == "circle" || tool.ToolType == "line";
+                bool isConstruction = tool.ToolType == "intersection" || tool.ToolType == "midline" || tool.ToolType == "projection";
                 bool isComposite = tool.ToolType == "distance" || tool.ToolType == "angle";
+                bool usesRefs = isComposite || isConstruction;
 
-                // Element tools (circle/line): ROI + Edge. Composite (distance/angle): RefTools.
+                // Element tools (circle/line): ROI + Edge. Construction/composite: RefTools + tolerance hidden for construction.
                 _roiGroup.Visible = isElement;
                 _edgeGroup.Visible = isElement;
-                _refGroup.Visible = isComposite;
+                _refGroup.Visible = usesRefs;
                 _angleHintLabel.Visible = tool.ToolType == "line";
 
                 if (isElement)
@@ -836,7 +850,7 @@ namespace FlashMeasurementSystem
                     SelectCombo(_interpolationCombo, tool.EdgeParameters.Interpolation);
                     SelectCombo(_measureModeCombo, tool.EdgeParameters.MeasureMode);
                 }
-                else if (isComposite)
+                else if (usesRefs)
                 {
                     PopulateRefCombos(tool);
                 }
@@ -852,20 +866,16 @@ namespace FlashMeasurementSystem
             }
         }
 
-        // distance supports line↔line, circle↔circle, line↔circle; angle only line↔line.
+        // distance: line/circle/intersection/midline/projection; angle: line/midline;
+        // intersection/midline: line; projection: circle + line。
         private void PopulateRefCombos(MeasurementTool tool)
         {
             _ref1Combo.Items.Clear();
             _ref2Combo.Items.Clear();
 
-            bool allowLine = true;
-            bool allowCircle = tool.ToolType == "distance";
-
             foreach (var t in _tools)
             {
-                if (t.ToolType == "line" && !allowLine) continue;
-                if (t.ToolType == "circle" && !allowCircle) continue;
-                if (t.ToolType != "line" && t.ToolType != "circle") continue;
+                if (!IsAllowedRef(tool.ToolType, t.ToolType)) continue;
                 var item = new ToolRef
                 {
                     Id = t.Id,
@@ -879,6 +889,27 @@ namespace FlashMeasurementSystem
             string id2 = tool.RefToolIds.Count > 1 ? tool.RefToolIds[1] : null;
             SelectRefCombo(_ref1Combo, id1);
             SelectRefCombo(_ref2Combo, id2);
+        }
+
+        // 依「目前工具型別」決定可作為其參考的「候選工具型別」。
+        private static bool IsAllowedRef(string ownerType, string candidateType)
+        {
+            switch (ownerType)
+            {
+                case "distance":
+                    return candidateType == "line" || candidateType == "circle"
+                        || candidateType == "intersection" || candidateType == "midline"
+                        || candidateType == "projection";
+                case "angle":
+                    return candidateType == "line" || candidateType == "midline";
+                case "intersection":
+                case "midline":
+                    return candidateType == "line";
+                case "projection":
+                    return candidateType == "line" || candidateType == "circle";
+                default:
+                    return false;
+            }
         }
 
         private static void SelectRefCombo(ComboBox combo, string id)
