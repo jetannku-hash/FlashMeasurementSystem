@@ -114,6 +114,13 @@ namespace FlashMeasurementSystem
             _edgeScanLengthNumeric.ValueChanged += OnEdgeRoiNumericChanged;
             _edgeRoiWidthNumeric.ValueChanged += OnEdgeRoiNumericChanged;
 
+            _arcCenterRowNumeric.ValueChanged += OnArcNumericChanged;
+            _arcCenterColNumeric.ValueChanged += OnArcNumericChanged;
+            _arcRadiusNumeric.ValueChanged += OnArcNumericChanged;
+            _arcAnnulusNumeric.ValueChanged += OnArcNumericChanged;
+            _arcAngleStartNumeric.ValueChanged += OnArcNumericChanged;
+            _arcAngleExtentNumeric.ValueChanged += OnArcNumericChanged;
+
             // 結果表空狀態提示（第五組 #11）：無資料列時於表格中央繪製引導文字。
             _edgeResultsGrid.Paint += EdgeResultsGrid_Paint;
 
@@ -1924,6 +1931,43 @@ namespace FlashMeasurementSystem
                 AngleExtent = extent,
                 AnnulusRadius = annulus
             };
+        }
+
+        // 互動編輯弧形開關：勾選 -> 以目前數值框內容進入拖曳編輯；取消 -> 離開編輯（保留數值與環帶）。
+        private void ArcEditCheck_CheckedChanged(object sender, EventArgs e)
+        {
+            if (_imageHelper == null) return;
+
+            if (_arcEditCheck.Checked)
+            {
+                if (_imageHelper.CurrentImage == null)
+                {
+                    _updatingArcControls = true;
+                    try { _arcEditCheck.Checked = false; } finally { _updatingArcControls = false; }
+                    _edgeStatusLabel.Text = "Arc: 請先載入影像";
+                    _edgeStatusLabel.ForeColor = Color.Red;
+                    return;
+                }
+
+                _latestArcRoi = BuildArcRoiFromControls();
+                if (!_latestArcRoi.IsDefined)
+                {
+                    _updatingArcControls = true;
+                    try { _arcEditCheck.Checked = false; } finally { _updatingArcControls = false; }
+                    _edgeStatusLabel.Text = "Arc ROI 無效: " + _latestArcRoi.ValidationError;
+                    _edgeStatusLabel.ForeColor = Color.Red;
+                    return;
+                }
+
+                ShowFittingOverlay();
+                _imageHelper.BeginArcEdit(_latestArcRoi.CenterRow, _latestArcRoi.CenterCol,
+                    _latestArcRoi.Radius, _latestArcRoi.AngleStart, _latestArcRoi.AngleExtent,
+                    _latestArcRoi.AnnulusRadius, OnArcRoiChanged);
+            }
+            else
+            {
+                _imageHelper.EndArcEdit();
+            }
         }
 
         private static decimal ClampNumericValue(NumericUpDown numeric, decimal value)
