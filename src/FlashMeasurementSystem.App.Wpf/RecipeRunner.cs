@@ -147,11 +147,26 @@ namespace FlashMeasurementSystem
                 if (!string.IsNullOrEmpty(tool.Id)) byId[tool.Id] = res;
             }
 
+            // ── Pass 1.5：構造工具（intersection / midline / projection）──
+            // 僅參照基礎元件（line/circle），不支援鏈式構造。
+            foreach (MeasurementTool tool in recipe.Tools)
+            {
+                if (tool == null) continue;
+                if (tool.ToolType != "intersection" && tool.ToolType != "midline" && tool.ToolType != "projection")
+                    continue;
+
+                var res = new ToolRunResult { Name = tool.Name, ToolType = tool.ToolType, Supported = true };
+                MeasureConstruction(res, tool, byId);
+                results.Add(res);
+                if (!string.IsNullOrEmpty(tool.Id)) byId[tool.Id] = res;
+            }
+
             // ── Pass 2：複合工具（distance）與其他 ──
             foreach (MeasurementTool tool in recipe.Tools)
             {
                 if (tool == null) continue;
                 if (tool.ToolType == "circle" || tool.ToolType == "line") continue;  // 已於 Pass 1 處理
+                if (tool.ToolType == "intersection" || tool.ToolType == "midline" || tool.ToolType == "projection") continue;  // 已於 Pass 1.5 處理
 
                 var res = new ToolRunResult { Name = tool.Name, ToolType = tool.ToolType };
 
@@ -303,6 +318,106 @@ namespace FlashMeasurementSystem
 
         // distance（B2b）：參考兩個 line 元素，用 distance_ss 最小距（M1 MeasureLineToLine，
         // 內部已換 mm）算垂直間距 → 判定。僅支援 line↔line。
+        // A5 構造工具：intersection（兩 line→點）、midline（兩 line→線）、projection（circle 圓心投影到 line→點）。
+        // 僅允許參照 line/circle 基礎元件；參照其他構造 → v1 不支援。
+        private void MeasureConstruction(ToolRunResult res, MeasurementTool tool,
+            Dictionary<string, ToolRunResult> byId)
+        {
+            if (tool.RefToolIds == null || tool.RefToolIds.Count < 2)
+            {
+                res.Measured = false;
+                res.ValueText = "需 2 參考元素";
+                res.Message = tool.ToolType + " 需 RefToolIds 含 2 個元素";
+                return;
+            }
+
+            ToolRunResult a, b;
+            if (!byId.TryGetValue(tool.RefToolIds[0], out a) || !byId.TryGetValue(tool.RefToolIds[1], out b))
+            {
+                res.Measured = false;
+                res.ValueText = "找不到參考元素";
+                res.Message = "RefToolIds 指向的元素不存在";
+                return;
+            }
+            if (!a.Measured || !b.Measured)
+            {
+                res.Measured = false;
+                res.ValueText = "參考元素未量測";
+                return;
+            }
+            // 不支援鏈式構造：ref 必須是 line/circle 基礎元件。
+            if (!IsBaseElement(a) || !IsBaseElement(b))
+            {
+                res.Measured = false;
+                res.ValueText = "不支援鏈式構造";
+                res.Message = "v1 構造只能參照 line/circle 基礎元件";
+                return;
+            }
+
+            if (tool.ToolType == "intersection")
+            {
+                if (a.ToolType != "line" || b.ToolType != "line")
+                {
+                    res.Measured = false; res.ValueText = "需兩條線";
+                    res.Message = "intersection 需兩個 line 元素"; return;
+                }
+                bool ok = GeometryConstruction.TryLineIntersection(
+                    a.LineRow1, a.LineCol1, a.LineRow2, a.LineCol2,
+                    b.LineRow1, b.LineCol1, b.LineRow2, b.LineCol2,
+                    out double r, out double c);
+                if (!ok)
+                {
+                    res.Measured = false; res.ValueText = "兩線平行，無交點";
+                    res.Message = "intersection: 兩線平行"; return;
+                }
+                res.Measured = true;
+                res.OutputPrimitive = GeometricPrimitive.Point(r, c);
+                res.ValueText = string.Format(CultureInfo.InvariantCulture, "({0:F1},{1:F1})", r, c);
+            }
+            else if (tool.ToolType == "midline")
+            {
+                if (a.ToolType != "line" || b.ToolType != "line")
+                {
+                    res.Measured = false; res.ValueText = "需兩條線";
+                    res.Message = "midline 需兩個 line 元素"; return;
+                }
+                GeometryConstruction.Midline(
+                    a.LineRow1, a.LineCol1, a.LineRow2, a.LineCol2,
+                    b.LineRow1, b.LineCol1, b.LineRow2, b.LineCol2,
+                    out double r1, out double c1, out double r2, out double c2);
+                res.Measured = true;
+                res.LineRow1 = r1; res.LineCol1 = c1; res.LineRow2 = r2; res.LineCol2 = c2;
+                res.OutputPrimitive = GeometricPrimitive.Line(r1, c1, r2, c2);
+                res.ValueText = "中線";
+            }
+            else // projection
+            {
+                // ref = [circle, line]：圓心投影到線
+                ToolRunResult circleElem = a.ToolType == "circle" ? a : (b.ToolType == "circle" ? b : null);
+                ToolRunResult lineElem = a.ToolType == "line" ? a : (b.ToolType == "line" ? b : null);
+                if (circleElem == null || lineElem == null)
+                {
+                    res.Measured = false; res.ValueText = "需 circle + line";
+                    res.Message = "projection 需一個 circle 與一個 line"; return;
+                }
+                GeometryConstruction.ProjectPointOntoLine(
+                    circleElem.FitCenterRow, circleElem.FitCenterCol,
+                    lineElem.LineRow1, lineElem.LineCol1, lineElem.LineRow2, lineElem.LineCol2,
+                    out double footRow, out double footCol);
+                res.Measured = true;
+                // 視覺化用：原點(圓心)→垂足 連線
+                res.DistRow1 = circleElem.FitCenterRow; res.DistCol1 = circleElem.FitCenterCol;
+                res.DistRow2 = footRow; res.DistCol2 = footCol;
+                res.OutputPrimitive = GeometricPrimitive.Point(footRow, footCol);
+                res.ValueText = string.Format(CultureInfo.InvariantCulture, "({0:F1},{1:F1})", footRow, footCol);
+            }
+        }
+
+        private static bool IsBaseElement(ToolRunResult r)
+        {
+            return r.ToolType == "line" || r.ToolType == "circle";
+        }
+
         private void MeasureDistance(ToolRunResult res, MeasurementTool tool,
             Dictionary<string, ToolRunResult> byId, double pixelSizeUmX, double pixelSizeUmY)
         {
