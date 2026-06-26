@@ -1300,6 +1300,20 @@ namespace FlashMeasurementSystem
                         double extent = r.AngleDeg * Math.PI / 180.0;
                         an.DrawAngle(r.AngleCenterRow, r.AngleCenterCol, r.AngleRadiusPx, r.AngleStartRad, extent, r.ValueText, r.IsOk);
                     }
+                    else if (r.Measured && r.ToolType == "intersection" && r.OutputPrimitive != null)
+                    {
+                        an.DrawCross(r.OutputPrimitive.Row, r.OutputPrimitive.Col, 15, "cyan");
+                    }
+                    else if (r.Measured && r.ToolType == "midline" && r.OutputPrimitive != null)
+                    {
+                        an.DrawLine(r.OutputPrimitive.Row1, r.OutputPrimitive.Col1,
+                            r.OutputPrimitive.Row2, r.OutputPrimitive.Col2, "cyan");
+                    }
+                    else if (r.Measured && r.ToolType == "projection" && r.OutputPrimitive != null)
+                    {
+                        an.DrawLine(r.DistRow1, r.DistCol1, r.DistRow2, r.DistCol2, "cyan");      // 圓心→垂足
+                        an.DrawCross(r.OutputPrimitive.Row, r.OutputPrimitive.Col, 12, "cyan");   // 垂足
+                    }
 
                     rows.Add(new OverlayResultRow { Name = r.Name, ValueText = r.ValueText, IsOk = r.IsOk });
                 }

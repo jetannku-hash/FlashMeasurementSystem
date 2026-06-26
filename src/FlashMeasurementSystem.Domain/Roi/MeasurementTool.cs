@@ -14,7 +14,7 @@ namespace FlashMeasurementSystem.Domain.Roi
     {
         public string Id { get; set; } = "";
         public string Name { get; set; } = "";
-        public string ToolType { get; set; } = "edge"; // edge / line / circle / distance / angle
+        public string ToolType { get; set; } = "edge"; // edge / line / circle / distance / angle / intersection / midline / projection
 
         public RoiGeometry Roi { get; set; } = new RoiGeometry();
         public EdgeDetectionParameters EdgeParameters { get; set; } = EdgeDetectionParameters.Default();
