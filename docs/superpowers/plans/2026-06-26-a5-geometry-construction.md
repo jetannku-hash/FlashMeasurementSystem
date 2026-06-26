@@ -15,6 +15,28 @@
 **Tests:** `.\tests\FlashMeasurementSystem.Tests\bin\x64\Debug\FlashMeasurementSystem.Tests.exe`
 **重建前先關 app:** `Stop-Process -Name FlashMeasurementSystem.App.Wpf -ErrorAction SilentlyContinue`
 **old-style csproj:** 新檔需手動 `<Compile Include>`。**Domain 不可** 參照 HALCON/UI。
+**C# 版本：LangVersion 7.3——不可使用 C# 8+ 語法（switch expression、using declaration、nullable ref…）。** 本 plan 內程式碼已是 7.3-safe；自行補碼時須守住。
+
+---
+
+## 執行分段與檢查點建議（先讀我）
+
+> 這份 plan **不適合純無人值守一路到底**：收尾的 GUI 驗證需要人。請依下列三段執行，並注意「build 綠燈 ≠ 行為正確」。
+
+**第 1 段 — T1～T3（純 Domain 引擎，真 TDD）**
+- 每個 task 皆「先寫失敗測試 → 實作 → 綠燈 → commit」，確定性高、無 HALCON/UI 相依。
+- **可無人值守一路跑完**；跑完是乾淨綠燈檢查點（甚至可先單獨評估合併）。
+
+**第 2 段 — T4～T9（整合，build-only）**
+- ⚠️ 這些 task **只有 build 驗證、沒有單元測試**（依專案慣例，HALCON adapter 與 WinForms UI 不做單元測試，改在 GUI 手動驗）。**「建置成功」不代表行為正確**，真正驗證集中在 T10。執行者**不可**在此段宣稱功能完成。
+- **每個 task 一個檢查點**（建議 subagent-driven-development 逐 task review）。
+- 🔴 **T6 是唯一改到既有 distance/angle dispatch 的重構**——跑完務必停下 review，且其回歸正確性要等 **T10 step 8**（既有 line↔line / circle↔circle / line↔circle 量測值不變）才算確認。
+- 🟠 **T6 step 2 與 T8 step 2–3 是「軟」步驟**（大範圍精確 span 取代、比照既有按鈕樣式 mirror），最易出錯；若由能力較弱或不同的模型執行，請由人或較強模型把關這兩步。
+
+**第 3 段 — T10（人工 GUI 驗收）**
+- 必須有人操作：建立含 line→intersection→distance 的配方、逐一驗證構造/overlay/下游消費、**回歸**（既有距離組合值不變）、**舊 v3 配方仍能載入**。本環境無法截圖，需使用者親自看畫面。
+
+**給自動執行者（含 DeepSeek 類）的提醒**：plan 已內建專案慣例（csproj 手動 Include、build 前關 app、7.3 限制）；逐字套用程式碼與錨點即可。遇到 T6/T8 的軟步驟若無法確定編輯邊界，**停下回報**，不要硬猜。
 
 ---
 
