@@ -64,6 +64,33 @@ namespace FlashMeasurementSystem
             HOperatorSet.SetDraw(_window, "margin");
         }
 
+        /// <summary>
+        /// 弧形互動編輯外觀：在中心、起角、終角、中弧(半徑)、外弧(環寬) 五處畫綠色實心把手方塊。
+        /// 環帶本身（橘/黃弧）仍由 DrawFittingLayers 繪製，此處只疊加把手。
+        /// handleHalf 為影像像素（由 helper 依縮放換算，確保螢幕恆定大小）。
+        /// </summary>
+        public void DrawEditArc(double cr, double cc, double radius, double a0, double extent,
+            double annulus, double handleHalf)
+        {
+            HOperatorSet.SetColor(_window, "green");
+            HOperatorSet.SetLineWidth(_window, 2);
+            HOperatorSet.SetDraw(_window, "fill");
+
+            double aMid = a0 + extent / 2.0;
+            ArcEditMath.PointOnArc(cr, cc, radius, a0, out double sr, out double sc);
+            ArcEditMath.PointOnArc(cr, cc, radius, a0 + extent, out double er, out double ec);
+            ArcEditMath.PointOnArc(cr, cc, radius, aMid, out double rr, out double rc);
+            ArcEditMath.PointOnArc(cr, cc, radius + annulus, aMid, out double ar, out double ac);
+
+            DrawHandleSquare(cr, cc, handleHalf);   // 中心（平移整個弧）
+            DrawHandleSquare(sr, sc, handleHalf);   // 起始角
+            DrawHandleSquare(er, ec, handleHalf);   // 終止角
+            DrawHandleSquare(rr, rc, handleHalf);   // 半徑
+            DrawHandleSquare(ar, ac, handleHalf);   // 環寬
+
+            HOperatorSet.SetDraw(_window, "margin");
+        }
+
         private void DrawHandleSquare(double r, double c, double half)
         {
             HOperatorSet.DispRectangle1(_window, r - half, c - half, r + half, c + half);
