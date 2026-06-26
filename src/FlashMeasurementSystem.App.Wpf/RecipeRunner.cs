@@ -316,8 +316,6 @@ namespace FlashMeasurementSystem
             }
         }
 
-        // distance（B2b）：參考兩個 line 元素，用 distance_ss 最小距（M1 MeasureLineToLine，
-        // 內部已換 mm）算垂直間距 → 判定。僅支援 line↔line。
         // A5 構造工具：intersection（兩 line→點）、midline（兩 line→線）、projection（circle 圓心投影到 line→點）。
         // 僅允許參照 line/circle 基礎元件；參照其他構造 → v1 不支援。
         private void MeasureConstruction(ToolRunResult res, MeasurementTool tool,
@@ -418,6 +416,14 @@ namespace FlashMeasurementSystem
             return r.ToolType == "line" || r.ToolType == "circle";
         }
 
+        // A5：把參考工具結果解析成幾何基元（即其 OutputPrimitive）。
+        private static GeometricPrimitive ResolvePrimitive(ToolRunResult r)
+        {
+            return r != null ? r.OutputPrimitive : null;
+        }
+
+        // distance：解析兩個 ref 為幾何基元，依 (Kind,Kind) 路由到既有 measurer
+        // （line↔line / circle↔circle / 點(或圓心)↔線 / 點↔點）；mm 由 measurer 內部換算 → 公差判定。
         private void MeasureDistance(ToolRunResult res, MeasurementTool tool,
             Dictionary<string, ToolRunResult> byId, double pixelSizeUmX, double pixelSizeUmY)
         {
@@ -453,98 +459,67 @@ namespace FlashMeasurementSystem
                     PixelSizeUmY = pixelSizeUmY
                 };
 
-                if (a.ToolType == "line" && b.ToolType == "line")
+                GeometricPrimitive pa = ResolvePrimitive(a);
+                GeometricPrimitive pb = ResolvePrimitive(b);
+                if (pa == null || pb == null)
                 {
-                    DistanceMeasurementResult dr = _distanceMeasurer.MeasureLineToLine(
-                        a.LineRow1, a.LineCol1, a.LineRow2, a.LineCol2,
-                        b.LineRow1, b.LineCol1, b.LineRow2, b.LineCol2, dp);
-
-                    if (!dr.Success)
-                    {
-                        res.Measured = false;
-                        res.ValueText = "距離計算失敗";
-                        res.Message = dr.ErrorMessage;
-                        return;
-                    }
-
-                    res.Measured = true;
-                    res.DistMm = dr.DistanceMm;
-                    // 視覺化：量到的是兩線「垂直最近距離」(distance_ss min)。用「line A 中點 →
-                    // 該點在 line B 上的垂足」畫線段，使其與邊垂直、長度等於間距（避免中點對中點
-                    // 因兩 ROI 水平偏移而畫成斜線，誤導使用者）。
-                    double aMidRow = (a.LineRow1 + a.LineRow2) / 2.0;
-                    double aMidCol = (a.LineCol1 + a.LineCol2) / 2.0;
-                    ProjectPointOntoLine(aMidRow, aMidCol,
-                        b.LineRow1, b.LineCol1, b.LineRow2, b.LineCol2,
-                        out double footRow, out double footCol);
-                    res.DistRow1 = aMidRow;
-                    res.DistCol1 = aMidCol;
-                    res.DistRow2 = footRow;
-                    res.DistCol2 = footCol;
-                    res.ValueText = string.Format(CultureInfo.InvariantCulture, "D={0:F4}mm", res.DistMm);
+                    res.Measured = false;
+                    res.ValueText = "參考元素無幾何輸出";
+                    res.Message = "ref 工具未提供 OutputPrimitive";
+                    return;
                 }
-                else if (a.ToolType == "circle" && b.ToolType == "circle")
+
+                DistanceMeasurementResult dr;
+                if (pa.Kind == GeometricPrimitiveKind.Line && pb.Kind == GeometricPrimitiveKind.Line)
                 {
-                    // A1: 圓心對圓心距離
-                    DistanceMeasurementResult dr = _distanceMeasurer.MeasureCircleToCircle(
-                        a.FitCenterRow, a.FitCenterCol,
-                        b.FitCenterRow, b.FitCenterCol, dp);
-
-                    if (!dr.Success)
-                    {
-                        res.Measured = false;
-                        res.ValueText = "距離計算失敗";
-                        res.Message = dr.ErrorMessage;
-                        return;
-                    }
-
-                    res.Measured = true;
-                    res.DistMm = dr.DistanceMm;
-                    res.DistRow1 = a.FitCenterRow;
-                    res.DistCol1 = a.FitCenterCol;
-                    res.DistRow2 = b.FitCenterRow;
-                    res.DistCol2 = b.FitCenterCol;
-                    res.ValueText = string.Format(CultureInfo.InvariantCulture, "D={0:F4}mm", res.DistMm);
+                    dr = _distanceMeasurer.MeasureLineToLine(
+                        pa.Row1, pa.Col1, pa.Row2, pa.Col2,
+                        pb.Row1, pb.Col1, pb.Row2, pb.Col2, dp);
+                    if (!FillDistance(res, dr)) return;
+                    // 視覺化：line A 中點 → 在 line B 上的垂足（與既有行為一致）
+                    double aMidRow = (pa.Row1 + pa.Row2) / 2.0, aMidCol = (pa.Col1 + pa.Col2) / 2.0;
+                    ProjectPointOntoLine(aMidRow, aMidCol, pb.Row1, pb.Col1, pb.Row2, pb.Col2,
+                        out double fR, out double fC);
+                    res.DistRow1 = aMidRow; res.DistCol1 = aMidCol; res.DistRow2 = fR; res.DistCol2 = fC;
                 }
-                else if ((a.ToolType == "line" && b.ToolType == "circle") ||
-                         (a.ToolType == "circle" && b.ToolType == "line"))
+                else if (pa.Kind == GeometricPrimitiveKind.Circle && pb.Kind == GeometricPrimitiveKind.Circle)
                 {
-                    // A1: 圓心到線的垂直距離
-                    ToolRunResult lineElem = a.ToolType == "line" ? a : b;
-                    ToolRunResult circleElem = a.ToolType == "circle" ? a : b;
-
-                    DistanceMeasurementResult dr = _distanceMeasurer.MeasurePointToLine(
-                        circleElem.FitCenterRow, circleElem.FitCenterCol,
-                        lineElem.LineRow1, lineElem.LineCol1,
-                        lineElem.LineRow2, lineElem.LineCol2, dp);
-
-                    if (!dr.Success)
+                    dr = _distanceMeasurer.MeasureCircleToCircle(
+                        pa.CenterRow, pa.CenterCol, pb.CenterRow, pb.CenterCol, dp);
+                    if (!FillDistance(res, dr)) return;
+                    res.DistRow1 = pa.CenterRow; res.DistCol1 = pa.CenterCol;
+                    res.DistRow2 = pb.CenterRow; res.DistCol2 = pb.CenterCol;
+                }
+                else if (pa.Kind == GeometricPrimitiveKind.Line || pb.Kind == GeometricPrimitiveKind.Line)
+                {
+                    // 一邊是線、另一邊是點/圓（取其點：圓→圓心）→ 點到線
+                    GeometricPrimitive linePrim = pa.Kind == GeometricPrimitiveKind.Line ? pa : pb;
+                    GeometricPrimitive other = pa.Kind == GeometricPrimitiveKind.Line ? pb : pa;
+                    if (!other.TryAsPoint(out double pr, out double pc))
                     {
-                        res.Measured = false;
-                        res.ValueText = "距離計算失敗";
-                        res.Message = dr.ErrorMessage;
-                        return;
+                        res.Measured = false; res.ValueText = "不支援的距離組合";
+                        res.Message = "line 對 line 以外，另一邊需可視為點"; return;
                     }
-
-                    res.Measured = true;
-                    res.DistMm = dr.DistanceMm;
-                    res.DistRow1 = circleElem.FitCenterRow;
-                    res.DistCol1 = circleElem.FitCenterCol;
-                    ProjectPointOntoLine(circleElem.FitCenterRow, circleElem.FitCenterCol,
-                        lineElem.LineRow1, lineElem.LineCol1,
-                        lineElem.LineRow2, lineElem.LineCol2,
+                    dr = _distanceMeasurer.MeasurePointToLine(pr, pc,
+                        linePrim.Row1, linePrim.Col1, linePrim.Row2, linePrim.Col2, dp);
+                    if (!FillDistance(res, dr)) return;
+                    ProjectPointOntoLine(pr, pc, linePrim.Row1, linePrim.Col1, linePrim.Row2, linePrim.Col2,
                         out double footRow, out double footCol);
-                    res.DistRow2 = footRow;
-                    res.DistCol2 = footCol;
-                    res.ValueText = string.Format(CultureInfo.InvariantCulture, "D={0:F4}mm", res.DistMm);
+                    res.DistRow1 = pr; res.DistCol1 = pc; res.DistRow2 = footRow; res.DistCol2 = footCol;
                 }
                 else
                 {
-                    res.Measured = false;
-                    res.ValueText = "不支援的距離組合";
-                    res.Message = "距離僅支援 line↔line、circle↔circle、line↔circle";
-                    return;
+                    // 兩邊都是點/圓 → 點到點（圓取圓心）
+                    if (!pa.TryAsPoint(out double ar, out double ac) || !pb.TryAsPoint(out double br, out double bc))
+                    {
+                        res.Measured = false; res.ValueText = "不支援的距離組合";
+                        res.Message = "距離組合無法解析為點/線"; return;
+                    }
+                    dr = _distanceMeasurer.MeasurePointToPoint(ar, ac, br, bc, dp);
+                    if (!FillDistance(res, dr)) return;
+                    res.DistRow1 = ar; res.DistCol1 = ac; res.DistRow2 = br; res.DistCol2 = bc;
                 }
+                res.ValueText = string.Format(CultureInfo.InvariantCulture, "D={0:F4}mm", res.DistMm);
 
                 if (tool.Tolerance != null)
                 {
@@ -567,6 +542,21 @@ namespace FlashMeasurementSystem
             }
         }
 
+        // 把 measurer 結果寫入 res；失敗時設好訊息並回 false。
+        private static bool FillDistance(ToolRunResult res, DistanceMeasurementResult dr)
+        {
+            if (dr == null || !dr.Success)
+            {
+                res.Measured = false;
+                res.ValueText = "距離計算失敗";
+                res.Message = dr != null ? dr.ErrorMessage : "null result";
+                return false;
+            }
+            res.Measured = true;
+            res.DistMm = dr.DistanceMm;
+            return true;
+        }
+
         // 把點 (pRow,pCol) 垂直投影到通過 (r1,c1)-(r2,c2) 的無限長直線，回傳垂足。
         // 線段退化（長度 0）時回傳該端點，避免除以 0。
         private static void ProjectPointOntoLine(double pRow, double pCol,
@@ -587,8 +577,8 @@ namespace FlashMeasurementSystem
             footCol = c1 + t * dCol;
         }
 
-        // angle（B2c）：參考兩個 line 元素，用 angle_ll 算夾角的 AcuteAngleDeg（0~90）。
-        // 旋轉不變量：工件轉 30°，兩線各多 30°，夾角仍同。
+        // angle（B2c）：參考兩條線（line 元素或構造 midline，皆為 Line primitive），
+        // 用 angle_ll 算夾角的 AcuteAngleDeg（0~90）。旋轉不變量：工件轉 30°，兩線各多 30°，夾角仍同。
         private void MeasureAngle(ToolRunResult res, MeasurementTool tool,
             Dictionary<string, ToolRunResult> byId)
         {
@@ -615,11 +605,14 @@ namespace FlashMeasurementSystem
                 res.ValueText = "參考元素未量測";
                 return;
             }
-            if (a.ToolType != "line" || b.ToolType != "line")
+            GeometricPrimitive pa = ResolvePrimitive(a);
+            GeometricPrimitive pb = ResolvePrimitive(b);
+            if (pa == null || pb == null ||
+                pa.Kind != GeometricPrimitiveKind.Line || pb.Kind != GeometricPrimitiveKind.Line)
             {
                 res.Measured = false;
-                res.ValueText = "僅支援 line↔line";
-                res.Message = "B2c 角度僅支援兩 line 元素";
+                res.ValueText = "角度需兩條線";
+                res.Message = "角度量測需兩條線（可為構造中線）";
                 return;
             }
 
@@ -627,8 +620,8 @@ namespace FlashMeasurementSystem
             {
                 var ap = AngleMeasurementParameters.Default();
                 AngleMeasurementResult ar = _angleMeasurer.MeasureAngle(
-                    a.LineRow1, a.LineCol1, a.LineRow2, a.LineCol2,
-                    b.LineRow1, b.LineCol1, b.LineRow2, b.LineCol2, ap);
+                    pa.Row1, pa.Col1, pa.Row2, pa.Col2,
+                    pb.Row1, pb.Col1, pb.Row2, pb.Col2, ap);
 
                 if (!ar.Success)
                 {
@@ -643,11 +636,10 @@ namespace FlashMeasurementSystem
                 res.ValueText = string.Format(CultureInfo.InvariantCulture, "{0:F2}°", res.AngleDeg);
 
                 // 兩線交點：取 a1→a2 與 b1→b2 的交點（四點重心當近似頂點，對近交點/平行線也安全）。
-                res.AngleCenterRow = (a.LineRow1 + a.LineRow2 + b.LineRow1 + b.LineRow2) / 4.0;
-                res.AngleCenterCol = (a.LineCol1 + a.LineCol2 + b.LineCol1 + b.LineCol2) / 4.0;
-                res.AngleRadiusPx = 80.0;  // 弧線半徑（像素）
-                // 弧起點：線 A 的第一端點指向交點（頂點）的方位角。
-                res.AngleStartRad = Math.Atan2(a.LineRow1 - res.AngleCenterRow, a.LineCol1 - res.AngleCenterCol);
+                res.AngleCenterRow = (pa.Row1 + pa.Row2 + pb.Row1 + pb.Row2) / 4.0;
+                res.AngleCenterCol = (pa.Col1 + pa.Col2 + pb.Col1 + pb.Col2) / 4.0;
+                res.AngleRadiusPx = 80.0;
+                res.AngleStartRad = Math.Atan2(pa.Row1 - res.AngleCenterRow, pa.Col1 - res.AngleCenterCol);
 
                 if (tool.Tolerance != null)
                 {
