@@ -1852,6 +1852,10 @@ namespace FlashMeasurementSystem
                 (double)_edgeRoiWidthNumeric.Value / 2.0,
                 (double)_edgeAngleNumeric.Value * Math.PI / 180.0);
             InvalidateEdgeState();
+            // 畫新的邊緣 rect ROI = 改用邊緣 ROI，對稱於 ArcEditCheck：清掉殘留的圓弧帶並
+            // 同步取消「互動編輯」勾選（BeginRect2Edit 已關掉 arc 編輯把手，這裡只補狀態/UI）。
+            _latestArcRoi = null;
+            if (_arcEditCheck.Checked) _arcEditCheck.Checked = false;
             _imageHelper.IsRoiMode = false;
             _edgeDrawRoiCheck.Checked = false;
             ShowFittingOverlay();
