@@ -312,7 +312,9 @@ namespace FlashMeasurementSystem
             _toolTip.SetToolTip(measurementPixelSizeYNumeric, "Pixel size in Y direction (µm/pixel)");
             _toolTip.SetToolTip(measurementCoordInput, "Enter coordinates, one pair per line: row,col");
             _toolTip.SetToolTip(appendLineButton, "Append the last fitted line endpoints to the coordinate input");
-            _toolTip.SetToolTip(appendCircleButton, "Append the last fitted circle center to the coordinate input");
+            _toolTip.SetToolTip(appendCircleButton, "Append the last fitted circle/arc center to the coordinate input");
+            _toolTip.SetToolTip(appendEllipseButton, "Append the last fitted ellipse center to the coordinate input");
+            _toolTip.SetToolTip(appendRectButton, "Append the last fitted rectangle center to the coordinate input");
             _toolTip.SetToolTip(appendContourButton, "Append detected edge points to the coordinate input");
             _toolTip.SetToolTip(measureDistanceButton, "Measure distance using coordinates above");
             _toolTip.SetToolTip(measureAngleButton, "Measure angle using coordinates above");
@@ -1945,6 +1947,31 @@ namespace FlashMeasurementSystem
                 return;
             }
             AppendCoordLine(circle.CenterRow, circle.CenterColumn);
+        }
+
+        // 把最近一次成功的 Ellipse 擬合結果（中心）附加到座標框。橢圓中心是「點」，
+        // 故走既有 PointToPoint/PointToLine 量測（A3-D：EllipseCenterToX）。
+        private void AppendEllipseButton_Click(object sender, EventArgs e)
+        {
+            EllipseFittingResult ellipse = _latestEllipseFittingResult;
+            if (ellipse == null || !ellipse.Success)
+            {
+                measureResultLabel.Text = "尚無成功的 Ellipse 擬合結果可帶入（請先在 Edge Detection 分頁按 Fit Ellipse）。";
+                return;
+            }
+            AppendCoordLine(ellipse.CenterRow, ellipse.CenterColumn);
+        }
+
+        // 把最近一次成功的 Rectangle 擬合結果（中心）附加到座標框（A3-D：RectCenterToX）。
+        private void AppendRectButton_Click(object sender, EventArgs e)
+        {
+            RectangleFittingResult rect = _latestRectangleFittingResult;
+            if (rect == null || !rect.Success)
+            {
+                measureResultLabel.Text = "尚無成功的 Rectangle 擬合結果可帶入（請先在 Edge Detection 分頁按 Fit Rectangle）。";
+                return;
+            }
+            AppendCoordLine(rect.CenterRow, rect.CenterColumn);
         }
 
         // 把最近一次 Edge Detection 的所有 EdgePoints 當成一條 contour 帶入座標框。

@@ -122,6 +122,8 @@ namespace FlashMeasurementSystem
             this.appendLineButton = new System.Windows.Forms.Button();
             this.appendCircleButton = new System.Windows.Forms.Button();
             this.appendContourButton = new System.Windows.Forms.Button();
+            this.appendEllipseButton = new System.Windows.Forms.Button();
+            this.appendRectButton = new System.Windows.Forms.Button();
             this.measureDistanceButton = new System.Windows.Forms.Button();
             this.angleModeLabel = new System.Windows.Forms.Label();
             this.angleModeCombo = new System.Windows.Forms.ComboBox();
@@ -1348,7 +1350,7 @@ namespace FlashMeasurementSystem
             this.measurementTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 26F));
             this.measurementTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 26F));
             this.measurementTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 130F));
-            this.measurementTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 28F));
+            this.measurementTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 56F));
             this.measurementTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 36F));
             this.measurementTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 26F));
             this.measurementTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 36F));
@@ -1509,13 +1511,16 @@ namespace FlashMeasurementSystem
             this.appendButtonPanel.Controls.Add(this.appendLineButton, 0, 0);
             this.appendButtonPanel.Controls.Add(this.appendCircleButton, 1, 0);
             this.appendButtonPanel.Controls.Add(this.appendContourButton, 2, 0);
+            this.appendButtonPanel.Controls.Add(this.appendEllipseButton, 0, 1);
+            this.appendButtonPanel.Controls.Add(this.appendRectButton, 1, 1);
             this.appendButtonPanel.Dock = System.Windows.Forms.DockStyle.Fill;
             this.appendButtonPanel.Location = new System.Drawing.Point(0, 260);
             this.appendButtonPanel.Margin = new System.Windows.Forms.Padding(0);
             this.appendButtonPanel.Name = "appendButtonPanel";
-            this.appendButtonPanel.RowCount = 1;
-            this.appendButtonPanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 100F));
-            this.appendButtonPanel.Size = new System.Drawing.Size(231, 28);
+            this.appendButtonPanel.RowCount = 2;
+            this.appendButtonPanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 50F));
+            this.appendButtonPanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 50F));
+            this.appendButtonPanel.Size = new System.Drawing.Size(231, 56);
             this.appendButtonPanel.TabIndex = 12;
             // 
             // appendLineButton
@@ -1553,6 +1558,26 @@ namespace FlashMeasurementSystem
             this.appendContourButton.Text = "+ Con&tour";
             this.appendContourButton.UseVisualStyleBackColor = true;
             this.appendContourButton.Click += new System.EventHandler(this.AppendContourButton_Click);
+            //
+            // appendEllipseButton
+            //
+            this.appendEllipseButton.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.appendEllipseButton.Margin = new System.Windows.Forms.Padding(0, 2, 2, 2);
+            this.appendEllipseButton.Name = "appendEllipseButton";
+            this.appendEllipseButton.TabIndex = 3;
+            this.appendEllipseButton.Text = "+ &Ellipse";
+            this.appendEllipseButton.UseVisualStyleBackColor = true;
+            this.appendEllipseButton.Click += new System.EventHandler(this.AppendEllipseButton_Click);
+            //
+            // appendRectButton
+            //
+            this.appendRectButton.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.appendRectButton.Margin = new System.Windows.Forms.Padding(2);
+            this.appendRectButton.Name = "appendRectButton";
+            this.appendRectButton.TabIndex = 4;
+            this.appendRectButton.Text = "+ &Rect";
+            this.appendRectButton.UseVisualStyleBackColor = true;
+            this.appendRectButton.Click += new System.EventHandler(this.AppendRectButton_Click);
             // 
             // measureDistanceButton
             // 
@@ -1720,6 +1745,8 @@ namespace FlashMeasurementSystem
         private System.Windows.Forms.Button appendLineButton;
         private System.Windows.Forms.Button appendCircleButton;
         private System.Windows.Forms.Button appendContourButton;
+        private System.Windows.Forms.Button appendEllipseButton;
+        private System.Windows.Forms.Button appendRectButton;
         private System.Windows.Forms.Button measureDistanceButton;
         private System.Windows.Forms.Label measureResultLabel;
         private System.Windows.Forms.Label angleModeLabel;
