@@ -1314,6 +1314,13 @@ namespace FlashMeasurementSystem
                         an.DrawLine(r.DistRow1, r.DistCol1, r.DistRow2, r.DistCol2, "cyan");      // 圓心→垂足
                         an.DrawCross(r.OutputPrimitive.Row, r.OutputPrimitive.Col, 12, "cyan");   // 垂足
                     }
+                    else if (r.Measured && (r.ToolType == "parallelism" || r.ToolType == "perpendicularity"
+                        || r.ToolType == "concentricity"))
+                    {
+                        // 帶基準的形位公差：畫量測↔基準的偏移連線 + 偏差/判定文字（T4 已設好兩端）。
+                        // 真圓度/真直度無對應幾何錨點，僅以結果表列呈現（其元素已由各自工具畫出）。
+                        an.DrawDistance(r.DistRow1, r.DistCol1, r.DistRow2, r.DistCol2, r.ValueText, r.IsOk);
+                    }
 
                     rows.Add(new OverlayResultRow { Name = r.Name, ValueText = r.ValueText, IsOk = r.IsOk });
                 }
