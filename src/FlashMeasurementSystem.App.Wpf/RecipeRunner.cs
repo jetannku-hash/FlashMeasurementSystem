@@ -16,6 +16,7 @@ using FlashMeasurementSystem.Domain.EdgeDetection;
 using FlashMeasurementSystem.Domain.LineFitting;
 using FlashMeasurementSystem.Domain.Roi;
 using FlashMeasurementSystem.Domain.Geometry;
+using FlashMeasurementSystem.Domain.Gdt;
 using FlashMeasurementSystem.Domain.Tolerance;
 using HalconDotNet;
 
@@ -53,6 +54,9 @@ namespace FlashMeasurementSystem
         public string ValueText;       // 結果表顯示文字
         public string Message;         // 失敗/說明
         public GeometricPrimitive OutputPrimitive;  // A5：此工具的幾何輸出（resolver / 下游消費）
+        public double ResidualRmsPx;     // line/circle 擬合殘差 RMS（px）；供真直度（近似）與品質
+        public double CircleRoundnessPx; // circle max-min 徑向（px）；供真圓度真值
+        public double GdtDeviationMm;    // GD&T：形位偏差（mm）
     }
 
     /// <summary>
@@ -161,12 +165,26 @@ namespace FlashMeasurementSystem
                 if (!string.IsNullOrEmpty(tool.Id)) byId[tool.Id] = res;
             }
 
+            // ── Pass 1.7：GD&T 形位公差工具（單邊判定，0 ≤ 偏差 ≤ T）──
+            // 僅參照 line/circle 基礎元件（不支援鏈式參照構造結果）。
+            foreach (MeasurementTool tool in recipe.Tools)
+            {
+                if (tool == null) continue;
+                if (!IsGdtType(tool.ToolType)) continue;
+
+                var res = new ToolRunResult { Name = tool.Name, ToolType = tool.ToolType };
+                MeasureGdt(res, tool, byId, pixelSizeUm);
+                results.Add(res);
+                if (!string.IsNullOrEmpty(tool.Id)) byId[tool.Id] = res;
+            }
+
             // ── Pass 2：複合工具（distance）與其他 ──
             foreach (MeasurementTool tool in recipe.Tools)
             {
                 if (tool == null) continue;
                 if (tool.ToolType == "circle" || tool.ToolType == "line") continue;  // 已於 Pass 1 處理
                 if (tool.ToolType == "intersection" || tool.ToolType == "midline" || tool.ToolType == "projection") continue;  // 已於 Pass 1.5 處理
+                if (IsGdtType(tool.ToolType)) continue;  // 已於 Pass 1.7 處理
 
                 var res = new ToolRunResult { Name = tool.Name, ToolType = tool.ToolType };
 
@@ -223,6 +241,8 @@ namespace FlashMeasurementSystem
                 res.FitCenterRow = circle.CenterRow;
                 res.FitCenterCol = circle.CenterColumn;
                 res.FitRadiusPx = circle.RadiusPx;
+                res.ResidualRmsPx = circle.ResidualRms;
+                res.CircleRoundnessPx = circle.Roundness;   // max-min 徑向＝GD&T 真圓度帶（真值）
                 res.DiameterMm = circle.DiameterPx * pixelSizeUm / 1000.0;
                 res.ValueText = string.Format(CultureInfo.InvariantCulture, "D={0:F4}mm", res.DiameterMm);
 
@@ -283,6 +303,7 @@ namespace FlashMeasurementSystem
                 res.LineRow1 = line.Row1; res.LineCol1 = line.Column1;
                 res.LineRow2 = line.Row2; res.LineCol2 = line.Column2;
                 res.LineAngleDeg = line.AngleDeg;
+                res.ResidualRmsPx = line.ResidualRms;   // 供真直度（RMS 近似，v1）
 
                 // C2：若 line 公差單位為 deg，對線角度做環狀公差判定。
                 //     否則維持純元素模式（IsOk = null）。
@@ -305,7 +326,10 @@ namespace FlashMeasurementSystem
                 else
                 {
                     res.IsOk = null;  // 元素不判定
-                    res.ValueText = string.Format(CultureInfo.InvariantCulture, "Ang={0:F2}deg", line.AngleDeg);
+                    // 顯示用正規化到無方向慣例 [0,180)：線無方向，0° 與 180° 同一條線。
+                    // 否則擬合端點排序會讓水平線顯示 180°，操作員判讀困惑。與 deg-公差判定路徑一致。
+                    double displayAngle = AngleNormalizer.ToHalfCircle(line.AngleDeg);
+                    res.ValueText = string.Format(CultureInfo.InvariantCulture, "Ang={0:F2}deg", displayAngle);
                 }
             }
             catch (HalconException ex)
@@ -414,6 +438,135 @@ namespace FlashMeasurementSystem
         private static bool IsBaseElement(ToolRunResult r)
         {
             return r.ToolType == "line" || r.ToolType == "circle";
+        }
+
+        private static bool IsGdtType(string t)
+        {
+            return t == "roundness" || t == "straightness" || t == "parallelism"
+                || t == "perpendicularity" || t == "concentricity";
+        }
+
+        // Pass 1.7 GD&T 形位公差：偏差(px) → mm → 單邊判定(0 ≤ dev ≤ T)。
+        // roundness 需 1 circle（偏差=max-min 徑向，真值）；straightness 需 1 line（偏差=ResidualRms 近似，v1）；
+        // parallelism/perpendicularity 需 2 line（量測線, 基準線）；concentricity 需 2 circle（量測, 基準）。
+        // 僅允許參照 line/circle 基礎元件（不支援鏈式參照構造結果）。
+        private void MeasureGdt(ToolRunResult res, MeasurementTool tool,
+            Dictionary<string, ToolRunResult> byId, double pixelSizeUm)
+        {
+            res.Supported = true;
+
+            if (tool.Gdt == null)
+            {
+                res.Measured = false;
+                res.ValueText = "缺 GD&T 規格";
+                res.Message = tool.ToolType + " 工具缺 Gdt 規格";
+                return;
+            }
+            if (tool.RefToolIds == null || tool.RefToolIds.Count < 1)
+            {
+                res.Measured = false;
+                res.ValueText = "需參考元素";
+                res.Message = tool.ToolType + " 需 RefToolIds";
+                return;
+            }
+
+            ToolRunResult a;
+            if (!byId.TryGetValue(tool.RefToolIds[0], out a))
+            {
+                res.Measured = false; res.ValueText = "找不到參考元素";
+                res.Message = "RefToolIds[0] 指向的元素不存在"; return;
+            }
+            if (!a.Measured) { res.Measured = false; res.ValueText = "參考元素未量測"; return; }
+            if (!IsBaseElement(a))
+            {
+                res.Measured = false; res.ValueText = "不支援鏈式參照";
+                res.Message = "GD&T v1 只能參照 line/circle 基礎元件"; return;
+            }
+
+            double deviationPx;
+
+            if (tool.ToolType == "roundness")
+            {
+                if (a.ToolType != "circle")
+                {
+                    res.Measured = false; res.ValueText = "需 circle";
+                    res.Message = "真圓度需參照一個 circle 元素"; return;
+                }
+                deviationPx = a.CircleRoundnessPx;
+            }
+            else if (tool.ToolType == "straightness")
+            {
+                if (a.ToolType != "line")
+                {
+                    res.Measured = false; res.ValueText = "需 line";
+                    res.Message = "真直度需參照一個 line 元素"; return;
+                }
+                deviationPx = a.ResidualRmsPx;
+            }
+            else
+            {
+                // 方位/位置類：需第二個 ref（基準 A）
+                if (tool.RefToolIds.Count < 2)
+                {
+                    res.Measured = false; res.ValueText = "需 2 參考元素";
+                    res.Message = tool.ToolType + " 需量測元素 + 基準元素"; return;
+                }
+                ToolRunResult b;
+                if (!byId.TryGetValue(tool.RefToolIds[1], out b))
+                {
+                    res.Measured = false; res.ValueText = "找不到基準元素";
+                    res.Message = "RefToolIds[1] 指向的基準不存在"; return;
+                }
+                if (!b.Measured) { res.Measured = false; res.ValueText = "基準元素未量測"; return; }
+                if (!IsBaseElement(b))
+                {
+                    res.Measured = false; res.ValueText = "不支援鏈式參照";
+                    res.Message = "GD&T v1 基準只能是 line/circle 基礎元件"; return;
+                }
+
+                if (tool.ToolType == "parallelism" || tool.ToolType == "perpendicularity")
+                {
+                    if (a.ToolType != "line" || b.ToolType != "line")
+                    {
+                        res.Measured = false; res.ValueText = "需兩條線";
+                        res.Message = tool.ToolType + " 需量測線與基準線（皆 line）"; return;
+                    }
+                    deviationPx = tool.ToolType == "parallelism"
+                        ? GdtCalculator.ParallelismZonePx(
+                            a.LineRow1, a.LineCol1, a.LineRow2, a.LineCol2,
+                            b.LineRow1, b.LineCol1, b.LineRow2, b.LineCol2)
+                        : GdtCalculator.PerpendicularityZonePx(
+                            a.LineRow1, a.LineCol1, a.LineRow2, a.LineCol2,
+                            b.LineRow1, b.LineCol1, b.LineRow2, b.LineCol2);
+                    // 視覺化：量測線中點 → 基準線上垂足（T5 細修；此處先給連線錨點）
+                    double aMidRow = (a.LineRow1 + a.LineRow2) / 2.0, aMidCol = (a.LineCol1 + a.LineCol2) / 2.0;
+                    ProjectPointOntoLine(aMidRow, aMidCol, b.LineRow1, b.LineCol1, b.LineRow2, b.LineCol2,
+                        out double fR, out double fC);
+                    res.DistRow1 = aMidRow; res.DistCol1 = aMidCol; res.DistRow2 = fR; res.DistCol2 = fC;
+                }
+                else // concentricity
+                {
+                    if (a.ToolType != "circle" || b.ToolType != "circle")
+                    {
+                        res.Measured = false; res.ValueText = "需兩個圓";
+                        res.Message = "同心度需量測圓與基準圓（皆 circle）"; return;
+                    }
+                    deviationPx = GdtCalculator.ConcentricityDiametralPx(
+                        a.FitCenterRow, a.FitCenterCol, b.FitCenterRow, b.FitCenterCol);
+                    // 視覺化：量測圓心 → 基準圓心 偏移線
+                    res.DistRow1 = a.FitCenterRow; res.DistCol1 = a.FitCenterCol;
+                    res.DistRow2 = b.FitCenterRow; res.DistCol2 = b.FitCenterCol;
+                }
+            }
+
+            double deviationMm = deviationPx * pixelSizeUm / 1000.0;
+            GdtJudgment j = GdtEvaluation.Evaluate(deviationMm, tool.Gdt.ToleranceZoneMm);
+
+            res.Measured = true;
+            res.GdtDeviationMm = deviationMm;
+            res.IsOk = j.IsOk;
+            res.ValueText = string.Format(CultureInfo.InvariantCulture, "偏差={0:F4}mm", deviationMm);
+            res.Message = j.Message;
         }
 
         // A5：把參考工具結果解析成幾何基元（即其 OutputPrimitive）。

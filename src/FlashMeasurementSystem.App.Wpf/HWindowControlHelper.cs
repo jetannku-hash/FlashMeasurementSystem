@@ -33,6 +33,10 @@ namespace FlashMeasurementSystem
         private int _panStartX, _panStartY;
         private bool _isResizing;
         private Action _persistentOverlayAction;
+        // 選取高亮疊加層：畫在 persistent overlay（量測結果）之上、編輯把手之下。
+        // 用於編輯器選取「參照型工具」（GD&T/距離/角度/構造）時高亮其參照的元素，
+        // 不覆寫量測結果 overlay。
+        private Action _selectionHighlightAction;
         private Action<double, double, double, double> _roiCallback;
         private bool _editActive;
         private double _editCenterRow, _editCenterCol, _editPhi, _editLen1, _editLen2;
@@ -64,9 +68,14 @@ namespace FlashMeasurementSystem
         public void DisplayImage(HImage image)
         {
             _persistentOverlayAction = null;
+            _selectionHighlightAction = null;
             _editActive = false;
             _editMode = Rect2Handle.None;
             _editCallback = null;
+            // 對稱清除弧形編輯狀態——否則換新圖後仍會以舊座標重繪弧形把手（H1）。
+            _arcEditActive = false;
+            _arcEditMode = ArcHandle.None;
+            _arcEditCallback = null;
             CurrentImage?.Dispose();
             CurrentImage = image;
             HOperatorSet.GetImageSize(image, out HTuple w, out HTuple h);
@@ -122,6 +131,7 @@ namespace FlashMeasurementSystem
             }
 
             _persistentOverlayAction?.Invoke();
+            _selectionHighlightAction?.Invoke();   // 疊在結果之上的選取高亮（編輯器用）
             // 非拖曳中、且沒有 persistent overlay、且非編輯模式時才畫 raw ROI 框。
             // persistent overlay（例如 DrawFittingLayers）有自己的 ROI 繪製邏輯，
             // 兩者同時畫會出現兩個重疊的藍色矩形；編輯模式則由下方綠色編輯框取代。
@@ -148,6 +158,22 @@ namespace FlashMeasurementSystem
         public void ClearOverlay()
         {
             _persistentOverlayAction = null;
+            _selectionHighlightAction = null;
+            Redraw();
+        }
+
+        /// <summary>設定選取高亮疊加層（畫在量測結果之上、不覆寫它）。傳 null 等同清除。</summary>
+        public void SetSelectionHighlight(Action action)
+        {
+            _selectionHighlightAction = action;
+            Redraw();
+        }
+
+        /// <summary>清除選取高亮疊加層（不影響 persistent overlay）。</summary>
+        public void ClearSelectionHighlight()
+        {
+            if (_selectionHighlightAction == null) return;
+            _selectionHighlightAction = null;
             Redraw();
         }
 
@@ -177,6 +203,7 @@ namespace FlashMeasurementSystem
             _roiStartRow = _roiEndRow = 0;
             _roiStartCol = _roiEndCol = 0;
             _persistentOverlayAction = null;
+            _selectionHighlightAction = null;
             IsRoiMode = true;
             Redraw();
         }

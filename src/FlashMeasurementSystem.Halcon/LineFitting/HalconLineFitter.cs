@@ -69,6 +69,19 @@ namespace FlashMeasurementSystem.Halcon.LineFitting
                     result.Column2 = colEnd.D;
                     result.UsedPoints = n;
 
+                    // fit_line_contour_xld 對「封閉/雙邊輪廓」（例：ROI 框住整條厚特徵時 edges_sub_pix
+                    // 回的閉環外輪廓）會回退化線（起訖點重合、長度≈0）。此時改用點雲主成分(PCA)方向
+                    // 求線方向與端點。僅在退化時觸發，正常單邊擬合不受影響。
+                    double fitLenSq = (result.Row2 - result.Row1) * (result.Row2 - result.Row1)
+                                    + (result.Column2 - result.Column1) * (result.Column2 - result.Column1);
+                    if (fitLenSq < 1.0)
+                    {
+                        FitLineByPca(rows, columns,
+                            out double pr1, out double pc1, out double pr2, out double pc2);
+                        result.Row1 = pr1; result.Column1 = pc1;
+                        result.Row2 = pr2; result.Column2 = pc2;
+                    }
+
                     double deltaRow = result.Row2 - result.Row1;
                     double deltaCol = result.Column2 - result.Column1;
                     // 慣例：影像座標系（Row 向下），故 AngleDeg 為「相對水平、順時針為正」。
@@ -87,6 +100,53 @@ namespace FlashMeasurementSystem.Halcon.LineFitting
             }
 
             return result;
+        }
+
+        // 點雲主成分(PCA)求線：取最大特徵值方向為線方向，投影 min/max 為端點。
+        // 對封閉/雙邊輪廓也穩健（不像 fit_line_contour_xld 會退化）。
+        private static void FitLineByPca(double[] rows, double[] cols,
+            out double r1, out double c1, out double r2, out double c2)
+        {
+            int n = rows.Length;
+            double mr = 0.0, mc = 0.0;
+            for (int i = 0; i < n; i++) { mr += rows[i]; mc += cols[i]; }
+            mr /= n; mc /= n;
+
+            double srr = 0.0, scc = 0.0, src = 0.0;
+            for (int i = 0; i < n; i++)
+            {
+                double dr = rows[i] - mr, dc = cols[i] - mc;
+                srr += dr * dr; scc += dc * dc; src += dr * dc;
+            }
+
+            // 2x2 對稱協方差 [[srr,src],[src,scc]] 的最大特徵值與其特徵向量 (src, λ1-srr)。
+            double half = (srr - scc) / 2.0;
+            double lambda1 = (srr + scc) / 2.0 + Math.Sqrt(half * half + src * src);
+            double dirRow, dirCol;
+            if (Math.Abs(src) > 1e-9)
+            {
+                dirRow = src;
+                dirCol = lambda1 - srr;
+            }
+            else
+            {
+                // src≈0：主軸沿 row 或 col。
+                if (srr >= scc) { dirRow = 1.0; dirCol = 0.0; }
+                else { dirRow = 0.0; dirCol = 1.0; }
+            }
+            double dlen = Math.Sqrt(dirRow * dirRow + dirCol * dirCol);
+            if (dlen < 1e-12) { dirRow = 0.0; dirCol = 1.0; dlen = 1.0; }
+            dirRow /= dlen; dirCol /= dlen;
+
+            double tMin = double.MaxValue, tMax = double.MinValue;
+            for (int i = 0; i < n; i++)
+            {
+                double t = (rows[i] - mr) * dirRow + (cols[i] - mc) * dirCol;
+                if (t < tMin) tMin = t;
+                if (t > tMax) tMax = t;
+            }
+            r1 = mr + tMin * dirRow; c1 = mc + tMin * dirCol;
+            r2 = mr + tMax * dirRow; c2 = mc + tMax * dirCol;
         }
 
         private static double CalculateResidualRms(IList<EdgePoint> edgePoints, LineFittingResult line)

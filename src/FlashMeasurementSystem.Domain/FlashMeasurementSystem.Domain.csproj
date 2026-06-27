@@ -90,6 +90,10 @@
     <Compile Include="Roi\ArcEditMath.cs" />
     <Compile Include="Geometry\GeometricPrimitive.cs" />
     <Compile Include="Geometry\GeometryConstruction.cs" />
+    <Compile Include="Gdt\GdtCharacteristic.cs" />
+    <Compile Include="Gdt\GdtToleranceSpec.cs" />
+    <Compile Include="Gdt\GdtCalculator.cs" />
+    <Compile Include="Gdt\GdtEvaluation.cs" />
     <Compile Include="Roi\MeasurementTool.cs" />
     <Compile Include="Roi\Recipe.cs" />
     <Compile Include="Workflow\MeasurementState.cs" />

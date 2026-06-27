@@ -5,6 +5,7 @@ using System.Globalization;
 using System.IO;
 using System.Windows.Forms;
 using FlashMeasurementSystem.Domain.EdgeDetection;
+using FlashMeasurementSystem.Domain.Gdt;
 using FlashMeasurementSystem.Domain.Roi;
 using FlashMeasurementSystem.Domain.Tolerance;
 using FlashMeasurementSystem.Infrastructure.Roi;
@@ -51,6 +52,11 @@ namespace FlashMeasurementSystem
         private Button _addIntersectionButton;
         private Button _addMidlineButton;
         private Button _addProjectionButton;
+        private Button _addRoundnessButton;
+        private Button _addStraightnessButton;
+        private Button _addParallelismButton;
+        private Button _addPerpendicularityButton;
+        private Button _addConcentricityButton;
         private Button _deleteButton;
         private Button _saveButton;
         private Button _saveAsButton;
@@ -91,6 +97,11 @@ namespace FlashMeasurementSystem
         private TextBox _unitTextBox;
         private Label _angleHintLabel;
 
+        private GroupBox _gdtGroup;
+        private Label _gdtCharLabel;
+        private NumericUpDown _gdtZoneNumeric;
+        private Label _gdtHintLabel;
+
         // ── Constructors ──────────────────────────────────────────────
 
         public RecipeEditor(HWindowControlHelper imageHelper) : this(imageHelper, null, null, null) { }
@@ -112,7 +123,7 @@ namespace FlashMeasurementSystem
                 LoadFromRecipe(recipe);
 
             FormClosing += OnFormClosing;
-            this.FormClosed += (s, e) => _imageHelper.EndRect2Edit();
+            this.FormClosed += (s, e) => { _imageHelper.EndRect2Edit(); _imageHelper.ClearSelectionHighlight(); };
         }
 
         // ─── Layout builders ───────────────────────────────────────────
@@ -128,7 +139,9 @@ namespace FlashMeasurementSystem
             };
             mainLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 200F));
             mainLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-            mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36F));
+            // 工具列列高 AutoSize：按鈕多時 FlowLayoutPanel 會折行，列高隨之增長，
+            // 避免按鈕數量超過單列寬度時被裁掉（原固定 36F 會藏住折行的按鈕）。
+            mainLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24F));
             mainLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
 
@@ -172,7 +185,9 @@ namespace FlashMeasurementSystem
             {
                 Dock = DockStyle.Fill,
                 FlowDirection = FlowDirection.LeftToRight,
-                AutoSize = true
+                WrapContents = true,          // 寬度不足時按鈕折到下一列，不被裁掉
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink
             };
 
             _newButton = new Button { Text = "New", Width = 50 };
@@ -193,6 +208,16 @@ namespace FlashMeasurementSystem
             _addMidlineButton.Click += (s, e) => AddTool("midline");
             _addProjectionButton = new Button { Text = "+ 投影", Width = 70 };
             _addProjectionButton.Click += (s, e) => AddTool("projection");
+            _addRoundnessButton = new Button { Text = "+ 真圓度", Width = 80 };
+            _addRoundnessButton.Click += (s, e) => AddTool("roundness");
+            _addStraightnessButton = new Button { Text = "+ 真直度", Width = 80 };
+            _addStraightnessButton.Click += (s, e) => AddTool("straightness");
+            _addParallelismButton = new Button { Text = "+ 平行度", Width = 80 };
+            _addParallelismButton.Click += (s, e) => AddTool("parallelism");
+            _addPerpendicularityButton = new Button { Text = "+ 垂直度", Width = 80 };
+            _addPerpendicularityButton.Click += (s, e) => AddTool("perpendicularity");
+            _addConcentricityButton = new Button { Text = "+ 同心度", Width = 80 };
+            _addConcentricityButton.Click += (s, e) => AddTool("concentricity");
             _deleteButton = new Button { Text = "Delete", Width = 60 };
             _deleteButton.Click += OnDeleteTool;
             _saveButton = new Button { Text = "Save", Width = 50 };
@@ -209,6 +234,11 @@ namespace FlashMeasurementSystem
             bar.Controls.Add(_addIntersectionButton);
             bar.Controls.Add(_addMidlineButton);
             bar.Controls.Add(_addProjectionButton);
+            bar.Controls.Add(_addRoundnessButton);
+            bar.Controls.Add(_addStraightnessButton);
+            bar.Controls.Add(_addParallelismButton);
+            bar.Controls.Add(_addPerpendicularityButton);
+            bar.Controls.Add(_addConcentricityButton);
             bar.Controls.Add(_deleteButton);
             bar.Controls.Add(_saveButton);
             bar.Controls.Add(_saveAsButton);
@@ -222,6 +252,7 @@ namespace FlashMeasurementSystem
             // visual top-to-bottom order then it shows reversed, so insert reversed:
             // we want Common, ROI, Edge, RefTool, Tolerance from top down.
             // With Dock=Top, the LAST added sits at top. Add in reverse.
+            _gdtGroup = CreateGroupBox("GD&T 形位公差", parent, 120);
             _toleranceGroup = CreateGroupBox("Tolerance", parent, 185);
             _refGroup = CreateGroupBox("Reference Tools", parent, 95);
             _edgeGroup = CreateGroupBox("Edge Detection", parent, 210);
@@ -233,6 +264,7 @@ namespace FlashMeasurementSystem
             FillEdgeGroup(_edgeGroup);
             FillRefGroup(_refGroup);
             FillToleranceGroup(_toleranceGroup);
+            FillGdtGroup(_gdtGroup);
 
             WireChangeEvents();
         }
@@ -369,6 +401,30 @@ namespace FlashMeasurementSystem
             gb.Controls.Add(t);
         }
 
+        // GD&T 形位公差輸入（單邊）：特性唯讀（由工具型別決定）+ 公差帶 T。
+        private void FillGdtGroup(GroupBox gb)
+        {
+            var t = NewTable();
+            int r = 0;
+
+            _gdtCharLabel = AddRow(t, "特性", ref r, new Label
+            {
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleLeft,
+                Text = "-"
+            });
+            _gdtZoneNumeric = AddNumericRow(t, "公差帶 T (mm)", ref r, 0M, 1000000M, 4, 0.05M, 0.001M);
+            _gdtHintLabel = AddRow(t, "", ref r, new Label
+            {
+                Dock = DockStyle.Fill,
+                Text = "單邊：0 ≤ 偏差 ≤ T。Ref1=量測元素；平行/垂直/同心需 Ref2=基準。",
+                TextAlign = ContentAlignment.MiddleLeft,
+                ForeColor = SystemColors.GrayText
+            });
+
+            gb.Controls.Add(t);
+        }
+
         // ─── Layout helpers ────────────────────────────────────────────
 
         private static TableLayoutPanel NewTable()
@@ -454,6 +510,8 @@ namespace FlashMeasurementSystem
             _nominalNumeric.ValueChanged += (s, e) => WriteTolerance();
             _lowerNumeric.ValueChanged += (s, e) => WriteTolerance();
             _upperNumeric.ValueChanged += (s, e) => WriteTolerance();
+
+            _gdtZoneNumeric.ValueChanged += (s, e) => WriteGdt();
         }
 
         private void WriteRoi()
@@ -509,6 +567,13 @@ namespace FlashMeasurementSystem
             MarkDirty();
         }
 
+        private void WriteGdt()
+        {
+            if (_updatingControls || _selectedTool == null || _selectedTool.Gdt == null) return;
+            _selectedTool.Gdt.ToleranceZoneMm = (double)_gdtZoneNumeric.Value;
+            MarkDirty();
+        }
+
         // ─── Tool CRUD ─────────────────────────────────────────────────
 
         private void AddTool(string toolType)
@@ -527,6 +592,15 @@ namespace FlashMeasurementSystem
                 Tolerance = tolerance,
                 RefToolIds = new List<string>()
             };
+            // GD&T 工具：單邊形位公差，預設帶寬待使用者設定（0.05mm 佔位，非 0 以免一律 NG）。
+            if (IsGdtType(toolType))
+            {
+                tool.Gdt = new GdtToleranceSpec
+                {
+                    Characteristic = GdtCharacteristicFor(toolType),
+                    ToleranceZoneMm = 0.05
+                };
+            }
             _tools.Add(tool);
             RefreshToolList();
             _toolListBox.SelectedIndex = _tools.Count - 1;
@@ -753,8 +827,32 @@ namespace FlashMeasurementSystem
                     UpperTolerance = tol.UpperTolerance,
                     Unit = tol.Unit
                 },
+                // 深複製 GD&T 規格——漏掉會在存檔/重載時遺失形位公差設定。
+                Gdt = src.Gdt == null ? null : new GdtToleranceSpec
+                {
+                    Characteristic = src.Gdt.Characteristic,
+                    ToleranceZoneMm = src.Gdt.ToleranceZoneMm
+                },
                 RefToolIds = new List<string>(src.RefToolIds ?? new List<string>())
             };
+        }
+
+        private static bool IsGdtType(string t)
+        {
+            return t == "roundness" || t == "straightness" || t == "parallelism"
+                || t == "perpendicularity" || t == "concentricity";
+        }
+
+        private static GdtCharacteristic GdtCharacteristicFor(string toolType)
+        {
+            switch (toolType)
+            {
+                case "straightness": return GdtCharacteristic.Straightness;
+                case "parallelism": return GdtCharacteristic.Parallelism;
+                case "perpendicularity": return GdtCharacteristic.Perpendicularity;
+                case "concentricity": return GdtCharacteristic.Concentricity;
+                default: return GdtCharacteristic.Roundness;
+            }
         }
 
         // ─── Selection & population ────────────────────────────────────
@@ -767,6 +865,7 @@ namespace FlashMeasurementSystem
                 _selectedTool = null;
                 SetPropertyPanelEnabled(false);
                 _imageHelper.EndRect2Edit();
+                _imageHelper.ClearSelectionHighlight();
                 return;
             }
 
@@ -776,17 +875,64 @@ namespace FlashMeasurementSystem
             ShowRoiEdit();
         }
 
-        // 對 circle/line 工具：清掉 MainWindow 殘留 overlay，進入 rect2 互動編輯。
+        // 選工具時更新主視窗 overlay：circle/line 元素進入 rect2 互動編輯（拖曳把手畫在
+        // persistent overlay 之上），GD&T/構造/複合工具只退出編輯。
+        // 不再 ClearOverlay——保留量測結果 overlay（Run Recipe 的結果不會因選工具而消失）；
+        // 編輯把手是疊加層，毋須清掉底圖，清掉反而會造成結果消失與 fallback 藍框。
         private void ShowRoiEdit()
         {
-            if (_selectedTool == null) { _imageHelper.EndRect2Edit(); return; }
-            bool isElement = _selectedTool.ToolType == "circle" || _selectedTool.ToolType == "line";
-            if (!isElement) { _imageHelper.EndRect2Edit(); return; }
+            if (_selectedTool == null)
+            {
+                _imageHelper.EndRect2Edit();
+                _imageHelper.ClearSelectionHighlight();
+                return;
+            }
 
-            _imageHelper.ClearOverlay();
+            bool isElement = _selectedTool.ToolType == "circle" || _selectedTool.ToolType == "line";
+            if (!isElement)
+            {
+                // 參照型工具（GD&T/距離/角度/構造）：高亮其參照的元素 ROI（青色，疊在量測
+                // 結果之上），讓使用者一眼看出此工具作用在哪些特徵上。
+                _imageHelper.EndRect2Edit();
+                var refs = GetReferencedElements(_selectedTool);
+                if (refs.Count > 0)
+                    _imageHelper.SetSelectionHighlight(() => DrawReferencedElements(_imageHelper.Annotator, refs));
+                else
+                    _imageHelper.ClearSelectionHighlight();
+                return;
+            }
+
+            // 元素：以編輯把手指示選取，不需 ref 高亮。
+            _imageHelper.ClearSelectionHighlight();
             var roi = _selectedTool.Roi;
             _imageHelper.BeginRect2Edit(roi.CenterRow, roi.CenterCol, roi.AngleRad,
                 roi.Length1, roi.Length2, OnToolRect2Changed);
+        }
+
+        // 取得某工具參照到的「元素」(circle/line，具 ROI)。構造工具等無 ROI 者不納入高亮。
+        private List<MeasurementTool> GetReferencedElements(MeasurementTool tool)
+        {
+            var list = new List<MeasurementTool>();
+            if (tool.RefToolIds == null) return list;
+            foreach (string id in tool.RefToolIds)
+            {
+                if (string.IsNullOrEmpty(id)) continue;
+                MeasurementTool t = _tools.Find(x => x.Id == id);
+                if (t != null && t.Roi != null && (t.ToolType == "circle" || t.ToolType == "line"))
+                    list.Add(t);
+            }
+            return list;
+        }
+
+        private static void DrawReferencedElements(OverlayAnnotator an, List<MeasurementTool> elements)
+        {
+            if (an == null) return;
+            foreach (MeasurementTool t in elements)
+            {
+                RoiGeometry roi = t.Roi;
+                an.DrawRectangle2(roi.CenterRow, roi.CenterCol, roi.AngleRad, roi.Length1, roi.Length2, "cyan");
+                an.DrawText(t.Name ?? string.Empty, (int)roi.CenterRow, (int)roi.CenterCol, "cyan");
+            }
         }
 
         // 滑鼠互動編輯回呼：回寫 RoiGeometry（弧度）與數值框，標記 dirty。
@@ -827,13 +973,23 @@ namespace FlashMeasurementSystem
                 bool isElement = tool.ToolType == "circle" || tool.ToolType == "line";
                 bool isConstruction = tool.ToolType == "intersection" || tool.ToolType == "midline" || tool.ToolType == "projection";
                 bool isComposite = tool.ToolType == "distance" || tool.ToolType == "angle";
-                bool usesRefs = isComposite || isConstruction;
+                bool isGdt = IsGdtType(tool.ToolType);
+                bool usesRefs = isComposite || isConstruction || isGdt;
 
-                // Element tools (circle/line): ROI + Edge. Construction/composite: RefTools + tolerance hidden for construction.
+                // Element tools (circle/line): ROI + Edge. Construction/composite/GD&T: RefTools.
+                // GD&T 走單邊 Gdt 群組並隱藏雙邊 Tolerance；其餘維持雙邊。
                 _roiGroup.Visible = isElement;
                 _edgeGroup.Visible = isElement;
                 _refGroup.Visible = usesRefs;
+                _toleranceGroup.Visible = !isGdt;
+                _gdtGroup.Visible = isGdt;
                 _angleHintLabel.Visible = tool.ToolType == "line";
+
+                if (isGdt && tool.Gdt != null)
+                {
+                    _gdtCharLabel.Text = GdtCharLabelText(tool.ToolType);
+                    _gdtZoneNumeric.Value = ClampDecimal(tool.Gdt.ToleranceZoneMm, _gdtZoneNumeric.Minimum, _gdtZoneNumeric.Maximum);
+                }
 
                 if (isElement)
                 {
@@ -907,8 +1063,28 @@ namespace FlashMeasurementSystem
                     return candidateType == "line";
                 case "projection":
                     return candidateType == "line" || candidateType == "circle";
+                case "roundness":
+                case "concentricity":
+                    return candidateType == "circle";
+                case "straightness":
+                case "parallelism":
+                case "perpendicularity":
+                    return candidateType == "line";
                 default:
                     return false;
+            }
+        }
+
+        private static string GdtCharLabelText(string toolType)
+        {
+            switch (toolType)
+            {
+                case "roundness": return "真圓度 Roundness";
+                case "straightness": return "真直度 Straightness";
+                case "parallelism": return "平行度 Parallelism";
+                case "perpendicularity": return "垂直度 Perpendicularity";
+                case "concentricity": return "同心度 Concentricity";
+                default: return toolType;
             }
         }
 
@@ -1111,6 +1287,11 @@ namespace FlashMeasurementSystem
             _toolTip.SetToolTip(_addLineButton, "Add a line measurement tool");
             _toolTip.SetToolTip(_addDistanceButton, "Add a distance tool (between two line/circle tools)");
             _toolTip.SetToolTip(_addAngleButton, "Add an angle tool (between two line tools)");
+            _toolTip.SetToolTip(_addRoundnessButton, "真圓度：Ref1=一個 circle，偏差=圓擬合 max-min 徑向");
+            _toolTip.SetToolTip(_addStraightnessButton, "真直度：Ref1=一個 line，偏差=線擬合殘差 RMS（v1 近似）");
+            _toolTip.SetToolTip(_addParallelismButton, "平行度：Ref1=量測 line，Ref2=基準 line");
+            _toolTip.SetToolTip(_addPerpendicularityButton, "垂直度：Ref1=量測 line，Ref2=基準 line");
+            _toolTip.SetToolTip(_addConcentricityButton, "同心度：Ref1=量測 circle，Ref2=基準 circle");
             _toolTip.SetToolTip(_deleteButton, "Delete the currently selected tool");
             _toolTip.SetToolTip(_saveButton, "Save the recipe to the current file");
             _toolTip.SetToolTip(_saveAsButton, "Save the recipe to a new .zcp file");
@@ -1136,6 +1317,8 @@ namespace FlashMeasurementSystem
             _toolTip.SetToolTip(_upperNumeric, "Upper tolerance (positive deviation from nominal)");
             _toolTip.SetToolTip(_unitTextBox, "Tolerance unit: 'mm' for distance/diameter, 'deg' for angle");
             _toolTip.SetToolTip(_angleHintLabel, "Line angle tolerance judgment: use Unit='deg' to judge the line's angle instead of length");
+            _toolTip.SetToolTip(_gdtZoneNumeric, "形位公差帶寬 T（mm，單邊）：OK 條件為 0 ≤ 偏差 ≤ T");
+            _toolTip.SetToolTip(_gdtCharLabel, "形位公差特性（由工具型別決定）");
         }
 
         protected override void Dispose(bool disposing)

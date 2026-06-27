@@ -139,6 +139,10 @@ namespace FlashMeasurementSystem.Tests
             Console.WriteLine("ArcEditMathTests passed");
             GeometryConstructionDomainTests.Run();
             Console.WriteLine("GeometryConstructionDomainTests passed");
+            GdtCalculatorDomainTests.Run();
+            Console.WriteLine("GdtCalculatorDomainTests passed");
+            GdtEvaluationDomainTests.Run();
+            Console.WriteLine("GdtEvaluationDomainTests passed");
             CsvReportWriterTests.Run();
             Console.WriteLine("CsvReportWriterTests passed");
             Console.WriteLine("EdgeDetectionDomainTests passed");

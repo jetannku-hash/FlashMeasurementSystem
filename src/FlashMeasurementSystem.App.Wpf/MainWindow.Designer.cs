@@ -648,6 +648,7 @@ namespace FlashMeasurementSystem
             this._edgeSubPixRadio.TabIndex = 1;
             this._edgeSubPixRadio.Text = "EdgesSubPix";
             this._edgeSubPixRadio.UseVisualStyleBackColor = true;
+            this._edgeSubPixRadio.CheckedChanged += new System.EventHandler(this.EdgeAlgorithmRadio_CheckedChanged);
             // 
             // edgeSigmaLabel
             // 
