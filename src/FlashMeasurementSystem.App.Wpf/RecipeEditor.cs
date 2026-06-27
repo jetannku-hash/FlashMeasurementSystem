@@ -139,7 +139,9 @@ namespace FlashMeasurementSystem
             };
             mainLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 200F));
             mainLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-            mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36F));
+            // 工具列列高 AutoSize：按鈕多時 FlowLayoutPanel 會折行，列高隨之增長，
+            // 避免按鈕數量超過單列寬度時被裁掉（原固定 36F 會藏住折行的按鈕）。
+            mainLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24F));
             mainLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
 
@@ -183,7 +185,9 @@ namespace FlashMeasurementSystem
             {
                 Dock = DockStyle.Fill,
                 FlowDirection = FlowDirection.LeftToRight,
-                AutoSize = true
+                WrapContents = true,          // 寬度不足時按鈕折到下一列，不被裁掉
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink
             };
 
             _newButton = new Button { Text = "New", Width = 50 };
