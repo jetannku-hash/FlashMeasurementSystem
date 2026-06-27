@@ -326,7 +326,10 @@ namespace FlashMeasurementSystem
                 else
                 {
                     res.IsOk = null;  // 元素不判定
-                    res.ValueText = string.Format(CultureInfo.InvariantCulture, "Ang={0:F2}deg", line.AngleDeg);
+                    // 顯示用正規化到無方向慣例 [0,180)：線無方向，0° 與 180° 同一條線。
+                    // 否則擬合端點排序會讓水平線顯示 180°，操作員判讀困惑。與 deg-公差判定路徑一致。
+                    double displayAngle = AngleNormalizer.ToHalfCircle(line.AngleDeg);
+                    res.ValueText = string.Format(CultureInfo.InvariantCulture, "Ang={0:F2}deg", displayAngle);
                 }
             }
             catch (HalconException ex)
