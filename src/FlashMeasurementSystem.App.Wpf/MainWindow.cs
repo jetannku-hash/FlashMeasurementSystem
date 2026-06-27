@@ -442,6 +442,8 @@ namespace FlashMeasurementSystem
             iqcResultLabel.Text = "Not tested";
             iqcResultLabel.ForeColor = Color.Black;
             measureResultLabel.Text = string.Empty;
+            // 重置顏色：否則上一次配方 NG(紅)/OK(綠) 會殘留並染色後續無關文字。
+            measureResultLabel.ForeColor = SystemColors.ControlText;
 
             // 換圖必須清掉匹配姿態，否則 Run Recipe 守門（HasReferencePose && !_hasMatch）
             // 會放行，並用前一張影像的 _lastMatch* 對新影像做 ROI 變換，畫出錯誤的 OK/NG。
@@ -706,12 +708,17 @@ namespace FlashMeasurementSystem
             }
             catch (HalconException ex)
             {
+                // 清掉前一次成功的結果/十字/格線，避免「狀態顯示失敗、但畫面仍是舊結果」的矛盾。
+                InvalidateEdgeState();
+                ShowFittingOverlay();
                 SetEdgeStatus(false, "Edge detection failed [Halcon " + ex.GetErrorCode() + "]: " + ex.Message);
             }
             catch (Exception ex)
             {
                 // 任何 .NET 未預期例外（UI thread 衝突、null reference、HObject 生命週期等）
                 // 都吞進來，避免 leak 到 WinForms 主訊息迴圈導致 unhandled exception dialog。
+                InvalidateEdgeState();
+                ShowFittingOverlay();
                 SetEdgeStatus(false, "Edge detection failed (unexpected " + ex.GetType().Name + "): " + ex.Message);
             }
             finally
@@ -775,6 +782,7 @@ namespace FlashMeasurementSystem
                 EdgeResult result = _edgeDetector.DetectEdgesOnArc(_imageHelper.CurrentImage, arcRoi, parameters);
                 _latestArcRoi = arcRoi;
                 _latestEdgeRoi = null;
+                _imageHelper.EndRect2Edit();   // 結束殘留的邊緣 rect2 編輯把手（M5），避免與弧帶並存
                 _latestEdgeResult = result;
                 _latestLineFittingResult = null;
                 _latestCircleFittingResult = null;
@@ -794,6 +802,8 @@ namespace FlashMeasurementSystem
             }
             catch (Exception ex)
             {
+                InvalidateEdgeState();
+                ShowFittingOverlay();
                 SetEdgeStatus(false, "Arc detect failed: " + ex.Message);
             }
             finally
@@ -818,9 +828,13 @@ namespace FlashMeasurementSystem
 
         private void FitLineButton_Click(object sender, EventArgs e)
         {
+            // 先清前次結果：失敗（早退/例外）時不殘留舊擬合線於 overlay 與結果表，
+            // 避免「label 顯示失敗、畫面卻仍是舊成功結果」的矛盾。結尾一律 ShowFittingOverlay 刷新。
+            _latestLineFittingResult = null;
             if (_latestEdgeResult == null || _latestEdgeResult.EdgePoints == null)
             {
                 UpdateLineFittingResult(new LineFittingResult { ErrorMessage = "請先執行邊緣檢測" });
+                ShowFittingOverlay();
                 return;
             }
 
@@ -829,11 +843,6 @@ namespace FlashMeasurementSystem
                 LineFittingResult result = _lineFitter.FitLine(_latestEdgeResult.EdgePoints, LineFittingParameters.Default());
                 _latestLineFittingResult = result;
                 UpdateLineFittingResult(result);
-
-                if (result.Success)
-                {
-                    ShowFittingOverlay();
-                }
             }
             catch (HalconException ex)
             {
@@ -849,14 +858,16 @@ namespace FlashMeasurementSystem
                     ErrorMessage = "直線擬合失敗 (unexpected " + ex.GetType().Name + "): " + ex.Message
                 });
             }
-
+            ShowFittingOverlay();
         }
 
         private void FitCircleButton_Click(object sender, EventArgs e)
         {
+            _latestCircleFittingResult = null;
             if (_latestEdgeResult == null || _latestEdgeResult.EdgePoints == null)
             {
                 UpdateCircleFittingResult(new CircleFittingResult { ErrorMessage = "請先執行邊緣檢測" });
+                ShowFittingOverlay();
                 return;
             }
 
@@ -865,11 +876,6 @@ namespace FlashMeasurementSystem
                 CircleFittingResult result = _circleFitter.FitCircle(_latestEdgeResult.EdgePoints, CircleFittingParameters.Default());
                 _latestCircleFittingResult = result;
                 UpdateCircleFittingResult(result);
-
-                if (result.Success)
-                {
-                    ShowFittingOverlay();
-                }
             }
             catch (HalconException ex)
             {
@@ -885,13 +891,16 @@ namespace FlashMeasurementSystem
                     ErrorMessage = "圓擬合失敗 (unexpected " + ex.GetType().Name + "): " + ex.Message
                 });
             }
+            ShowFittingOverlay();
         }
 
         private void FitEllipseButton_Click(object sender, EventArgs e)
         {
+            _latestEllipseFittingResult = null;
             if (_latestEdgeResult == null || _latestEdgeResult.EdgePoints == null)
             {
                 UpdateEllipseFittingResult(new EllipseFittingResult { ErrorMessage = "請先執行邊緣檢測" });
+                ShowFittingOverlay();
                 return;
             }
 
@@ -900,11 +909,6 @@ namespace FlashMeasurementSystem
                 EllipseFittingResult result = _ellipseFitter.FitEllipse(_latestEdgeResult.EdgePoints, EllipseFittingParameters.Default());
                 _latestEllipseFittingResult = result;
                 UpdateEllipseFittingResult(result);
-
-                if (result.Success)
-                {
-                    ShowFittingOverlay();
-                }
             }
             catch (HalconException ex)
             {
@@ -920,13 +924,16 @@ namespace FlashMeasurementSystem
                     ErrorMessage = "橢圓擬合失敗 (unexpected " + ex.GetType().Name + "): " + ex.Message
                 });
             }
+            ShowFittingOverlay();
         }
 
         private void FitRectangleButton_Click(object sender, EventArgs e)
         {
+            _latestRectangleFittingResult = null;
             if (_latestEdgeResult == null || _latestEdgeResult.EdgePoints == null)
             {
                 UpdateRectangleFittingResult(new RectangleFittingResult { ErrorMessage = "請先執行邊緣檢測" });
+                ShowFittingOverlay();
                 return;
             }
 
@@ -935,11 +942,6 @@ namespace FlashMeasurementSystem
                 RectangleFittingResult result = _rectangleFitter.FitRectangle(_latestEdgeResult.EdgePoints, RectangleFittingParameters.Default());
                 _latestRectangleFittingResult = result;
                 UpdateRectangleFittingResult(result);
-
-                if (result.Success)
-                {
-                    ShowFittingOverlay();
-                }
             }
             catch (HalconException ex)
             {
@@ -955,6 +957,7 @@ namespace FlashMeasurementSystem
                     ErrorMessage = "矩形擬合失敗 (unexpected " + ex.GetType().Name + "): " + ex.Message
                 });
             }
+            ShowFittingOverlay();
         }
 
         private void EdgeDrawRoiCheck_CheckedChanged(object sender, EventArgs e)
@@ -1264,6 +1267,10 @@ namespace FlashMeasurementSystem
         // 抽出 RunRecipeButton_Click 的 overlay 繪製與結果表更新，供 Run Recipe 與一鍵量測共用。
         private void DrawRecipeResults(System.Collections.Generic.List<ToolRunResult> results, string pixelSizeSource)
         {
+            // 產生配方結果前先結束殘留的互動編輯把手（rect2/arc）。否則前一次畫邊緣 ROI 留下的
+            // 綠色把手會疊在結果之上，且拖曳它會偷改邊緣量測狀態（H2）。
+            _imageHelper.EndRect2Edit();
+            _imageHelper.EndArcEdit();
             _imageHelper.SetPersistentOverlayAction(() =>
             {
                 OverlayAnnotator an = _imageHelper.Annotator;
@@ -1808,6 +1815,13 @@ namespace FlashMeasurementSystem
 
         private void ClearFittingState()
         {
+            // 換圖/清除時若弧形互動編輯仍勾選，同步取消（helper 端已結束弧編輯，這裡讓
+            // checkbox 與實際狀態一致，避免「勾著但無弧帶」的不同步）。
+            if (_arcEditCheck != null && _arcEditCheck.Checked)
+            {
+                _updatingArcControls = true;
+                try { _arcEditCheck.Checked = false; } finally { _updatingArcControls = false; }
+            }
             _latestEdgeRoi = null;
             _latestArcRoi = null;
             _latestEdgeResult = null;
@@ -1988,6 +2002,12 @@ namespace FlashMeasurementSystem
                 // 進入互動編輯 = 改用圓弧 ROI，比照 Detect Arc 清掉殘留的邊緣 rect ROI，
                 // 否則 DrawFittingLayers 仍會畫出舊的藍色 Rectangle2，與圓弧帶同時殘留在畫面上。
                 _latestEdgeRoi = null;
+
+                // 關閉 ROI 繪製模式，否則弧把手 hit-test 被 IsRoiMode 擋住，滑鼠按下會畫新框
+                // 而非拖把手（M4）。取消勾選會經各自 handler 把 IsRoiMode 設為 false。
+                if (_edgeDrawRoiCheck.Checked) _edgeDrawRoiCheck.Checked = false;
+                if (roiModeCheck.Checked) roiModeCheck.Checked = false;
+                _imageHelper.IsRoiMode = false;
 
                 ShowFittingOverlay();
                 _imageHelper.BeginArcEdit(_latestArcRoi.CenterRow, _latestArcRoi.CenterCol,

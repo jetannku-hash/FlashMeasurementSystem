@@ -72,6 +72,10 @@ namespace FlashMeasurementSystem
             _editActive = false;
             _editMode = Rect2Handle.None;
             _editCallback = null;
+            // 對稱清除弧形編輯狀態——否則換新圖後仍會以舊座標重繪弧形把手（H1）。
+            _arcEditActive = false;
+            _arcEditMode = ArcHandle.None;
+            _arcEditCallback = null;
             CurrentImage?.Dispose();
             CurrentImage = image;
             HOperatorSet.GetImageSize(image, out HTuple w, out HTuple h);
