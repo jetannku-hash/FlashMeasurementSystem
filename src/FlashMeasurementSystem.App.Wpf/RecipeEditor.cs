@@ -874,14 +874,16 @@ namespace FlashMeasurementSystem
             ShowRoiEdit();
         }
 
-        // 對 circle/line 工具：清掉 MainWindow 殘留 overlay，進入 rect2 互動編輯。
+        // 選工具時更新主視窗 overlay：circle/line 元素進入 rect2 互動編輯（拖曳把手畫在
+        // persistent overlay 之上），GD&T/構造/複合工具只退出編輯。
+        // 不再 ClearOverlay——保留量測結果 overlay（Run Recipe 的結果不會因選工具而消失）；
+        // 編輯把手是疊加層，毋須清掉底圖，清掉反而會造成結果消失與 fallback 藍框。
         private void ShowRoiEdit()
         {
             if (_selectedTool == null) { _imageHelper.EndRect2Edit(); return; }
             bool isElement = _selectedTool.ToolType == "circle" || _selectedTool.ToolType == "line";
             if (!isElement) { _imageHelper.EndRect2Edit(); return; }
 
-            _imageHelper.ClearOverlay();
             var roi = _selectedTool.Roi;
             _imageHelper.BeginRect2Edit(roi.CenterRow, roi.CenterCol, roi.AngleRad,
                 roi.Length1, roi.Length2, OnToolRect2Changed);
