@@ -1626,7 +1626,8 @@ namespace FlashMeasurementSystem
                 {
                     Name = "Line",
                     ValueText = string.Format(CultureInfo.InvariantCulture,
-                        "Len={0:F1}px Ang={1:F2}deg", line.Length, line.AngleDeg),
+                        "Len={0:F1}px Ang={1:F2}deg", line.Length,
+                        Domain.AngleMeasurement.AngleNormalizer.ToHalfCircle(line.AngleDeg)),
                     IsOk = null
                 });
             }
@@ -1706,7 +1707,7 @@ namespace FlashMeasurementSystem
                 result.Column1,
                 result.Row2,
                 result.Column2,
-                result.AngleDeg,
+                Domain.AngleMeasurement.AngleNormalizer.ToHalfCircle(result.AngleDeg),
                 result.Length,
                 result.ResidualRms,
                 result.UsedPoints);
