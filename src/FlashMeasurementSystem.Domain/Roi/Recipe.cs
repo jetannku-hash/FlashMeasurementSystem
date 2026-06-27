@@ -14,7 +14,10 @@ namespace FlashMeasurementSystem.Domain.Roi
         // v2：參考姿態（RefRow/RefCol/RefAngleRad + HasReferencePose），供 ROI 跟隨工件。
         // v3：MeasurementTool.RefToolIds（複合工具 distance/angle 參考元素工具）。
         // v4：A5 構造工具（intersection/midline/projection，沿用 RefToolIds）。
-        public int SchemaVersion { get; set; } = 4;
+        // v5：GD&T 形位公差工具（roundness/straightness/parallelism/perpendicularity/
+        //     concentricity + MeasurementTool.Gdt）。純加欄位，向後相容、無遷移碼：
+        //     舊檔載入時 Gdt=null、無 GD&T 工具，行為不變。
+        public int SchemaVersion { get; set; } = 5;
         public string RecipeId { get; set; } = "";
         public string Name { get; set; } = "";
 
