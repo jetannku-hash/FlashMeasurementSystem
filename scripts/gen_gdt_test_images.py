@@ -94,7 +94,7 @@ def concentricity(offset=6.0):
     r_outer = 160.0
     r_inner = 70.0
     rad_outer = np.hypot(yy - cr, xx - cc)
-    rad_inner = np.hypot(yy - (cr + offset), xx - (cc + offset))  # 內孔中心偏移
+    rad_inner = np.hypot(yy - (cr + offset), xx - cc)  # 內孔中心沿 row 偏移 offset px（圓心距=offset）
     arr = new_canvas()
     arr[(rad_outer <= r_outer) & (rad_inner >= r_inner)] = FG  # 環帶（外盤挖偏心孔）
     save(arr, "gdt_concentricity.png")
