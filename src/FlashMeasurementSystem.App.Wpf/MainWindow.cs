@@ -973,6 +973,15 @@ namespace FlashMeasurementSystem
             }
         }
 
+        // 切換 subpix/measure_pos 演算法後，前一次偵測的格線/十字/狀態已不適用 → 清除並刷新，
+        // 提示需重新 Detect（M1）。InitializeComponent 期間 _imageHelper 尚未建立，以 null 守門。
+        private void EdgeAlgorithmRadio_CheckedChanged(object sender, EventArgs e)
+        {
+            if (_imageHelper == null) return;
+            InvalidateEdgeState();
+            ShowFittingOverlay();
+        }
+
         private EdgeDetectionParameters CreateEdgeDetectionParameters()
         {
             // MeasureMode applies to the MeasurePos path; EdgesSubPix keeps using SubpixelMethod.
