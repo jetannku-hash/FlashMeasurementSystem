@@ -123,7 +123,7 @@ namespace FlashMeasurementSystem
                 LoadFromRecipe(recipe);
 
             FormClosing += OnFormClosing;
-            this.FormClosed += (s, e) => _imageHelper.EndRect2Edit();
+            this.FormClosed += (s, e) => { _imageHelper.EndRect2Edit(); _imageHelper.ClearSelectionHighlight(); };
         }
 
         // ─── Layout builders ───────────────────────────────────────────
@@ -865,6 +865,7 @@ namespace FlashMeasurementSystem
                 _selectedTool = null;
                 SetPropertyPanelEnabled(false);
                 _imageHelper.EndRect2Edit();
+                _imageHelper.ClearSelectionHighlight();
                 return;
             }
 
@@ -880,13 +881,58 @@ namespace FlashMeasurementSystem
         // 編輯把手是疊加層，毋須清掉底圖，清掉反而會造成結果消失與 fallback 藍框。
         private void ShowRoiEdit()
         {
-            if (_selectedTool == null) { _imageHelper.EndRect2Edit(); return; }
-            bool isElement = _selectedTool.ToolType == "circle" || _selectedTool.ToolType == "line";
-            if (!isElement) { _imageHelper.EndRect2Edit(); return; }
+            if (_selectedTool == null)
+            {
+                _imageHelper.EndRect2Edit();
+                _imageHelper.ClearSelectionHighlight();
+                return;
+            }
 
+            bool isElement = _selectedTool.ToolType == "circle" || _selectedTool.ToolType == "line";
+            if (!isElement)
+            {
+                // 參照型工具（GD&T/距離/角度/構造）：高亮其參照的元素 ROI（青色，疊在量測
+                // 結果之上），讓使用者一眼看出此工具作用在哪些特徵上。
+                _imageHelper.EndRect2Edit();
+                var refs = GetReferencedElements(_selectedTool);
+                if (refs.Count > 0)
+                    _imageHelper.SetSelectionHighlight(() => DrawReferencedElements(_imageHelper.Annotator, refs));
+                else
+                    _imageHelper.ClearSelectionHighlight();
+                return;
+            }
+
+            // 元素：以編輯把手指示選取，不需 ref 高亮。
+            _imageHelper.ClearSelectionHighlight();
             var roi = _selectedTool.Roi;
             _imageHelper.BeginRect2Edit(roi.CenterRow, roi.CenterCol, roi.AngleRad,
                 roi.Length1, roi.Length2, OnToolRect2Changed);
+        }
+
+        // 取得某工具參照到的「元素」(circle/line，具 ROI)。構造工具等無 ROI 者不納入高亮。
+        private List<MeasurementTool> GetReferencedElements(MeasurementTool tool)
+        {
+            var list = new List<MeasurementTool>();
+            if (tool.RefToolIds == null) return list;
+            foreach (string id in tool.RefToolIds)
+            {
+                if (string.IsNullOrEmpty(id)) continue;
+                MeasurementTool t = _tools.Find(x => x.Id == id);
+                if (t != null && t.Roi != null && (t.ToolType == "circle" || t.ToolType == "line"))
+                    list.Add(t);
+            }
+            return list;
+        }
+
+        private static void DrawReferencedElements(OverlayAnnotator an, List<MeasurementTool> elements)
+        {
+            if (an == null) return;
+            foreach (MeasurementTool t in elements)
+            {
+                RoiGeometry roi = t.Roi;
+                an.DrawRectangle2(roi.CenterRow, roi.CenterCol, roi.AngleRad, roi.Length1, roi.Length2, "cyan");
+                an.DrawText(t.Name ?? string.Empty, (int)roi.CenterRow, (int)roi.CenterCol, "cyan");
+            }
         }
 
         // 滑鼠互動編輯回呼：回寫 RoiGeometry（弧度）與數值框，標記 dirty。
