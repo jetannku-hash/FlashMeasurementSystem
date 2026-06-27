@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using FlashMeasurementSystem.Domain.EdgeDetection;
+using FlashMeasurementSystem.Domain.Gdt;
 using FlashMeasurementSystem.Domain.Tolerance;
 
 namespace FlashMeasurementSystem.Domain.Roi
@@ -14,11 +15,16 @@ namespace FlashMeasurementSystem.Domain.Roi
     {
         public string Id { get; set; } = "";
         public string Name { get; set; } = "";
-        public string ToolType { get; set; } = "edge"; // edge / line / circle / distance / angle / intersection / midline / projection
+        // edge / line / circle / distance / angle / intersection / midline / projection
+        // / roundness / straightness / parallelism / perpendicularity / concentricity（GD&T 形位公差，v1）
+        public string ToolType { get; set; } = "edge";
 
         public RoiGeometry Roi { get; set; } = new RoiGeometry();
         public EdgeDetectionParameters EdgeParameters { get; set; } = EdgeDetectionParameters.Default();
         public ToleranceSpec Tolerance { get; set; } = ToleranceSpec.Default();
+
+        // GD&T 形位公差規格（單邊判定）。null＝非 GD&T 工具，走既有雙邊 Tolerance。
+        public GdtToleranceSpec Gdt { get; set; } = null;
 
         // 複合工具（distance/angle）參考的元素工具 Id（line/circle）。
         // 自足工具（circle/line 元素）此清單為空。順序有意義（例：distance 取 [0]→[1]）。

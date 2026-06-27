@@ -68,6 +68,8 @@
     <Compile Include="Rect2EditMathTests.cs" />
     <Compile Include="ArcEditMathTests.cs" />
     <Compile Include="GeometryConstructionDomainTests.cs" />
+    <Compile Include="GdtCalculatorDomainTests.cs" />
+    <Compile Include="GdtEvaluationDomainTests.cs" />
     <Compile Include="CsvReportWriterTests.cs" />
     <Compile Include="WorkflowDomainTests.cs" />
   </ItemGroup>
