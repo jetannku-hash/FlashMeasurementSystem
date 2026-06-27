@@ -195,7 +195,26 @@ namespace FlashMeasurementSystem
                 // Build ItemJudgment for reporting: look up the recipe tool by name
                 // to get tolerance spec, then re-judge to produce full judgment data.
                 MeasurementTool tool = FindTool(recipe, r.Name, r.ToolType);
-                if (tool != null && tool.Tolerance != null)
+                if (tool != null && tool.Gdt != null)
+                {
+                    // GD&T 形位公差為單邊（0 ≤ 偏差 ≤ T），不走雙邊判定器。
+                    // 直接用 RecipeRunner 算好的偏差與判定（GdtEvaluation 的結果）組報表列，
+                    // 避免落入下方雙邊分支用 MeasuredValue=0 誤判為 OK。
+                    judgments.Add(new ItemJudgment
+                    {
+                        ToolId = tool.Id ?? "",
+                        ToolName = tool.Name ?? r.Name,
+                        MeasuredValue = r.GdtDeviationMm,
+                        Nominal = 0,
+                        LowerLimit = 0,
+                        UpperLimit = tool.Gdt.ToleranceZoneMm,
+                        Unit = "mm",
+                        Deviation = r.GdtDeviationMm,
+                        IsOk = r.IsOk ?? false,
+                        Message = r.Message ?? ""
+                    });
+                }
+                else if (tool != null && tool.Tolerance != null)
                 {
                     double measuredValue = GetMeasuredValue(r, tool);
                     var input = new ToleranceItemInput
