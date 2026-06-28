@@ -1525,6 +1525,11 @@ namespace FlashMeasurementSystem
                         "已從編輯器更新配方 '{0}'（{1} 工具）。可執行 Run Recipe。",
                         recipe.Name, recipe.Tools.Count);
                 });
+            // 編輯器接管共用影像視窗做 ROI 編輯：先清掉主視窗殘留的偵測/擬合 overlay
+            // （Edge Detection 藍框、邊緣十字、Run Recipe 結果等），讓編輯器從乾淨影像開始。
+            _imageHelper.EndRect2Edit();
+            _imageHelper.EndArcEdit();
+            _imageHelper.ClearOverlay();
             editor.Show(this);
         }
 
