@@ -988,6 +988,7 @@ namespace FlashMeasurementSystem
             if (_imageHelper == null) return;
             _imageHelper.EndRect2Edit();
             _imageHelper.EndArcEdit();
+            _imageHelper.ClearRoiCoordinates();  // 消除 fallback 藍框殘留
             _imageHelper.IsRoiMode = false;
             if (_edgeDrawRoiCheck != null && _edgeDrawRoiCheck.Checked) _edgeDrawRoiCheck.Checked = false;
             if (roiModeCheck != null && roiModeCheck.Checked) roiModeCheck.Checked = false;

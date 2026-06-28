@@ -177,6 +177,16 @@ namespace FlashMeasurementSystem
             Redraw();
         }
 
+        /// <summary>只清除 ROI 座標（消除 fallback 藍框），不動 overlay 與編輯狀態。</summary>
+        public void ClearRoiCoordinates()
+        {
+            _roiStartRow = 0;
+            _roiStartCol = 0;
+            _roiEndRow = 0;
+            _roiEndCol = 0;
+            Redraw();
+        }
+
         public void ClearRoi()
         {
             _roiStartRow = 0;
