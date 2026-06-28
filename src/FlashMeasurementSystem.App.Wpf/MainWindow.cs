@@ -534,9 +534,15 @@ namespace FlashMeasurementSystem
                     {
                         HOperatorSet.SmallestRectangle1(templateRegion,
                             out HTuple r1, out HTuple c1, out HTuple r2, out HTuple c2);
-                        _imageHelper.Redraw();
-                        _imageHelper.Annotator.DrawRoiRectangle(r1, c1, r2, c2);
-                        _imageHelper.Annotator.DrawText("Model saved", (int)r1 - 5, (int)c1);
+                        // L1：用 persistent overlay 取代直接繪製，這樣 pan/zoom 後文字與框不消失。
+                        double mR1 = r1, mC1 = c1, mR2 = r2, mC2 = c2;
+                        _imageHelper.EndRect2Edit();
+                        _imageHelper.EndArcEdit();
+                        _imageHelper.SetPersistentOverlayAction(() =>
+                        {
+                            _imageHelper.Annotator.DrawRoiRectangle(mR1, mC1, mR2, mC2);
+                            _imageHelper.Annotator.DrawText("Model saved", (int)mR1 - 5, (int)mC1);
+                        });
                     }
 
                     LoadTemplateList();
@@ -605,6 +611,8 @@ namespace FlashMeasurementSystem
                     _hasMatch = true;
                     RefreshMatchContour(); // 算一次快取輪廓，overlay action 每次 redraw 直接用
 
+                    _imageHelper.EndRect2Edit();  // H2：接管畫面前結束殘留編輯把手
+                    _imageHelper.EndArcEdit();
                     _imageHelper.SetPersistentOverlayAction(() =>
                     {
                         if (_matchContour != null)
@@ -971,6 +979,18 @@ namespace FlashMeasurementSystem
 
                 _imageHelper.IsRoiMode = _edgeDrawRoiCheck.Checked;
             }
+        }
+
+        // 切換分頁時結束殘留的編輯/繪製模式。影像區跨分頁共用，前一分頁留下的把手或
+        // 正在進行的 ROI draw 在換頁後會讓操作困惑（還有 pending RequestRoi callback 風險）。
+        private void FeatureTabControl_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            if (_imageHelper == null) return;
+            _imageHelper.EndRect2Edit();
+            _imageHelper.EndArcEdit();
+            _imageHelper.IsRoiMode = false;
+            if (_edgeDrawRoiCheck != null && _edgeDrawRoiCheck.Checked) _edgeDrawRoiCheck.Checked = false;
+            if (roiModeCheck != null && roiModeCheck.Checked) roiModeCheck.Checked = false;
         }
 
         // 切換 subpix/measure_pos 演算法後，前一次偵測的格線/十字/狀態已不適用 → 清除並刷新，
@@ -1903,6 +1923,7 @@ namespace FlashMeasurementSystem
             if (_arcEditCheck.Checked) _arcEditCheck.Checked = false;
             _imageHelper.IsRoiMode = false;
             _edgeDrawRoiCheck.Checked = false;
+            roiModeCheck.Checked = false;   // M2：template ROI 繪製完成後同步取消，避免洩漏到 edge 狀態
             ShowFittingOverlay();
             _imageHelper.BeginRect2Edit(_latestEdgeRoi.CenterRow, _latestEdgeRoi.CenterCol,
                 _latestEdgeRoi.AngleRad, _latestEdgeRoi.Length1, _latestEdgeRoi.Length2, OnEdgeRect2Changed);
@@ -2212,6 +2233,8 @@ namespace FlashMeasurementSystem
             string distText = string.Format(CultureInfo.InvariantCulture,
                 "{0:F1} px / {1:F3} mm", result.DistancePx, result.DistanceMm);
 
+            _imageHelper.EndRect2Edit();  // H2：接管畫面前結束殘留編輯把手
+            _imageHelper.EndArcEdit();
             _imageHelper.SetPersistentOverlayAction(() =>
             {
                 var an = _imageHelper.Annotator;
@@ -2278,6 +2301,8 @@ namespace FlashMeasurementSystem
             if (_imageHelper == null || _imageHelper.CurrentImage == null) return;
             string angleText = string.Format(CultureInfo.InvariantCulture, "{0:F2}°", result.AngleDeg);
 
+            _imageHelper.EndRect2Edit();  // H2：接管畫面前結束殘留編輯把手
+            _imageHelper.EndArcEdit();
             _imageHelper.SetPersistentOverlayAction(() =>
             {
                 OverlayAnnotator an = _imageHelper.Annotator;
@@ -2302,6 +2327,8 @@ namespace FlashMeasurementSystem
             string angleText = string.Format(CultureInfo.InvariantCulture, "{0:F2}°", result.AngleDeg);
             const double refLen = 100.0;
 
+            _imageHelper.EndRect2Edit();  // H2：接管畫面前結束殘留編輯把手
+            _imageHelper.EndArcEdit();
             _imageHelper.SetPersistentOverlayAction(() =>
             {
                 OverlayAnnotator an = _imageHelper.Annotator;
@@ -2340,6 +2367,8 @@ namespace FlashMeasurementSystem
             string maxText = string.Format(CultureInfo.InvariantCulture,
                 "Max {0:F1}px / {1:F3}mm", result.DistanceMaxPx, result.DistanceMaxMm);
 
+            _imageHelper.EndRect2Edit();  // H2：接管畫面前結束殘留編輯把手
+            _imageHelper.EndArcEdit();
             _imageHelper.SetPersistentOverlayAction(() =>
             {
                 var an = _imageHelper.Annotator;

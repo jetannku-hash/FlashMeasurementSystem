@@ -39,6 +39,7 @@ namespace FlashMeasurementSystem
         private int _toolIdCounter;
         private bool _updatingControls;
         private bool _dirty;
+        private bool _editorOwnsEdit;  // L2：追蹤編輯把手是否為編輯器持有，關閉時只拆自己的
         private string _savePath;
 
         // ── Toolbar controls ──
@@ -123,7 +124,12 @@ namespace FlashMeasurementSystem
                 LoadFromRecipe(recipe);
 
             FormClosing += OnFormClosing;
-            this.FormClosed += (s, e) => { _imageHelper.EndRect2Edit(); _imageHelper.ClearSelectionHighlight(); };
+            this.FormClosed += (s, e) =>
+            {
+                // L2：只拆除編輯器自己持有的 edit/highlight，不誤殺主視窗的。
+                if (_editorOwnsEdit) { _imageHelper.EndRect2Edit(); _editorOwnsEdit = false; }
+                _imageHelper.ClearSelectionHighlight();
+            };
         }
 
         // ─── Layout builders ───────────────────────────────────────────
@@ -884,6 +890,7 @@ namespace FlashMeasurementSystem
             if (_selectedTool == null)
             {
                 _imageHelper.EndRect2Edit();
+                _editorOwnsEdit = false;
                 _imageHelper.ClearSelectionHighlight();
                 return;
             }
@@ -894,6 +901,7 @@ namespace FlashMeasurementSystem
                 // 參照型工具（GD&T/距離/角度/構造）：高亮其參照的元素 ROI（青色，疊在量測
                 // 結果之上），讓使用者一眼看出此工具作用在哪些特徵上。
                 _imageHelper.EndRect2Edit();
+                _editorOwnsEdit = false;
                 var refs = GetReferencedElements(_selectedTool);
                 if (refs.Count > 0)
                     _imageHelper.SetSelectionHighlight(() => DrawReferencedElements(_imageHelper.Annotator, refs));
@@ -907,6 +915,7 @@ namespace FlashMeasurementSystem
             var roi = _selectedTool.Roi;
             _imageHelper.BeginRect2Edit(roi.CenterRow, roi.CenterCol, roi.AngleRad,
                 roi.Length1, roi.Length2, OnToolRect2Changed);
+            _editorOwnsEdit = true;
         }
 
         // 取得某工具參照到的「元素」(circle/line，具 ROI)。構造工具等無 ROI 者不納入高亮。

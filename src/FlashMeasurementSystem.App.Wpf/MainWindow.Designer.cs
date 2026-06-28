@@ -219,6 +219,7 @@ namespace FlashMeasurementSystem
             this.featureTabControl.Location = new System.Drawing.Point(4, 4);
             this.featureTabControl.Name = "featureTabControl";
             this.featureTabControl.SelectedIndex = 0;
+            this.featureTabControl.SelectedIndexChanged += new System.EventHandler(this.FeatureTabControl_SelectedIndexChanged);
             this.featureTabControl.Size = new System.Drawing.Size(261, 634);
             this.featureTabControl.TabIndex = 0;
             // 
