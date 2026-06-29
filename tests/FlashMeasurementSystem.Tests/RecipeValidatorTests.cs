@@ -49,6 +49,13 @@ namespace FlashMeasurementSystem.Tests
             var re = RecipeValidator.Validate(roiEdge, W, H);
             AssertCount(re, 0, 1, "partial out of bounds → 1 warning, 0 error");
 
+            // 回歸：水平 ROI（角度 0）完整位於影像內但靠近上緣 —— 舊的圓形上界會把短邊也當對角線
+            // 長而誤報；軸對齊外接框不應警告。l1: row 10..110、col 10..210 全在 640x480 內。
+            var roiInsideNearEdge = new Recipe();
+            roiInsideNearEdge.Tools.Add(Line("l1", 60, 110, 100, 50));
+            AssertCount(RecipeValidator.Validate(roiInsideNearEdge, W, H), 0, 0,
+                "horizontal ROI fully inside near edge → no warning");
+
             // 邊界檢查在無影像 (0,0) 時略過
             AssertCount(RecipeValidator.Validate(roiOut, 0, 0), 0, 0, "no image → skip bounds check");
 

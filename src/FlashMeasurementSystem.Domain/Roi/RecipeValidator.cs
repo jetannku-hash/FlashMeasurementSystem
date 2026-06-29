@@ -123,10 +123,15 @@ namespace FlashMeasurementSystem.Domain.Roi
                 }
                 else
                 {
-                    // 旋轉矩形最遠角距中心 = sqrt(L1²+L2²)，用保守外接框避免方向慣例造成誤報。
-                    double reach = Math.Sqrt(roi.Length1 * roi.Length1 + roi.Length2 * roi.Length2);
-                    if (roi.CenterCol - reach < 0 || roi.CenterCol + reach > w
-                        || roi.CenterRow - reach < 0 || roi.CenterRow + reach > h)
+                    // 依 ROI 角度算「軸對齊外接框」半寬/半高（rect2：Length1 沿主軸、Length2 垂直）。
+                    // Phi=0（水平主軸）時 halfCol=Length1、halfRow=Length2。用圓形上界會把短邊也當對角線長
+                    // → 明明完整在框內卻誤報，故改用實際旋轉矩形外接框。
+                    double cos = Math.Abs(Math.Cos(roi.AngleRad));
+                    double sin = Math.Abs(Math.Sin(roi.AngleRad));
+                    double halfCol = roi.Length1 * cos + roi.Length2 * sin;
+                    double halfRow = roi.Length1 * sin + roi.Length2 * cos;
+                    if (roi.CenterCol - halfCol < 0 || roi.CenterCol + halfCol > w
+                        || roi.CenterRow - halfRow < 0 || roi.CenterRow + halfRow > h)
                     {
                         issues.Add(new RecipeIssue(RecipeIssueSeverity.Warning, tool.Id, tool.Name,
                             "ROI 部分超出影像範圍"));
