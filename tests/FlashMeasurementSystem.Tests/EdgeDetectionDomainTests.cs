@@ -143,6 +143,8 @@ namespace FlashMeasurementSystem.Tests
             Console.WriteLine("GdtCalculatorDomainTests passed");
             GdtEvaluationDomainTests.Run();
             Console.WriteLine("GdtEvaluationDomainTests passed");
+            RecipeValidatorTests.Run();
+            Console.WriteLine("RecipeValidatorTests passed");
             CsvReportWriterTests.Run();
             Console.WriteLine("CsvReportWriterTests passed");
             Console.WriteLine("EdgeDetectionDomainTests passed");

@@ -96,6 +96,8 @@
     <Compile Include="Gdt\GdtEvaluation.cs" />
     <Compile Include="Roi\MeasurementTool.cs" />
     <Compile Include="Roi\Recipe.cs" />
+    <Compile Include="Roi\RecipeIssue.cs" />
+    <Compile Include="Roi\RecipeValidator.cs" />
     <Compile Include="Workflow\MeasurementState.cs" />
     <Compile Include="Workflow\WorkflowResult.cs" />
   </ItemGroup>

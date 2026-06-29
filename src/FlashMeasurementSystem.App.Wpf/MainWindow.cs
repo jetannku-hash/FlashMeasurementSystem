@@ -1254,6 +1254,49 @@ namespace FlashMeasurementSystem
 
         // 執行配方（B1）：每個工具 ROI 轉到當前匹配姿態 → circle 量直徑(mm) → 公差判定 →
         // 結果表 OK/NG 上色 + 畫擬合圓。pixel size 優先用配方參考的校正檔，否則退回量測分頁數值。
+        // N1：執行前配方驗證。Error → 列出並阻擋（回 false）；只有 Warning → 列出並詢問是否繼續；
+        // 無問題 → 直接放行。imageW/H 取目前影像（取不到則 0,0，驗證會略過邊界檢查）。
+        private bool EnsureRecipeValid()
+        {
+            int width = 0, height = 0;
+            if (_imageHelper != null && _imageHelper.CurrentImage != null)
+            {
+                try
+                {
+                    HOperatorSet.GetImageSize(_imageHelper.CurrentImage, out HTuple w, out HTuple h);
+                    width = w.I; height = h.I;
+                }
+                catch (HalconException) { /* 取不到尺寸 → 略過邊界檢查 */ }
+            }
+
+            System.Collections.Generic.List<RecipeIssue> issues =
+                RecipeValidator.Validate(_loadedRecipe, width, height);
+            if (issues.Count == 0) return true;
+
+            var errors = issues.Where(i => i.Severity == RecipeIssueSeverity.Error).ToList();
+            var warnings = issues.Where(i => i.Severity == RecipeIssueSeverity.Warning).ToList();
+
+            if (errors.Count > 0)
+            {
+                MessageBox.Show(
+                    "配方驗證未通過，請先修正以下錯誤：\n\n" + FormatRecipeIssues(errors)
+                    + (warnings.Count > 0 ? "\n\n警告：\n" + FormatRecipeIssues(warnings) : ""),
+                    "配方驗證", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return false;
+            }
+
+            DialogResult r = MessageBox.Show(
+                "配方有以下警告：\n\n" + FormatRecipeIssues(warnings) + "\n\n是否仍要繼續量測？",
+                "配方驗證", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+            return r == DialogResult.Yes;
+        }
+
+        private static string FormatRecipeIssues(System.Collections.Generic.List<RecipeIssue> issues)
+        {
+            return string.Join("\n", issues.Select(i =>
+                "• " + (string.IsNullOrEmpty(i.ToolName) ? "" : "[" + i.ToolName + "] ") + i.Message));
+        }
+
         private void RunRecipeButton_Click(object sender, EventArgs e)
         {
             if (_loadedRecipe == null) { MessageBox.Show("請先載入配方 (.zcp)。", "Info"); return; }
@@ -1263,6 +1306,7 @@ namespace FlashMeasurementSystem
                 MessageBox.Show("此配方含參考姿態，請先對目前影像執行模板匹配以取得當前工件姿態。", "Info");
                 return;
             }
+            if (!EnsureRecipeValid()) return;
 
             // pixel size 來源（決策 A）：配方 CalibrationProfileId 有設且檔案存在 → 用校正檔；
             // 否則退回量測分頁。與一鍵量測共用 ResolvePixelSize（含載入失敗揭露）。
@@ -1413,6 +1457,7 @@ namespace FlashMeasurementSystem
         {
             if (_loadedRecipe == null) { MessageBox.Show("請先載入配方 (.zcp)。", "Info"); return; }
             if (_imageHelper == null || _imageHelper.CurrentImage == null) { MessageBox.Show("請先載入影像。", "Info"); return; }
+            if (!EnsureRecipeValid()) return;
 
             Cursor = Cursors.WaitCursor;
             try
