@@ -226,12 +226,15 @@ namespace FlashMeasurementSystem
                 && recipe.MetrologyModel.Objects != null
                 && recipe.MetrologyModel.Objects.Count > 0)
             {
-                // v1：量測模型一律以「絕對影像座標」量測——操作員在編輯器輸入的就是影像上看到的
-                // 像素位置，量測即發生在該處，行為可預期。此無硬體階段不把量測模型對齊到 1D 的
-                // 模板匹配姿態（否則 active match 會把標稱幾何整個位移、量測區掃不到目標）。
-                // 對齊到移動工件是日後有硬體可驗證時再開的進階選項。
+                // 量測模型跟隨工件：沿用 1D 工具相同且已驗證的剛體變換（CreateFromMatch→TransformRoi）
+                // 把標稱幾何「預先」轉到當前匹配姿態，再以絕對座標套用（不走 HALCON reference_system/
+                // align —— 那條路徑座標對映不穩，是先前圓量不到的根因）。無匹配時 transform==null，
+                // 標稱幾何即絕對座標。
+                MetrologyModelDef appliedModel = (transform != null)
+                    ? TransformMetrologyModel(recipe.MetrologyModel, transform)
+                    : recipe.MetrologyModel;
                 MetrologyModelResult mResult = _metrologyRunner.Apply(
-                    recipe.MetrologyModel,
+                    appliedModel,
                     0.0, 0.0, 0.0, false,
                     image,
                     0.0, 0.0, 0.0, false);
@@ -248,6 +251,45 @@ namespace FlashMeasurementSystem
             }
 
             return results;
+        }
+
+        // 用與 1D 相同的剛體變換把整個量測模型的標稱幾何轉到當前匹配姿態（位置+方向，尺寸不變）。
+        // 回傳新的 MetrologyModelDef（不改原配方），量測參數/半徑/邊長原樣保留。
+        private MetrologyModelDef TransformMetrologyModel(MetrologyModelDef model, RigidTransform transform)
+        {
+            var outModel = new MetrologyModelDef { ImageWidth = model.ImageWidth, ImageHeight = model.ImageHeight };
+            foreach (MetrologyObjectDef o in model.Objects)
+            {
+                var c = new MetrologyObjectDef
+                {
+                    Id = o.Id, Name = o.Name, Shape = o.Shape,
+                    Radius = o.Radius, Radius1 = o.Radius1, Radius2 = o.Radius2,
+                    Length1 = o.Length1, Length2 = o.Length2,
+                    MeasureLength1 = o.MeasureLength1, MeasureLength2 = o.MeasureLength2,
+                    MeasureSigma = o.MeasureSigma, MeasureThreshold = o.MeasureThreshold,
+                    MeasureDistance = o.MeasureDistance, NumMeasures = o.NumMeasures,
+                    Tolerance = o.Tolerance
+                };
+                switch (o.Shape)
+                {
+                    case MetrologyObjectType.Line:
+                        TransformedRoi b = _mapper.TransformRoi(o.RowBegin, o.ColumnBegin, 0.0, transform);
+                        TransformedRoi e = _mapper.TransformRoi(o.RowEnd, o.ColumnEnd, 0.0, transform);
+                        c.RowBegin = b.Row; c.ColumnBegin = b.Col; c.RowEnd = e.Row; c.ColumnEnd = e.Col;
+                        break;
+                    case MetrologyObjectType.Circle:
+                        TransformedRoi tc = _mapper.TransformRoi(o.Row, o.Column, 0.0, transform);
+                        c.Row = tc.Row; c.Column = tc.Col;
+                        break;
+                    case MetrologyObjectType.Ellipse:
+                    case MetrologyObjectType.Rectangle:
+                        TransformedRoi tr = _mapper.TransformRoi(o.Row, o.Column, o.Phi, transform);
+                        c.Row = tr.Row; c.Column = tr.Col; c.Phi = tr.AngleRad;
+                        break;
+                }
+                outModel.Objects.Add(c);
+            }
+            return outModel;
         }
 
         // 把 metrology 物件結果轉成 ToolRunResult，ToolType 用 "metrology_*"（與 1D 型別區隔，
