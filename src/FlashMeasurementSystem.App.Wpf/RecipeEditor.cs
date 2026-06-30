@@ -875,6 +875,9 @@ namespace FlashMeasurementSystem
 
         // Copies all recipe fields EXCEPT Tools (caller fills Tools). Preserves
         // reference pose / calibration / schema set elsewhere (e.g. Set Ref).
+        // MetrologyModel is carried through unchanged so editing/saving a recipe in
+        // the 1D editor does NOT wipe a metrology model defined in the metrology editor
+        // (this method runs both on load → _recipe and on save → BuildRecipe).
         private static Recipe CopyRecipeMetadata(Recipe src)
         {
             return new Recipe
@@ -887,6 +890,7 @@ namespace FlashMeasurementSystem
                 RefCol = src.RefCol,
                 RefAngleRad = src.RefAngleRad,
                 HasReferencePose = src.HasReferencePose,
+                MetrologyModel = src.MetrologyModel,
                 CreatedAt = src.CreatedAt,
                 ModifiedAt = src.ModifiedAt
             };
