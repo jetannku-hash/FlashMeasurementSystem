@@ -226,16 +226,15 @@ namespace FlashMeasurementSystem
                 && recipe.MetrologyModel.Objects != null
                 && recipe.MetrologyModel.Objects.Count > 0)
             {
-                // reference_system 與 align 必須成對：唯有真的要對齊（有參考姿態且有匹配）時才設
-                // reference_system，否則標稱幾何視為「絕對影像座標」直接量測。傳 hasAlign 給
-                // hasReferencePose 引數，避免「有參考姿態但未匹配」時 reference_system 把幾何位移錯位。
-                bool hasAlign = recipe.HasReferencePose && hasMatch;
+                // v1：量測模型一律以「絕對影像座標」量測——操作員在編輯器輸入的就是影像上看到的
+                // 像素位置，量測即發生在該處，行為可預期。此無硬體階段不把量測模型對齊到 1D 的
+                // 模板匹配姿態（否則 active match 會把標稱幾何整個位移、量測區掃不到目標）。
+                // 對齊到移動工件是日後有硬體可驗證時再開的進階選項。
                 MetrologyModelResult mResult = _metrologyRunner.Apply(
                     recipe.MetrologyModel,
-                    recipe.RefRow, recipe.RefCol, recipe.RefAngleRad, hasAlign,
+                    0.0, 0.0, 0.0, false,
                     image,
-                    hasAlign ? matchRow : 0.0, hasAlign ? matchCol : 0.0, hasAlign ? matchAngleRad : 0.0,
-                    hasAlign);
+                    0.0, 0.0, 0.0, false);
 
                 if (mResult != null && mResult.Objects != null)
                 {
