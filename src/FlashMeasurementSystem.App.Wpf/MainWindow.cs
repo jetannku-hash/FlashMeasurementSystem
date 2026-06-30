@@ -25,6 +25,7 @@ using FlashMeasurementSystem.Halcon.AngleMeasurement;
 using FlashMeasurementSystem.Domain.Roi;
 using FlashMeasurementSystem.Domain.Calibration;
 using FlashMeasurementSystem.Halcon.CoordinateSystem;
+using FlashMeasurementSystem.Halcon.MetrologyModel;
 using FlashMeasurementSystem.Infrastructure.Roi;
 using FlashMeasurementSystem.Infrastructure.Tolerance;
 using FlashMeasurementSystem.Infrastructure.Calibration;
@@ -48,6 +49,7 @@ namespace FlashMeasurementSystem
         private readonly HalconRectangleFitter _rectangleFitter = new HalconRectangleFitter();
         private readonly HalconDistanceMeasurer _distanceMeasurer = new HalconDistanceMeasurer();
         private readonly HalconAngleMeasurer _angleMeasurer = new HalconAngleMeasurer();
+        private readonly HalconMetrologyModelRunner _metrologyRunner = new HalconMetrologyModelRunner();
         private EdgeDetectionRoi _latestEdgeRoi;
         private double _editCenterRow, _editCenterCol;
         private EdgeResult _latestEdgeResult;
@@ -96,7 +98,7 @@ namespace FlashMeasurementSystem
             _imageHelper.RoiSelected += OnImageRoiSelected;
 
             // 配方執行引擎：以既有 adapters 注入（邊緣 + 圓/線擬合 + 公差 + 座標映射）。
-            _recipeRunner = new RecipeRunner(_edgeDetector, _circleFitter, _lineFitter, _distanceMeasurer, _angleMeasurer, _judger, _coordinateMapper);
+            _recipeRunner = new RecipeRunner(_edgeDetector, _circleFitter, _lineFitter, _distanceMeasurer, _angleMeasurer, _judger, _coordinateMapper, _metrologyRunner);
             _workflow = new MeasurementWorkflow(_iqc, _templateMatcher, _recipeRunner, _judger, _reportWriter);
             // 一鍵量測逐階段進度：StateChanged 在 UI 執行緒同步觸發，於 status bar 即時顯示。
             _workflow.StateChanged += OnWorkflowStateChanged;
@@ -1442,6 +1444,34 @@ namespace FlashMeasurementSystem
                         // 帶基準的形位公差：畫量測↔基準的偏移連線 + 偏差/判定文字（T4 已設好兩端）。
                         // 真圓度/真直度無對應幾何錨點，僅以結果表列呈現（其元素已由各自工具畫出）。
                         an.DrawDistance(r.DistRow1, r.DistCol1, r.DistRow2, r.DistCol2, r.ValueText, r.IsOk);
+                    }
+                    else if (r.Measured && r.ToolType != null && r.ToolType.StartsWith("metrology_"))
+                    {
+                        // 2D 量測模型：擬合形狀畫綠色（IsOk 有設時依判定上色），量測區邊點畫青色十字。
+                        // 與 1D overlay 同處於這個 persistent-overlay action，故能共存且隨平移/縮放重繪。
+                        string mColor = r.IsOk == true ? "green" : (r.IsOk == false ? "red" : "green");
+                        if (r.ToolType == "metrology_circle")
+                            an.DrawCircle(r.FitCenterRow, r.FitCenterCol, r.FitRadiusPx, mColor);
+                        else if (r.ToolType == "metrology_line")
+                            an.DrawLine(r.LineRow1, r.LineCol1, r.LineRow2, r.LineCol2, mColor);
+                        else if (r.ToolType == "metrology_ellipse")
+                            an.DrawEllipse(r.FitCenterRow, r.FitCenterCol, r.FitPhi, r.FitRadius1, r.FitRadius2, mColor);
+                        else if (r.ToolType == "metrology_rectangle")
+                            an.DrawRectangle2(r.FitCenterRow, r.FitCenterCol, r.FitPhi, r.FitLength1, r.FitLength2, mColor);
+
+                        // 量測區邊點（青色十字），等間距抽樣至多 MaxOverlayCrosses 個（同 1D 邊緣十字慣例）。
+                        int mTotal = Math.Min(r.MetrologyMeasureRows.Count, r.MetrologyMeasureCols.Count);
+                        if (mTotal > 0)
+                        {
+                            int mStep = mTotal <= MaxOverlayCrosses ? 1 : (int)Math.Ceiling((double)mTotal / MaxOverlayCrosses);
+                            for (int mi = 0; mi < mTotal; mi += mStep)
+                                an.DrawCross(r.MetrologyMeasureRows[mi], r.MetrologyMeasureCols[mi], 6, "cyan");
+                        }
+
+                        // 文字錨點：線用兩端中點，其餘用擬合中心。
+                        double mTextRow = r.ToolType == "metrology_line" ? (r.LineRow1 + r.LineRow2) / 2.0 : r.FitCenterRow;
+                        double mTextCol = r.ToolType == "metrology_line" ? (r.LineCol1 + r.LineCol2) / 2.0 : r.FitCenterCol;
+                        an.DrawText(r.ValueText ?? string.Empty, (int)mTextRow, (int)mTextCol, mColor);
                     }
 
                     rows.Add(new OverlayResultRow { Name = r.Name, ValueText = r.ValueText, IsOk = r.IsOk });

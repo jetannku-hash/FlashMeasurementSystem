@@ -7,6 +7,7 @@ using FlashMeasurementSystem.Application.CoordinateSystem;
 using FlashMeasurementSystem.Application.DistanceMeasurement;
 using FlashMeasurementSystem.Application.EdgeDetection;
 using FlashMeasurementSystem.Application.LineFitting;
+using FlashMeasurementSystem.Application.MetrologyModel;
 using FlashMeasurementSystem.Application.Tolerance;
 using FlashMeasurementSystem.Domain.AngleMeasurement;
 using FlashMeasurementSystem.Domain.CircleFitting;
@@ -14,6 +15,7 @@ using FlashMeasurementSystem.Domain.CoordinateSystem;
 using FlashMeasurementSystem.Domain.DistanceMeasurement;
 using FlashMeasurementSystem.Domain.EdgeDetection;
 using FlashMeasurementSystem.Domain.LineFitting;
+using FlashMeasurementSystem.Domain.MetrologyModel;
 using FlashMeasurementSystem.Domain.Roi;
 using FlashMeasurementSystem.Domain.Geometry;
 using FlashMeasurementSystem.Domain.Gdt;
@@ -44,6 +46,12 @@ namespace FlashMeasurementSystem
         public double DiameterMm;      // circle：直徑 (mm)
         public double FitCenterRow, FitCenterCol, FitRadiusPx;  // 擬合圓（供繪製）
         public double LineRow1, LineCol1, LineRow2, LineCol2, LineAngleDeg;  // line 元素（供繪製/複合工具引用）
+        // 2D metrology 擬合幾何：circle 用 FitCenter*/FitRadiusPx、line 用 LineRow1..LineCol2、
+        // ellipse 用 FitCenter*/FitPhi/FitRadius1/FitRadius2、rectangle 用 FitCenter*/FitPhi/FitLength1/FitLength2。
+        public double FitPhi, FitRadius1, FitRadius2, FitLength1, FitLength2;
+        // metrology 量測區邊點（供顯示 cyan 十字）
+        public List<double> MetrologyMeasureRows = new List<double>();
+        public List<double> MetrologyMeasureCols = new List<double>();
         public double DistMm;          // distance：距離 (mm)
         public double DistRow1, DistCol1, DistRow2, DistCol2;  // distance 連線兩端（供繪製）
         public double AngleDeg;         // angle：夾角 AcuteAngleDeg (0~90)
@@ -73,10 +81,13 @@ namespace FlashMeasurementSystem
         private readonly IAngleMeasurer _angleMeasurer;
         private readonly IToleranceJudger _judger;
         private readonly ICoordinateMapper _mapper;
+        // v6：2D 量測模型（加性、可為 null）。null 時 Pass 3 整段跳過，既有建構點/單元測試不受影響。
+        private readonly IMetrologyModelRunner<HImage> _metrologyRunner;
 
         public RecipeRunner(IEdgeDetector<HImage> edgeDetector, ICircleFitter circleFitter,
             ILineFitter lineFitter, IDistanceMeasurer<HXLDCont> distanceMeasurer,
-            IAngleMeasurer angleMeasurer, IToleranceJudger judger, ICoordinateMapper mapper)
+            IAngleMeasurer angleMeasurer, IToleranceJudger judger, ICoordinateMapper mapper,
+            IMetrologyModelRunner<HImage> metrologyRunner = null)
         {
             _edgeDetector = edgeDetector;
             _circleFitter = circleFitter;
@@ -85,6 +96,7 @@ namespace FlashMeasurementSystem
             _angleMeasurer = angleMeasurer;
             _judger = judger;
             _mapper = mapper;
+            _metrologyRunner = metrologyRunner;
         }
 
         public List<ToolRunResult> Run(Recipe recipe, HImage image,
@@ -207,7 +219,70 @@ namespace FlashMeasurementSystem
                 results.Add(res);
             }
 
+            // ── Pass 3：2D 量測模型（MET2D；加性，在 1D passes 之後，與其並存）──
+            // _metrologyRunner==null 或無 MetrologyModel → 整段跳過，1D 結果一字不差。
+            if (_metrologyRunner != null
+                && recipe.MetrologyModel != null
+                && recipe.MetrologyModel.Objects != null
+                && recipe.MetrologyModel.Objects.Count > 0)
+            {
+                bool hasAlign = recipe.HasReferencePose && hasMatch;
+                MetrologyModelResult mResult = _metrologyRunner.Apply(
+                    recipe.MetrologyModel,
+                    recipe.RefRow, recipe.RefCol, recipe.RefAngleRad, recipe.HasReferencePose,
+                    image,
+                    hasAlign ? matchRow : 0.0, hasAlign ? matchCol : 0.0, hasAlign ? matchAngleRad : 0.0,
+                    hasAlign);
+
+                if (mResult != null && mResult.Objects != null)
+                {
+                    foreach (MetrologyObjectResult o in mResult.Objects)
+                    {
+                        ToolRunResult res = MapToToolRunResult(o);
+                        results.Add(res);
+                        if (!string.IsNullOrEmpty(o.Id)) byId[o.Id] = res;
+                    }
+                }
+            }
+
             return results;
+        }
+
+        // 把 metrology 物件結果轉成 ToolRunResult，ToolType 用 "metrology_*"（與 1D 型別區隔，
+        // 任何 pass 都不會重複處理）。純像素，不做 mm 轉換。
+        private static ToolRunResult MapToToolRunResult(MetrologyObjectResult o)
+        {
+            var res = new ToolRunResult
+            {
+                Name = o.Name,
+                ToolType = "metrology_" + o.Shape.ToString().ToLowerInvariant(),
+                Supported = true,
+                Measured = o.Success,
+                IsOk = o.IsOk,
+                ValueText = o.ValueText,
+                Message = o.ErrorMessage
+            };
+            switch (o.Shape)
+            {
+                case MetrologyObjectType.Circle:
+                    res.FitCenterRow = o.FitRow; res.FitCenterCol = o.FitColumn; res.FitRadiusPx = o.FitRadius;
+                    break;
+                case MetrologyObjectType.Line:
+                    res.LineRow1 = o.FitRowBegin; res.LineCol1 = o.FitColumnBegin;
+                    res.LineRow2 = o.FitRowEnd; res.LineCol2 = o.FitColumnEnd;
+                    break;
+                case MetrologyObjectType.Ellipse:
+                    res.FitCenterRow = o.FitRow; res.FitCenterCol = o.FitColumn;
+                    res.FitPhi = o.FitPhi; res.FitRadius1 = o.FitRadius1; res.FitRadius2 = o.FitRadius2;
+                    break;
+                case MetrologyObjectType.Rectangle:
+                    res.FitCenterRow = o.FitRow; res.FitCenterCol = o.FitColumn;
+                    res.FitPhi = o.FitPhi; res.FitLength1 = o.FitLength1; res.FitLength2 = o.FitLength2;
+                    break;
+            }
+            if (o.MeasurePointRows != null) res.MetrologyMeasureRows.AddRange(o.MeasurePointRows);
+            if (o.MeasurePointCols != null) res.MetrologyMeasureCols.AddRange(o.MeasurePointCols);
+            return res;
         }
 
         private void MeasureCircle(HImage image, ToolRunResult res, MeasurementTool tool,
