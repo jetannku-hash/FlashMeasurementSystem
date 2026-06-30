@@ -54,6 +54,63 @@ namespace FlashMeasurementSystem.Tests.Halcon
             return result;
         }
 
+        /// <summary>White filled ellipse on dark background (R1 along major axis, Phi rad).</summary>
+        public static HImage CreateEllipseImage(int w, int h, double cRow, double cCol, double phi, double r1, double r2)
+        {
+            HImage img = new HImage();
+            img.GenImageConst("byte", w, h);
+            img = PaintRect(img, 0, 0, h - 1, w - 1, 30.0);
+            HRegion ellipse = new HRegion();
+            ellipse.GenEllipse(cRow, cCol, phi, r1, r2);
+            HImage result = img.PaintRegion(ellipse, 220.0, "fill");
+            ellipse.Dispose();
+            img.Dispose();
+            return result;
+        }
+
+        /// <summary>White filled oriented rectangle on dark background (Length1/2 = half edges, Phi rad).</summary>
+        public static HImage CreateRectangleImage(int w, int h, double cRow, double cCol, double phi, double l1, double l2)
+        {
+            HImage img = new HImage();
+            img.GenImageConst("byte", w, h);
+            img = PaintRect(img, 0, 0, h - 1, w - 1, 30.0);
+            HRegion rect = new HRegion();
+            rect.GenRectangle2(cRow, cCol, phi, l1, l2);
+            HImage result = img.PaintRegion(rect, 220.0, "fill");
+            rect.Dispose();
+            img.Dispose();
+            return result;
+        }
+
+        // 多特徵合成圖（MET2D-04）已知幾何：圓 + 橢圓 + 水平線，互不重疊（256x256）。
+        public const double CompCircleRow = 70, CompCircleCol = 70, CompCircleRadius = 35;
+        public const double CompEllipseRow = 70, CompEllipseCol = 190, CompEllipsePhi = 0, CompEllipseR1 = 40, CompEllipseR2 = 22;
+        public const double CompLineRow = 200, CompLineColBegin = 40, CompLineColEnd = 216;
+
+        /// <summary>Composite image: filled circle + filled ellipse + thin horizontal line (for one-Apply multi-feature).</summary>
+        public static HImage CreateCompositeImage(int w = DefaultSize, int h = DefaultSize)
+        {
+            HImage img = new HImage();
+            img.GenImageConst("byte", w, h);
+            img = PaintRect(img, 0, 0, h - 1, w - 1, 30.0);
+
+            HRegion circle = new HRegion();
+            circle.GenCircle(CompCircleRow, CompCircleCol, CompCircleRadius);
+            HImage withCircle = img.PaintRegion(circle, 220.0, "fill");
+            circle.Dispose();
+            img.Dispose();
+
+            HRegion ellipse = new HRegion();
+            ellipse.GenEllipse(CompEllipseRow, CompEllipseCol, CompEllipsePhi, CompEllipseR1, CompEllipseR2);
+            HImage withEllipse = withCircle.PaintRegion(ellipse, 220.0, "fill");
+            ellipse.Dispose();
+            withCircle.Dispose();
+
+            // 水平線（±2 px 厚）
+            HImage result = PaintRect(withEllipse, CompLineRow - 2, CompLineColBegin, CompLineRow + 2, CompLineColEnd, 220.0);
+            return result;
+        }
+
         /// <summary>Edge image with Gaussian blur.</summary>
         public static HImage CreateBlurryImage(int w = DefaultSize, int h = DefaultSize)
         {

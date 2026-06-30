@@ -67,6 +67,7 @@
     <Compile Include="DistanceMeasurement\HalconDistanceMeasurer.cs" />
     <Compile Include="AngleMeasurement\HalconAngleMeasurer.cs" />
     <Compile Include="CoordinateSystem\HalconCoordinateMapper.cs" />
+    <Compile Include="MetrologyModel\HalconMetrologyModelRunner.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\FlashMeasurementSystem.Application\FlashMeasurementSystem.Application.csproj">
