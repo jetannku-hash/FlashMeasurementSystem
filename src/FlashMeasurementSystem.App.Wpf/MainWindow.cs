@@ -465,6 +465,7 @@ namespace FlashMeasurementSystem
             measureResultLabel.Text = string.Empty;
             // 重置顏色：否則上一次配方 NG(紅)/OK(綠) 會殘留並染色後續無關文字。
             measureResultLabel.ForeColor = SystemColors.ControlText;
+            SetResultBanner(0, 0, false);
             UpdateEmptyState();
 
             // 換圖必須清掉匹配姿態，否則 Run Recipe 守門（HasReferencePose && !_hasMatch）
@@ -1443,6 +1444,30 @@ namespace FlashMeasurementSystem
                 _loadedRecipe != null ? _loadedRecipe.Name : "", results.Count, okCount, ngCount, pixelSizeSource);
             measureResultLabel.ForeColor = ngCount > 0 ? System.Drawing.Color.DarkRed
                 : (okCount > 0 ? System.Drawing.Color.DarkGreen : System.Drawing.SystemColors.ControlText);
+            SetResultBanner(okCount, ngCount, true);
+        }
+
+        // N2 大字 PASS/FAIL 橫幅：依 okCount/ngCount 切換顏色與文字。
+        // 未量測(measured=false) → 灰底 "—"；有 NG → 紅底 "FAIL（NG n）"；
+        // 全 OK → 綠底 "PASS"；okCount==0 && ngCount==0 但已量測 → 視為灰 "—"（無量測工具）。
+        private void SetResultBanner(int okCount, int ngCount, bool measured)
+        {
+            if (resultBannerPanel == null || resultBannerLabel == null) return;
+            if (measured && ngCount > 0)
+            {
+                resultBannerPanel.BackColor = Color.FromArgb(192, 0, 0);
+                resultBannerLabel.Text = string.Format(CultureInfo.InvariantCulture, "FAIL（NG {0}）", ngCount);
+            }
+            else if (measured && ngCount == 0 && okCount > 0)
+            {
+                resultBannerPanel.BackColor = Color.FromArgb(0, 128, 0);
+                resultBannerLabel.Text = "PASS";
+            }
+            else
+            {
+                resultBannerPanel.BackColor = Color.FromArgb(160, 160, 160);
+                resultBannerLabel.Text = "—";
+            }
         }
 
         // Pixel size 來源：配方 CalibrationProfileId 有設且檔案存在 → 用校正檔；否則退回量測分頁。
