@@ -1600,6 +1600,20 @@ namespace FlashMeasurementSystem
                 return;
             }
 
+            // A1：提供「單一工具試測」委派給編輯器。只跑這一個工具（暫態單工具配方），
+            // 不套匹配姿態（ROI 即影像座標）、不呼叫 EnsureRecipeValid、不重跑整份配方。
+            Func<MeasurementTool, ToolRunResult> trialMeasure = (tool) =>
+            {
+                if (tool == null || _imageHelper == null || _imageHelper.CurrentImage == null) return null;
+                ResolvePixelSize(out double pxUmX, out double pxUmY, out _);
+                var single = Recipe.Default();
+                single.HasReferencePose = false;
+                single.Tools = new System.Collections.Generic.List<MeasurementTool> { tool };
+                var list = _recipeRunner.Run(single, _imageHelper.CurrentImage,
+                    false, 0.0, 0.0, 0.0, pxUmX, pxUmY);
+                return list.Count > 0 ? list[0] : null;
+            };
+
             // If a recipe is already loaded in MainWindow, pass it to the editor
             // so the user can inspect and edit without re-loading. On save, write the
             // edited recipe back so Run Recipe uses it immediately (no re-load needed).
@@ -1612,7 +1626,8 @@ namespace FlashMeasurementSystem
                         "已從編輯器更新配方 '{0}'（{1} 工具）。可執行 Run Recipe。",
                         recipe.Name, recipe.Tools.Count);
                     UpdateEmptyState();
-                });
+                },
+                trialMeasure);
             // 編輯器接管共用影像視窗做 ROI 編輯：先清掉主視窗殘留的偵測/擬合 overlay
             // （Edge Detection 藍框、邊緣十字、Run Recipe 結果等），讓編輯器從乾淨影像開始。
             _imageHelper.EndRect2Edit();

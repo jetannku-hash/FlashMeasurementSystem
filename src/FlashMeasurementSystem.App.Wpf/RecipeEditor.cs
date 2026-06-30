@@ -32,6 +32,8 @@ namespace FlashMeasurementSystem
         private readonly RecipeStore _recipeStore = new RecipeStore();
         private readonly List<MeasurementTool> _tools = new List<MeasurementTool>();
         private readonly Action<Recipe, string> _savedCallback;
+        // A1：MainWindow 提供的單一工具試測委派（可為 null → 試測按鈕停用）。
+        private readonly Func<MeasurementTool, ToolRunResult> _trialMeasure;
         private ToolTip _toolTip;
         // Working recipe metadata (pose/calibration/schema), isolated from caller's object.
         private Recipe _recipe = Recipe.Default();
@@ -61,6 +63,7 @@ namespace FlashMeasurementSystem
         private Button _deleteButton;
         private Button _saveButton;
         private Button _saveAsButton;
+        private Button _trialMeasureButton;
 
         // ── Left: tool list ──
         private ListBox _toolListBox;
@@ -95,6 +98,7 @@ namespace FlashMeasurementSystem
         private NumericUpDown _nominalNumeric;
         private NumericUpDown _lowerNumeric;
         private NumericUpDown _upperNumeric;
+        private Label _tolerancePreviewLabel;
         private TextBox _unitTextBox;
         private Label _angleHintLabel;
 
@@ -105,14 +109,15 @@ namespace FlashMeasurementSystem
 
         // ── Constructors ──────────────────────────────────────────────
 
-        public RecipeEditor(HWindowControlHelper imageHelper) : this(imageHelper, null, null, null) { }
+        public RecipeEditor(HWindowControlHelper imageHelper) : this(imageHelper, null, null, null, null) { }
 
         public RecipeEditor(HWindowControlHelper imageHelper, Recipe recipe, string filePath,
-            Action<Recipe, string> savedCallback)
+            Action<Recipe, string> savedCallback, Func<MeasurementTool, ToolRunResult> trialMeasure)
         {
             _imageHelper = imageHelper ?? throw new ArgumentNullException(nameof(imageHelper));
             _savePath = filePath;
             _savedCallback = savedCallback;
+            _trialMeasure = trialMeasure;
 
             MinimumSize = new Size(580, 440);
 
@@ -230,6 +235,8 @@ namespace FlashMeasurementSystem
             _saveButton.Click += OnSave;
             _saveAsButton = new Button { Text = "Save As", Width = 65 };
             _saveAsButton.Click += OnSaveAs;
+            _trialMeasureButton = new Button { Text = "[在此試測]", Width = 90, Enabled = false };
+            _trialMeasureButton.Click += OnTrialMeasure;
 
             bar.Controls.Add(_newButton);
             bar.Controls.Add(_loadButton);
@@ -248,6 +255,7 @@ namespace FlashMeasurementSystem
             bar.Controls.Add(_deleteButton);
             bar.Controls.Add(_saveButton);
             bar.Controls.Add(_saveAsButton);
+            bar.Controls.Add(_trialMeasureButton);
 
             return bar;
         }
@@ -259,7 +267,9 @@ namespace FlashMeasurementSystem
             // we want Common, ROI, Edge, RefTool, Tolerance from top down.
             // With Dock=Top, the LAST added sits at top. Add in reverse.
             _gdtGroup = CreateGroupBox("GD&T 形位公差", parent, 120);
-            _toleranceGroup = CreateGroupBox("Tolerance", parent, 185);
+            // 高度含 6 列 × 28px（Nominal/Lower/Upper/公差預覽/Unit/角度提示）+ 標題與內距；
+            // N5 新增的公差預覽列使原 185 高度容不下最後的角度提示列，提高到 215。
+            _toleranceGroup = CreateGroupBox("Tolerance", parent, 215);
             _refGroup = CreateGroupBox("Reference Tools", parent, 95);
             _edgeGroup = CreateGroupBox("Edge Detection", parent, 210);
             _roiGroup = CreateGroupBox("ROI Geometry", parent, 210);
@@ -384,6 +394,15 @@ namespace FlashMeasurementSystem
             _nominalNumeric = AddNumericRow(t, "Nominal", ref r, -1000000M, 1000000M, 4, 0M, 0.1M);
             _lowerNumeric = AddNumericRow(t, "Lower", ref r, -1000000M, 1000000M, 4, -0.005M, 0.001M);
             _upperNumeric = AddNumericRow(t, "Upper", ref r, -1000000M, 1000000M, 4, 0.005M, 0.001M);
+
+            // N5：即時顯示實際允許範圍 [LowerLimit, UpperLimit]，上限<下限時轉紅警示（不擋存檔）。
+            _tolerancePreviewLabel = AddRow(t, "", ref r, new Label
+            {
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleLeft,
+                ForeColor = SystemColors.GrayText,
+                Text = "= [-, -] mm"
+            });
 
             _unitTextBox = AddRow(t, "Unit", ref r, new TextBox { Dock = DockStyle.Fill, Text = "mm" });
             _unitTextBox.TextChanged += (s, e) =>
@@ -571,6 +590,81 @@ namespace FlashMeasurementSystem
             _selectedTool.Tolerance.LowerTolerance = (double)_lowerNumeric.Value;
             _selectedTool.Tolerance.UpperTolerance = (double)_upperNumeric.Value;
             MarkDirty();
+            UpdateTolerancePreview();
+        }
+
+        // N5：依目前 Tolerance 即時顯示 [LowerLimit, UpperLimit]；上限<下限時轉紅警示（純顯示、不擋存檔）。
+        // 算術沿用 ToleranceSpec.LowerLimit/UpperLimit，反轉判定沿用 RecipeValidator 同一述詞。
+        private void UpdateTolerancePreview()
+        {
+            if (_tolerancePreviewLabel == null) return;
+            if (_selectedTool == null || _selectedTool.Tolerance == null) return;
+            var tol = _selectedTool.Tolerance;
+            bool inverted = tol.UpperTolerance < tol.LowerTolerance;
+            string unit = string.IsNullOrEmpty(tol.Unit) ? "mm" : tol.Unit;
+            if (inverted)
+            {
+                _tolerancePreviewLabel.ForeColor = Color.DarkRed;
+                _tolerancePreviewLabel.Text = "⚠ 上限 < 下限 (Upper < Lower)";
+            }
+            else
+            {
+                _tolerancePreviewLabel.ForeColor = SystemColors.GrayText;
+                _tolerancePreviewLabel.Text = string.Format(CultureInfo.InvariantCulture,
+                    "= [{0:F4}, {1:F4}] {2}", tol.LowerLimit, tol.UpperLimit, unit);
+            }
+        }
+
+        // A1：試測按鈕只在「有委派 + 已載入影像 + 選中 circle/line 工具」時可用。
+        private void RefreshTrialButtonEnabled()
+        {
+            if (_trialMeasureButton == null) return;
+            _trialMeasureButton.Enabled =
+                _trialMeasure != null
+                && _imageHelper != null && _imageHelper.CurrentImage != null
+                && _selectedTool != null
+                && (_selectedTool.ToolType == "circle" || _selectedTool.ToolType == "line");
+        }
+
+        // A1：在編輯器內就地試測選中的 circle/line 工具，把擬合結果畫在共用主視窗影像上。
+        // 只跑這一個工具（MainWindow 委派內以暫態單工具配方呼叫 RecipeRunner.Run），
+        // 不重跑整份配方、不做配方驗證。單一 overlay slot：重畫 ROI 框 + 擬合結果。
+        private void OnTrialMeasure(object sender, EventArgs e)
+        {
+            var tool = _selectedTool;
+            if (tool == null || _trialMeasure == null) return;
+            ToolRunResult result;
+            try { result = _trialMeasure(tool); }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, "試測失敗：" + ex.Message, "Trial Measure",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            var roi = tool.Roi;
+            _imageHelper.SetPersistentOverlayAction(() =>
+            {
+                OverlayAnnotator an = _imageHelper.Annotator;
+                if (an == null) return;
+                if (roi != null)
+                    an.DrawRectangle2(roi.CenterRow, roi.CenterCol, roi.AngleRad,
+                                      roi.Length1, roi.Length2, "orange");
+                if (result == null || !result.Measured)
+                {
+                    an.DrawText("未偵測到邊緣 / No edge detected",
+                        roi != null ? (int)roi.CenterRow : 20,
+                        roi != null ? (int)roi.CenterCol : 20, "yellow");
+                    return;
+                }
+                if (result.ToolType == "circle")
+                    an.DrawCircle(result.FitCenterRow, result.FitCenterCol, result.FitRadiusPx, "green");
+                else if (result.ToolType == "line")
+                    an.DrawLine(result.LineRow1, result.LineCol1, result.LineRow2, result.LineCol2, "green");
+                an.DrawText(result.ValueText ?? string.Empty,
+                    roi != null ? (int)roi.CenterRow : 20,
+                    roi != null ? (int)roi.CenterCol + 18 : 20, "green");
+            });
         }
 
         private void WriteGdt()
@@ -872,6 +966,7 @@ namespace FlashMeasurementSystem
                 SetPropertyPanelEnabled(false);
                 _imageHelper.EndRect2Edit();
                 _imageHelper.ClearSelectionHighlight();
+                RefreshTrialButtonEnabled();
                 return;
             }
 
@@ -1029,6 +1124,10 @@ namespace FlashMeasurementSystem
             {
                 _updatingControls = false;
             }
+
+            // 數值已填好（guard 已解除）→ 刷新公差預覽與試測按鈕狀態。
+            UpdateTolerancePreview();
+            RefreshTrialButtonEnabled();
         }
 
         // distance: line/circle/intersection/midline/projection; angle: line/midline;
@@ -1284,6 +1383,7 @@ namespace FlashMeasurementSystem
             if (prev >= 0 && prev < _tools.Count)
                 _toolListBox.SelectedIndex = prev;
             UpdateTitle();
+            RefreshTrialButtonEnabled();
         }
 
         private void SetupToolTips()
@@ -1304,6 +1404,7 @@ namespace FlashMeasurementSystem
             _toolTip.SetToolTip(_deleteButton, "Delete the currently selected tool");
             _toolTip.SetToolTip(_saveButton, "Save the recipe to the current file");
             _toolTip.SetToolTip(_saveAsButton, "Save the recipe to a new .zcp file");
+            _toolTip.SetToolTip(_trialMeasureButton, "試測目前選中的 circle/line 工具（需已載入影像）");
             _toolTip.SetToolTip(_nameTextBox, "Tool display name (appears in result table)");
             _toolTip.SetToolTip(_idTextBox, "Unique tool ID (auto-generated, read-only)");
             _toolTip.SetToolTip(_typeLabel, "Tool type: circle, line, distance, or angle");
