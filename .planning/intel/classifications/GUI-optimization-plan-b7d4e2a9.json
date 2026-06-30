@@ -1,0 +1,37 @@
+{
+  "source_path": "F:/C#/FlashMeasurementSystem/FlashMeasurementSystem/docs/superpowers/plans/GUI建議優化項目計畫書.md",
+  "type": "SPEC",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "GUI 建議優化項目計畫書",
+  "summary": "Prioritized implementation plan for 12 WinForms GUI/UX improvements to FlashMeasurementSystem, each with options, affected files, and verification steps.",
+  "scope": [
+    "RecipeEditor",
+    "MainWindow",
+    "RecipeValidator",
+    "RecipeIssue",
+    "empty-state guidance (N3)",
+    "PASS/FAIL banner (N2)",
+    "tolerance limit display (N5)",
+    "recipe validation (N1)",
+    "in-editor trial measurement (A1)",
+    "measurement hotkeys + drag-drop (N6)",
+    "live edge preview (A3)",
+    "Undo/Redo (A5)",
+    "recent recipes/images (N7)",
+    "tool-list TreeView (A4)",
+    "edge-parameter tooltips (A6)",
+    "SplitContainer layout (A7)"
+  ],
+  "cross_refs": [
+    "MainWindow.Designer.cs",
+    "MainWindow.cs",
+    "RecipeEditor.cs",
+    "Domain/Roi/RecipeValidator.cs",
+    "RecipeIssue.cs",
+    "tests/.../RecipeValidatorTests.cs"
+  ],
+  "locked": false,
+  "precedence": null,
+  "notes": "Type forced to SPEC by MANIFEST_TYPE. Content is actually a planning/proposal document (status: 待審閱) with options and verification steps, closer to a DOC/plan than a technical contract spec, but manifest declaration is authoritative."
+}

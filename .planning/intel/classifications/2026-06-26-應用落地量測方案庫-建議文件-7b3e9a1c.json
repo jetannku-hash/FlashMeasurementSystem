@@ -1,0 +1,30 @@
+{
+  "source_path": "F:/C#/FlashMeasurementSystem/FlashMeasurementSystem/docs/superpowers/plans/2026-06-26_應用落地量測方案庫_建議文件.md",
+  "type": "SPEC",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "應用落地量測方案庫（Measurement Solutions）— 建議文件",
+  "summary": "Proposed library of named measurement solutions layered on existing geometric primitives, defining per-solution detection target, primitives, outputs, judgment, and output format.",
+  "scope": [
+    "MeasurementSolution",
+    "Recipe",
+    "MeasurementTool",
+    "RecipeRunner",
+    "ToleranceJudger",
+    "geometric primitives (edge/line/circle/ellipse/rectangle/arc calipers)",
+    "gear tooth count/pitch",
+    "PCD / hole arrays",
+    "shaft/bore diameter",
+    "pin pitch",
+    "GD&T / contour comparison",
+    "template alignment + batch measurement",
+    "pixel-to-mm calibration"
+  ],
+  "cross_refs": [
+    "docs/superpowers/plans/2026-06-25_現況到主流量測儀_能力差距清單.md",
+    "docs/superpowers/plans/2026-06-25_A3_幾何基元擴充_任務型計畫.md"
+  ],
+  "locked": false,
+  "precedence": null,
+  "notes": ""
+}

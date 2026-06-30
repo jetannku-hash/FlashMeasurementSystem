@@ -1,0 +1,30 @@
+{
+  "source_path": "F:/C#/FlashMeasurementSystem/FlashMeasurementSystem/docs/superpowers/specs/2026-06-05-line-fitting-design.md",
+  "type": "SPEC",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "Line Fitting Design",
+  "summary": "Technical design for adapting HALCON fit_line_contour_xld line fitting into the project's layered architecture with a WinForms test action.",
+  "scope": [
+    "LineFitting",
+    "fit_line_contour_xld",
+    "Domain LineFittingParameters/LineFittingResult",
+    "ILineFitter",
+    "HalconLineFitter",
+    "Edge Detection tab",
+    "OverlayAnnotator"
+  ],
+  "cross_refs": [
+    "src/FlashMeasurementSystem.Domain/LineFitting/LineFittingParameters.cs",
+    "src/FlashMeasurementSystem.Domain/LineFitting/LineFittingResult.cs",
+    "src/FlashMeasurementSystem.Application/LineFitting/ILineFitter.cs",
+    "src/FlashMeasurementSystem.Halcon/LineFitting/HalconLineFitter.cs",
+    "src/FlashMeasurementSystem.App.Wpf/MainWindow.cs",
+    "src/FlashMeasurementSystem.App.Wpf/MainWindow.Designer.cs",
+    "src/FlashMeasurementSystem.App.Wpf/OverlayAnnotator.cs",
+    "tests/FlashMeasurementSystem.Tests/LineFittingDomainTests.cs"
+  ],
+  "locked": false,
+  "precedence": null,
+  "notes": ""
+}

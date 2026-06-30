@@ -1,0 +1,36 @@
+{
+  "source_path": "F:/C#/FlashMeasurementSystem/FlashMeasurementSystem/docs/superpowers/specs/2026-06-12-rectangular-measure-object-enhancement-design.md",
+  "type": "SPEC",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "Rectangular Measure Object Enhancement Design",
+  "summary": "Technical design to strengthen the HALCON 1D rectangular measure workflow by adding interpolation, measure_pairs, and numeric ROI controls with live preview.",
+  "scope": [
+    "HALCON 1D measure object",
+    "gen_measure_rectangle2",
+    "measure_pos",
+    "measure_pairs",
+    "EdgeDetectionParameters",
+    "EdgeDetectionRoi",
+    "EdgePair DTO",
+    "HalconEdgeDetector",
+    "MainWindow Edge Detection UI",
+    "rectangular ROI numeric controls"
+  ],
+  "cross_refs": [
+    "halcon_pdf/reference/reference_hdevelop.txt",
+    "src/FlashMeasurementSystem.Domain/EdgeDetection/EdgeDetectionParameters.cs",
+    "src/FlashMeasurementSystem.Domain/EdgeDetection/EdgeDetectionRoi.cs",
+    "src/FlashMeasurementSystem.Domain/EdgeDetection/EdgeResult.cs",
+    "src/FlashMeasurementSystem.Domain/EdgeDetection/EdgePoint.cs",
+    "src/FlashMeasurementSystem.Domain/EdgeDetection/EdgePair.cs",
+    "src/FlashMeasurementSystem.Halcon/EdgeDetection/HalconEdgeDetector.cs",
+    "src/FlashMeasurementSystem.App.Wpf/MainWindow.cs",
+    "src/FlashMeasurementSystem.App.Wpf/MainWindow.Designer.cs",
+    "tests/FlashMeasurementSystem.Tests/EdgeDetectionDomainTests.cs",
+    "FlashMeasurementSystem.Domain.csproj"
+  ],
+  "locked": false,
+  "precedence": null,
+  "notes": "Type set from MANIFEST_TYPE (SPEC); content strongly corroborates SPEC (operator contracts, schemas, DTO field definitions, error-handling and verification sections)."
+}

@@ -1,0 +1,32 @@
+{
+  "source_path": "F:/C#/FlashMeasurementSystem/FlashMeasurementSystem/docs/superpowers/specs/2026-06-04-edge-detection-test-ui-design.md",
+  "type": "SPEC",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "Edge Detection Test UI Design",
+  "summary": "Technical design for an Edge Detection test feature and WinForms harness implementing manual section 4.3 (MeasurePos and EdgesSubPix) across the project's strict layers.",
+  "scope": [
+    "Edge Detection",
+    "MeasurePos",
+    "EdgesSubPix",
+    "Domain layer (EdgeResult, EdgePoint, EdgeDetectionParameters, EdgeDetectionRoi)",
+    "Application IEdgeDetector interface",
+    "Halcon HalconEdgeDetector adapter",
+    "MainWindow WinForms test UI",
+    "HWindowControl ROI interaction",
+    "edge profile chart"
+  ],
+  "cross_refs": [
+    "src/FlashMeasurementSystem.Domain/EdgeDetection/EdgeResult.cs",
+    "src/FlashMeasurementSystem.Domain/EdgeDetection/EdgePoint.cs",
+    "src/FlashMeasurementSystem.Domain/EdgeDetection/EdgeDetectionParameters.cs",
+    "src/FlashMeasurementSystem.Domain/EdgeDetection/EdgeDetectionRoi.cs",
+    "src/FlashMeasurementSystem.Application/EdgeDetection/IEdgeDetector.cs",
+    "src/FlashMeasurementSystem.Halcon/EdgeDetection/HalconEdgeDetector.cs",
+    "src/FlashMeasurementSystem.App.Wpf/MainWindow.cs",
+    "src/FlashMeasurementSystem.App.Wpf/MainWindow.Designer.cs"
+  ],
+  "locked": false,
+  "precedence": null,
+  "notes": ""
+}

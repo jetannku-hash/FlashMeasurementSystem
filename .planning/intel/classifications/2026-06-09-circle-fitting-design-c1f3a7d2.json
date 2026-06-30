@@ -1,0 +1,23 @@
+{
+  "source_path": "F:/C#/FlashMeasurementSystem/FlashMeasurementSystem/docs/superpowers/specs/2026-06-09-circle-fitting-design.md",
+  "type": "SPEC",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "Circle Fitting Design",
+  "summary": "Technical design for a Circle Fitting feature that fits a circle from edge-detection points via HALCON fit_circle_contour_xld across the project's layered architecture.",
+  "scope": ["CircleFittingParameters", "CircleFittingResult", "ICircleFitter", "HalconCircleFitter", "fit_circle_contour_xld", "Edge Detection tab", "OverlayAnnotator", "MainWindow WinForms UI"],
+  "cross_refs": [
+    "src/FlashMeasurementSystem.Domain/CircleFitting/CircleFittingParameters.cs",
+    "src/FlashMeasurementSystem.Domain/CircleFitting/CircleFittingResult.cs",
+    "src/FlashMeasurementSystem.Application/CircleFitting/ICircleFitter.cs",
+    "src/FlashMeasurementSystem.Halcon/CircleFitting/HalconCircleFitter.cs",
+    "tests/FlashMeasurementSystem.Tests/CircleFittingDomainTests.cs",
+    "tests/FlashMeasurementSystem.Tests/EdgeDetectionDomainTests.cs",
+    "src/FlashMeasurementSystem.App.Wpf/MainWindow.cs",
+    "src/FlashMeasurementSystem.App.Wpf/MainWindow.Designer.cs",
+    "src/FlashMeasurementSystem.App.Wpf/OverlayAnnotator.cs"
+  ],
+  "locked": false,
+  "precedence": null,
+  "notes": ""
+}

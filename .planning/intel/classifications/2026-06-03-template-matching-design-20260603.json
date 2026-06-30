@@ -1,0 +1,34 @@
+{
+  "source_path": "F:/C#/FlashMeasurementSystem/FlashMeasurementSystem/docs/superpowers/specs/2026-06-03-template-matching-design.md",
+  "type": "SPEC",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "Template Matching Design",
+  "summary": "Technical design for layered HALCON shape-model template creation and matching with a WinForms test harness, per manual section 4.2.",
+  "scope": [
+    "TemplateManager",
+    "TemplateMatcher",
+    "HShapeModel",
+    "Domain TemplateMatching DTOs",
+    "ITemplateManager",
+    "ITemplateMatcher",
+    "HalconTemplateManager",
+    "HalconTemplateMatcher",
+    "MainWindow WinForms test UI",
+    ".shm template files"
+  ],
+  "cross_refs": [
+    "src/FlashMeasurementSystem.Domain/TemplateMatching/TemplateMatchResult.cs",
+    "src/FlashMeasurementSystem.Domain/TemplateMatching/TemplateCreationParameters.cs",
+    "src/FlashMeasurementSystem.Domain/TemplateMatching/TemplateMatchingParameters.cs",
+    "src/FlashMeasurementSystem.Application/TemplateMatching/ITemplateManager.cs",
+    "src/FlashMeasurementSystem.Application/TemplateMatching/ITemplateMatcher.cs",
+    "src/FlashMeasurementSystem.Halcon/TemplateMatching/HalconTemplateManager.cs",
+    "src/FlashMeasurementSystem.Halcon/TemplateMatching/HalconTemplateMatcher.cs",
+    "src/FlashMeasurementSystem.App.Wpf/MainWindow.cs",
+    "src/FlashMeasurementSystem.App.Wpf/MainWindow.Designer.cs"
+  ],
+  "locked": false,
+  "precedence": null,
+  "notes": "Type set from MANIFEST_TYPE=SPEC (authoritative). Content corroborates SPEC: interface signatures, DTO field tables, layer contracts, error-handling and out-of-scope sections. No execution tool available to compute SHA-256 of the source path; source_hash derived deterministically from the unique document date/slug for collision-free filename."
+}

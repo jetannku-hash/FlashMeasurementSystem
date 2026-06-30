@@ -1,0 +1,29 @@
+{
+  "source_path": "F:/C#/FlashMeasurementSystem/FlashMeasurementSystem/docs/本手冊/開發檢查清單.md",
+  "type": "DOC",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "FlashMeasurementSystem 開發檢查清單",
+  "summary": "A pre-/post-implementation developer checklist covering architecture layering, HALCON/measurement rules, data locations, testing, and completion reporting.",
+  "scope": [
+    "Domain layer",
+    "Application layer",
+    "Infrastructure layer",
+    "Halcon adapter",
+    "Mes",
+    "Reporting",
+    "App.Wpf (WinForms)",
+    ".NET Framework 4.8 / x64 build",
+    "measurement state machine",
+    "data folders (images/recipes/calibrations/reports)",
+    "tests and verification",
+    "completion reporting"
+  ],
+  "cross_refs": [
+    "docs/本手冊/FlashMeasurementSystem_開發手冊.md",
+    "AGENTS.md"
+  ],
+  "locked": false,
+  "precedence": null,
+  "notes": ""
+}

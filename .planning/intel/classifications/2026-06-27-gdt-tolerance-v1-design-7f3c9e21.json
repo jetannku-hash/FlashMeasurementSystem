@@ -1,0 +1,32 @@
+{
+  "source_path": "F:/C#/FlashMeasurementSystem/FlashMeasurementSystem/docs/superpowers/specs/2026-06-27-gdt-tolerance-v1-design.md",
+  "type": "SPEC",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "GD&T 形位公差 v1 — 設計規格",
+  "summary": "Technical design spec for v1 GD&T geometric tolerances (5 characteristics) covering data model, deviation math, RecipeRunner integration, UI, and tests.",
+  "scope": [
+    "GD&T geometric tolerances",
+    "Roundness",
+    "Straightness",
+    "Parallelism",
+    "Perpendicularity",
+    "Concentricity",
+    "GdtToleranceSpec",
+    "GdtCalculator",
+    "GdtEvaluation",
+    "MeasurementTool",
+    "ToolRunResult",
+    "RecipeRunner",
+    "RecipeEditor",
+    "MainWindow overlay"
+  ],
+  "cross_refs": [
+    "docs/superpowers/plans/2026-06-25_現況到主流量測儀_能力差距清單.md",
+    "scripts/gen_gdt_test_images.py",
+    "data/images"
+  ],
+  "locked": false,
+  "precedence": null,
+  "notes": ""
+}

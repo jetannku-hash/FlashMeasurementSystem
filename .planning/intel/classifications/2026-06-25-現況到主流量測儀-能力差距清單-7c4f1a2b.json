@@ -1,0 +1,26 @@
+{
+  "source_path": "F:/C#/FlashMeasurementSystem/FlashMeasurementSystem/docs/superpowers/plans/2026-06-25_現況到主流量測儀_能力差距清單.md",
+  "type": "SPEC",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "從現況補到主流量測儀 — 能力差距清單",
+  "summary": "Capability gap analysis mapping current measurement features to mainstream metrology, with HALCON operators and effort/risk per gap.",
+  "scope": [
+    "camera calibration / lens distortion / world-plane metrology",
+    "2D metrology model",
+    "geometric primitives (ellipse, arc, rectangle, point)",
+    "GD&T form/position tolerance",
+    "geometric construction operations",
+    "fuzzy robust edge measurement",
+    "GR&R repeatability tooling",
+    "PDF report / MES integration",
+    "autofocus (Z-axis)"
+  ],
+  "cross_refs": [
+    "halcon_pdf/reference/halcon_operator_index.md",
+    "AGENTS.md"
+  ],
+  "locked": false,
+  "precedence": null,
+  "notes": ""
+}

@@ -1,0 +1,25 @@
+{
+  "source_path": "F:/C#/FlashMeasurementSystem/FlashMeasurementSystem/docs/本手冊/FlashMeasurementSystem_開發手冊.md",
+  "type": "DOC",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "一鍵式閃測儀軟體開發手冊",
+  "summary": "Comprehensive developer reference manual for building a one-click flash optical measurement system in C# WPF with HALCON, covering principles, setup, architecture, and per-feature implementation.",
+  "scope": [
+    "閃測儀 (flash measurement instrument)",
+    "C# WPF application",
+    "HALCON 17.12 machine vision",
+    "subpixel edge detection",
+    "calibration (µm/px)",
+    "template matching / shape model",
+    "ROI / geometry fitting",
+    "tolerance evaluation (OK/NG)",
+    "measurement state machine",
+    "recipe (.zcp) and template (.shm) data models",
+    "debugging and tuning guide"
+  ],
+  "cross_refs": [],
+  "locked": false,
+  "precedence": null,
+  "notes": "Type provided authoritatively by manifest (DOC); large prose-heavy development reference manual with tutorials and code examples, no decision or requirement contract. No markdown links to other docs found; only file-format references (.zcp, .shm, appsettings.json)."
+}
