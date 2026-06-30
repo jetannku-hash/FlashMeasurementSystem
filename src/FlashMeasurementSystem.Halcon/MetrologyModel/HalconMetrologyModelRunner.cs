@@ -267,7 +267,8 @@ namespace FlashMeasurementSystem.Halcon.MetrologyModel
                 Name = def.Name,
                 Shape = def.Shape,
                 Success = false,
-                ErrorMessage = message
+                ErrorMessage = message,
+                ValueText = message   // 讓結果表/疊加顯示失敗原因，而非空白
             };
         }
     }

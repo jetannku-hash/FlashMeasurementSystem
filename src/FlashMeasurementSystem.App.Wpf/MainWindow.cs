@@ -1348,9 +1348,11 @@ namespace FlashMeasurementSystem
         {
             if (_loadedRecipe == null) { MessageBox.Show("請先載入配方 (.zcp)。", "Info"); return; }
             if (_imageHelper == null || _imageHelper.CurrentImage == null) { MessageBox.Show("請先載入影像。", "Info"); return; }
-            if (_loadedRecipe.HasReferencePose && !_hasMatch)
+            // 參考姿態守門只對「需要姿態變換的 1D 工具」有意義。純 2D 量測模型（無 1D 工具）
+            // 不需匹配：未匹配時其標稱幾何以絕對影像座標量測（Pass 3 不套 reference_system/align）。
+            if (_loadedRecipe.HasReferencePose && !_hasMatch && _loadedRecipe.Tools.Count > 0)
             {
-                MessageBox.Show("此配方含參考姿態，請先對目前影像執行模板匹配以取得當前工件姿態。", "Info");
+                MessageBox.Show("此配方含參考姿態且有 1D 量測工具，請先對目前影像執行模板匹配以取得當前工件姿態。", "Info");
                 return;
             }
             if (!EnsureRecipeValid()) return;

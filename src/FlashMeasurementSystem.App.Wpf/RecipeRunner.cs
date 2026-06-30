@@ -226,10 +226,13 @@ namespace FlashMeasurementSystem
                 && recipe.MetrologyModel.Objects != null
                 && recipe.MetrologyModel.Objects.Count > 0)
             {
+                // reference_system 與 align 必須成對：唯有真的要對齊（有參考姿態且有匹配）時才設
+                // reference_system，否則標稱幾何視為「絕對影像座標」直接量測。傳 hasAlign 給
+                // hasReferencePose 引數，避免「有參考姿態但未匹配」時 reference_system 把幾何位移錯位。
                 bool hasAlign = recipe.HasReferencePose && hasMatch;
                 MetrologyModelResult mResult = _metrologyRunner.Apply(
                     recipe.MetrologyModel,
-                    recipe.RefRow, recipe.RefCol, recipe.RefAngleRad, recipe.HasReferencePose,
+                    recipe.RefRow, recipe.RefCol, recipe.RefAngleRad, hasAlign,
                     image,
                     hasAlign ? matchRow : 0.0, hasAlign ? matchCol : 0.0, hasAlign ? matchAngleRad : 0.0,
                     hasAlign);
@@ -282,6 +285,9 @@ namespace FlashMeasurementSystem
             }
             if (o.MeasurePointRows != null) res.MetrologyMeasureRows.AddRange(o.MeasurePointRows);
             if (o.MeasurePointCols != null) res.MetrologyMeasureCols.AddRange(o.MeasurePointCols);
+            // 結果表不留空白：ValueText 為空時退回顯示訊息/失敗原因。
+            if (string.IsNullOrEmpty(res.ValueText))
+                res.ValueText = !string.IsNullOrEmpty(o.ErrorMessage) ? o.ErrorMessage : (o.Success ? "(no value)" : "量測失敗");
             return res;
         }
 
