@@ -87,6 +87,9 @@
     <Compile Include="RecipeEditor.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="MetrologyModelEditorForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="Properties\AssemblyInfo.cs" />
     <EmbeddedResource Include="MainWindow.resx">
       <DependentUpon>MainWindow.cs</DependentUpon>

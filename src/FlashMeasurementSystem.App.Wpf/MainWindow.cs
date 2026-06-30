@@ -153,6 +153,8 @@ namespace FlashMeasurementSystem
             // 配方編輯器（M3c-2）：建/編 .zcp。Load Recipe 為執行流程入口，兩者並存。
             var editRecipeButton = new Button { Text = "&Edit Recipe", Width = 84, Height = 26 };
             editRecipeButton.Click += OpenRecipeEditor;
+            var metrologyButton = new Button { Text = "Metrology Model", Width = 110, Height = 26 };
+            metrologyButton.Click += OpenMetrologyModelEditor;
             var oneClickButton = new Button { Text = "一鍵量測", Width = 84, Height = 26 };
             oneClickButton.Click += OneClickMeasureButton_Click;
             _skipIqcCheckBox = new CheckBox
@@ -169,6 +171,7 @@ namespace FlashMeasurementSystem
             _toolTip.SetToolTip(setRefButton, "Set the current match pose as the recipe reference pose");
             _toolTip.SetToolTip(runRecipeButton, "Run the loaded recipe on the current image");
             _toolTip.SetToolTip(editRecipeButton, "Open recipe editor to create or modify recipes");
+            _toolTip.SetToolTip(metrologyButton, "Define the 2D metrology model for the loaded recipe");
             _toolTip.SetToolTip(oneClickButton, "Run full pipeline: IQC → Match → Measure → Evaluate → Report");
             _toolTip.SetToolTip(_skipIqcCheckBox, "Skip image quality check (for testing with synthetic images)");
 
@@ -177,6 +180,7 @@ namespace FlashMeasurementSystem
             topToolbar.Controls.Add(setRefButton);
             topToolbar.Controls.Add(runRecipeButton);
             topToolbar.Controls.Add(editRecipeButton);
+            topToolbar.Controls.Add(metrologyButton);
             topToolbar.Controls.Add(oneClickButton);
             topToolbar.Controls.Add(_skipIqcCheckBox);
             measurementTabPage.Controls.Add(topToolbar);
@@ -1664,6 +1668,51 @@ namespace FlashMeasurementSystem
             _imageHelper.EndArcEdit();
             _imageHelper.ClearOverlay();
             editor.Show(this);
+        }
+
+        // 開啟 2D 量測模型編輯器（modal）。編輯的是目前載入的配方；存檔後回寫 _loadedRecipe
+        // 並（若有路徑）以 RecipeStore 持久化，Run Recipe 立即經 Pass 3 套用此模型。
+        private void OpenMetrologyModelEditor(object sender, EventArgs e)
+        {
+            if (_loadedRecipe == null)
+            {
+                MessageBox.Show(this, "請先載入或建立配方，再定義量測模型。", "Metrology Model",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            int imgW = 0, imgH = 0;
+            if (_imageHelper != null && _imageHelper.CurrentImage != null)
+            {
+                try
+                {
+                    HOperatorSet.GetImageSize(_imageHelper.CurrentImage, out HTuple w, out HTuple h);
+                    imgW = w.I; imgH = h.I;
+                }
+                catch (HalconException) { /* 取不到尺寸用 0：apply 時 adapter 會即時查詢 */ }
+            }
+
+            using (var editor = new MetrologyModelEditorForm(_loadedRecipe, imgW, imgH,
+                (recipe) =>
+                {
+                    _loadedRecipe = recipe;
+                    if (!string.IsNullOrEmpty(_loadedRecipePath))
+                    {
+                        try { _recipeStore.Save(_loadedRecipe, _loadedRecipePath); }
+                        catch (Exception ex)
+                        {
+                            MessageBox.Show(this, "量測模型存檔失敗：" + ex.Message, "Metrology Model",
+                                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        }
+                    }
+                    int count = _loadedRecipe.MetrologyModel != null && _loadedRecipe.MetrologyModel.Objects != null
+                        ? _loadedRecipe.MetrologyModel.Objects.Count : 0;
+                    measureResultLabel.Text = string.Format(CultureInfo.InvariantCulture,
+                        "已更新量測模型（{0} 物件）。可執行 Run Recipe。", count);
+                }))
+            {
+                editor.ShowDialog(this);
+            }
         }
 
         // 單一 overlay slot 的共用底層：把目前有效的偵測/擬合狀態（ROI 框 + 邊緣十字 +
