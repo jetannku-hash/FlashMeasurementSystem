@@ -130,6 +130,7 @@ namespace FlashMeasurementSystem
             this.angleModeCombo = new System.Windows.Forms.ComboBox();
             this.measureAngleButton = new System.Windows.Forms.Button();
             this.measureResultLabel = new System.Windows.Forms.Label();
+            this.emptyStateGuideLabel = new System.Windows.Forms.Label();
             this.statusStrip = new System.Windows.Forms.StatusStrip();
             this.progressLabel = new System.Windows.Forms.ToolStripStatusLabel();
             this.coordLabel = new System.Windows.Forms.ToolStripStatusLabel();
@@ -179,6 +180,7 @@ namespace FlashMeasurementSystem
             this.mainTableLayout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 25F));
             this.mainTableLayout.Controls.Add(this.hWindowControl, 0, 0);
             this.mainTableLayout.Controls.Add(this.rightPanel, 1, 0);
+            this.mainTableLayout.Controls.Add(this.emptyStateGuideLabel, 0, 0);
             this.mainTableLayout.Dock = System.Windows.Forms.DockStyle.Fill;
             this.mainTableLayout.Location = new System.Drawing.Point(0, 0);
             this.mainTableLayout.Name = "mainTableLayout";
@@ -198,7 +200,21 @@ namespace FlashMeasurementSystem
             this.hWindowControl.Size = new System.Drawing.Size(819, 642);
             this.hWindowControl.TabIndex = 0;
             this.hWindowControl.WindowSize = new System.Drawing.Size(819, 642);
-            // 
+            //
+            // emptyStateGuideLabel (N3: overlays the image area with a 3-step guide)
+            //
+            this.emptyStateGuideLabel.BackColor = System.Drawing.Color.FromArgb(200, 20, 20, 20);
+            this.emptyStateGuideLabel.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.emptyStateGuideLabel.Font = new System.Drawing.Font("Segoe UI", 14F, System.Drawing.FontStyle.Bold);
+            this.emptyStateGuideLabel.ForeColor = System.Drawing.Color.White;
+            this.emptyStateGuideLabel.Location = new System.Drawing.Point(3, 3);
+            this.emptyStateGuideLabel.Name = "emptyStateGuideLabel";
+            this.emptyStateGuideLabel.Size = new System.Drawing.Size(819, 642);
+            this.emptyStateGuideLabel.TabIndex = 2;
+            this.emptyStateGuideLabel.Text = "① 載入影像（Load Image）\n② 載入或建立配方（Load / Edit Recipe）\n③ 按一鍵量測（One-Click）";
+            this.emptyStateGuideLabel.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
+            this.emptyStateGuideLabel.BringToFront();
+            //
             // rightPanel
             // 
             this.rightPanel.AutoScroll = true;
@@ -1763,6 +1779,7 @@ namespace FlashMeasurementSystem
         private System.Windows.Forms.Button appendRectButton;
         private System.Windows.Forms.Button measureDistanceButton;
         private System.Windows.Forms.Label measureResultLabel;
+        private System.Windows.Forms.Label emptyStateGuideLabel;
         private System.Windows.Forms.Label angleModeLabel;
         private System.Windows.Forms.ComboBox angleModeCombo;
         private System.Windows.Forms.Button measureAngleButton;
