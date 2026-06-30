@@ -321,7 +321,9 @@ namespace FlashMeasurementSystem
                     };
                     OverallJudgment overall = _judger.Judge(new List<ToleranceItemInput> { input });
                     if (overall.Items.Count > 0) res.IsOk = overall.Items[0].IsOk;
-                    res.ValueText = string.Format(CultureInfo.InvariantCulture, "{0:F2} deg", aligned);
+                    // 與 Fit Line 顯示一致：同時顯示線長與（判定用的）角度。
+                    res.ValueText = string.Format(CultureInfo.InvariantCulture,
+                        "Len={0:F1}px Ang={1:F2}deg", line.Length, aligned);
                 }
                 else
                 {
@@ -329,7 +331,9 @@ namespace FlashMeasurementSystem
                     // 顯示用正規化到無方向慣例 [0,180)：線無方向，0° 與 180° 同一條線。
                     // 否則擬合端點排序會讓水平線顯示 180°，操作員判讀困惑。與 deg-公差判定路徑一致。
                     double displayAngle = AngleNormalizer.ToHalfCircle(line.AngleDeg);
-                    res.ValueText = string.Format(CultureInfo.InvariantCulture, "Ang={0:F2}deg", displayAngle);
+                    // 與 Fit Line 顯示一致：Len=…px Ang=…deg（先前只有角度，缺線長）。
+                    res.ValueText = string.Format(CultureInfo.InvariantCulture,
+                        "Len={0:F1}px Ang={1:F2}deg", line.Length, displayAngle);
                 }
             }
             catch (HalconException ex)

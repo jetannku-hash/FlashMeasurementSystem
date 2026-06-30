@@ -272,7 +272,8 @@ namespace FlashMeasurementSystem
                 // 影像座標 == 視窗像素：之後的 set_tposition / disp_rectangle1 皆以視窗像素計。
                 HOperatorSet.SetPart(_window, 0, 0, winHeight - 1, winWidth - 1);
 
-                const int lineH = 22, col1 = 14, col2 = 170, col3 = 285, boxLeft = 6, boxWidth = 350;
+                // col2→col3 需容納最長的實測值（如 "Len=520.4px Ang=5.00deg"），否則溢出到判定欄。
+                const int lineH = 22, col1 = 14, col2 = 160, col3 = 370, boxLeft = 6, boxWidth = 470;
                 int boxBottom = 6 + (rows.Count + 1) * lineH + 6;
 
                 // 深色背景框（填滿），確保任何影像背景上文字皆可讀。
