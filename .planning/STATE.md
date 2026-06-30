@@ -4,16 +4,16 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 1
 current_phase_name: Operator Experience
-status: planned
-stopped_at: Rolled back broken N3/N2 execution (commit 05b6e0b); Phase 1 re-pending, plans 01-01/01-02 retained for redo
+status: executing
+stopped_at: 01-01 (N3 empty-state guide + N2 PASS/FAIL banner) re-done with Claude, GUI accepted, committed 935060a; next is 01-02 (GUI-03/GUI-04)
 last_updated: "2026-06-30T11:08:15.139Z"
 last_activity: 2026-06-30
-last_activity_desc: Reverted broken empty-state/banner execution; source back to N1 baseline
+last_activity_desc: Re-implemented empty-state guide + PASS/FAIL banner (corrected overlay), GUI accepted
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 2
-  completed_plans: 0
+  completed_plans: 1
   percent: 0
 ---
 
