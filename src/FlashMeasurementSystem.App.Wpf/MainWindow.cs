@@ -200,6 +200,10 @@ namespace FlashMeasurementSystem
             {
                 Text = "Flash Measurement System - Template Matching (Halcon unavailable)";
             }
+
+            // 初始空狀態：尚無影像/配方→顯示三步驟引導；橫幅為灰「—」。
+            UpdateEmptyState();
+            SetResultBanner(0, 0, false);
         }
 
         private void NormalizeTemplateMatchingLayout()
@@ -453,6 +457,42 @@ namespace FlashMeasurementSystem
             _lastMatchCol = 0;
             _lastMatchAngleDeg = 0;
             RefreshMatchContour(); // _hasMatch=false → 釋放並清空快取輪廓
+
+            // 換圖重置：橫幅回灰「—」、重新評估空狀態引導（此時已載入影像→引導隱藏）。
+            SetResultBanner(0, 0, false);
+            UpdateEmptyState();
+        }
+
+        // 空狀態工作流引導（GUI-01 / N3）：視窗尚無影像且無配方時，於影像格顯示三步驟指引；
+        // 一旦載入影像或配方即隱藏，避免不透明面板蓋住已載入內容。
+        // 刻意只覆蓋影像格（column0），且不切換 HALCON 控制項 Visible
+        // （HWindowControlHelper 在建構時擷取 HalconWindow，切換控制項可見性會使其失效）。
+        private void UpdateEmptyState()
+        {
+            bool hasImage = _imageHelper != null && _imageHelper.CurrentImage != null;
+            bool hasRecipe = _loadedRecipe != null;
+            emptyStateGuideLabel.Visible = !hasImage && !hasRecipe;
+        }
+
+        // PASS/FAIL 大字橫幅（GUI-02 / N2）：依配方執行結果設定顏色與文字。
+        // 未量測 / 無有效工具 → 灰「—」；NG>0 → 紅 FAIL（NG n）；否則 OK>0 → 綠 PASS。
+        private void SetResultBanner(int okCount, int ngCount, bool measured)
+        {
+            if (!measured || (okCount == 0 && ngCount == 0))
+            {
+                resultBannerPanel.BackColor = System.Drawing.Color.FromArgb(160, 160, 160);
+                resultBannerLabel.Text = "—";
+            }
+            else if (ngCount > 0)
+            {
+                resultBannerPanel.BackColor = System.Drawing.Color.FromArgb(192, 0, 0);
+                resultBannerLabel.Text = string.Format(CultureInfo.InvariantCulture, "FAIL（NG {0}）", ngCount);
+            }
+            else
+            {
+                resultBannerPanel.BackColor = System.Drawing.Color.FromArgb(0, 128, 0);
+                resultBannerLabel.Text = "PASS";
+            }
         }
 
         // 重算快取匹配輪廓：先釋放舊的，若目前有匹配則依 _lastMatch* 算一次新的。
@@ -1222,6 +1262,7 @@ namespace FlashMeasurementSystem
                 _loadedRecipePath = null;
                 measureResultLabel.Text = "載入配方失敗: " + ex.Message;
             }
+            UpdateEmptyState();
         }
 
         // 以「目前的模板匹配姿態」設為配方的參考姿態，並存回原檔。
@@ -1419,6 +1460,7 @@ namespace FlashMeasurementSystem
                 _loadedRecipe != null ? _loadedRecipe.Name : "", results.Count, okCount, ngCount, pixelSizeSource);
             measureResultLabel.ForeColor = ngCount > 0 ? System.Drawing.Color.DarkRed
                 : (okCount > 0 ? System.Drawing.Color.DarkGreen : System.Drawing.SystemColors.ControlText);
+            SetResultBanner(okCount, ngCount, true);
         }
 
         // Pixel size 來源：配方 CalibrationProfileId 有設且檔案存在 → 用校正檔；否則退回量測分頁。
@@ -1569,6 +1611,7 @@ namespace FlashMeasurementSystem
                     measureResultLabel.Text = string.Format(CultureInfo.InvariantCulture,
                         "已從編輯器更新配方 '{0}'（{1} 工具）。可執行 Run Recipe。",
                         recipe.Name, recipe.Tools.Count);
+                    UpdateEmptyState();
                 });
             // 編輯器接管共用影像視窗做 ROI 編輯：先清掉主視窗殘留的偵測/擬合 overlay
             // （Edge Detection 藍框、邊緣十字、Run Recipe 結果等），讓編輯器從乾淨影像開始。

@@ -130,11 +130,17 @@ namespace FlashMeasurementSystem
             this.angleModeCombo = new System.Windows.Forms.ComboBox();
             this.measureAngleButton = new System.Windows.Forms.Button();
             this.measureResultLabel = new System.Windows.Forms.Label();
+            this.imageHostPanel = new System.Windows.Forms.Panel();
+            this.resultBannerPanel = new System.Windows.Forms.Panel();
+            this.resultBannerLabel = new System.Windows.Forms.Label();
+            this.emptyStateGuideLabel = new System.Windows.Forms.Label();
             this.statusStrip = new System.Windows.Forms.StatusStrip();
             this.progressLabel = new System.Windows.Forms.ToolStripStatusLabel();
             this.coordLabel = new System.Windows.Forms.ToolStripStatusLabel();
             this.imageSizeLabel = new System.Windows.Forms.ToolStripStatusLabel();
             this.mainTableLayout.SuspendLayout();
+            this.imageHostPanel.SuspendLayout();
+            this.resultBannerPanel.SuspendLayout();
             this.rightPanel.SuspendLayout();
             this.featureTabControl.SuspendLayout();
             this.inspectionTabPage.SuspendLayout();
@@ -177,18 +183,67 @@ namespace FlashMeasurementSystem
             this.mainTableLayout.ColumnCount = 2;
             this.mainTableLayout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 75F));
             this.mainTableLayout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 25F));
-            this.mainTableLayout.Controls.Add(this.hWindowControl, 0, 0);
-            this.mainTableLayout.Controls.Add(this.rightPanel, 1, 0);
+            this.mainTableLayout.Controls.Add(this.resultBannerPanel, 0, 0);
+            this.mainTableLayout.Controls.Add(this.imageHostPanel, 0, 1);
+            this.mainTableLayout.Controls.Add(this.rightPanel, 1, 1);
+            this.mainTableLayout.SetColumnSpan(this.resultBannerPanel, 2);
             this.mainTableLayout.Dock = System.Windows.Forms.DockStyle.Fill;
             this.mainTableLayout.Location = new System.Drawing.Point(0, 0);
             this.mainTableLayout.Name = "mainTableLayout";
-            this.mainTableLayout.RowCount = 1;
+            this.mainTableLayout.RowCount = 2;
+            this.mainTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 56F));
             this.mainTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 100F));
             this.mainTableLayout.Size = new System.Drawing.Size(1100, 648);
             this.mainTableLayout.TabIndex = 0;
-            // 
+            //
+            // imageHostPanel
+            //
+            // 影像格容器：HWindowControl 與空狀態引導同置於此普通 Panel，
+            // 以 Z-order/BringToFront 疊放（TableLayoutPanel 單一儲存格不支援兩個控制項，
+            // 直接放會把第二個擠到右欄）。
+            this.imageHostPanel.Controls.Add(this.emptyStateGuideLabel);
+            this.imageHostPanel.Controls.Add(this.hWindowControl);
+            this.imageHostPanel.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.imageHostPanel.Location = new System.Drawing.Point(3, 59);
+            this.imageHostPanel.Margin = new System.Windows.Forms.Padding(0);
+            this.imageHostPanel.Name = "imageHostPanel";
+            this.imageHostPanel.Size = new System.Drawing.Size(819, 586);
+            this.imageHostPanel.TabIndex = 0;
+            //
+            // resultBannerPanel
+            //
+            this.resultBannerPanel.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(160)))), ((int)(((byte)(160)))), ((int)(((byte)(160)))));
+            this.resultBannerPanel.Controls.Add(this.resultBannerLabel);
+            this.resultBannerPanel.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.resultBannerPanel.Location = new System.Drawing.Point(3, 3);
+            this.resultBannerPanel.Name = "resultBannerPanel";
+            this.resultBannerPanel.Size = new System.Drawing.Size(1094, 50);
+            this.resultBannerPanel.TabIndex = 2;
+            //
+            // resultBannerLabel
+            //
+            this.resultBannerLabel.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.resultBannerLabel.Font = new System.Drawing.Font("Segoe UI", 24F, System.Drawing.FontStyle.Bold);
+            this.resultBannerLabel.ForeColor = System.Drawing.Color.White;
+            this.resultBannerLabel.Name = "resultBannerLabel";
+            this.resultBannerLabel.TabIndex = 0;
+            this.resultBannerLabel.Text = "—";
+            this.resultBannerLabel.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
+            //
+            // emptyStateGuideLabel
+            //
+            this.emptyStateGuideLabel.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(37)))), ((int)(((byte)(37)))), ((int)(((byte)(38)))));
+            this.emptyStateGuideLabel.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.emptyStateGuideLabel.Font = new System.Drawing.Font("Segoe UI", 14F, System.Drawing.FontStyle.Bold);
+            this.emptyStateGuideLabel.ForeColor = System.Drawing.Color.White;
+            this.emptyStateGuideLabel.Name = "emptyStateGuideLabel";
+            this.emptyStateGuideLabel.TabIndex = 3;
+            this.emptyStateGuideLabel.Text = "① 載入影像（Load Image）\n② 載入或建立配方（Load / Edit Recipe）\n③ 按一鍵量測（One-Click）";
+            this.emptyStateGuideLabel.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
+            this.emptyStateGuideLabel.BringToFront();
+            //
             // hWindowControl
-            // 
+            //
             this.hWindowControl.BackColor = System.Drawing.Color.Gray;
             this.hWindowControl.BorderColor = System.Drawing.Color.Gray;
             this.hWindowControl.Dock = System.Windows.Forms.DockStyle.Fill;
@@ -1695,6 +1750,8 @@ namespace FlashMeasurementSystem
             this.Name = "MainWindow";
             this.Text = "Flash Measurement System - Template Matching";
             this.mainTableLayout.ResumeLayout(false);
+            this.imageHostPanel.ResumeLayout(false);
+            this.resultBannerPanel.ResumeLayout(false);
             this.rightPanel.ResumeLayout(false);
             this.featureTabControl.ResumeLayout(false);
             this.inspectionTabPage.ResumeLayout(false);
@@ -1763,6 +1820,10 @@ namespace FlashMeasurementSystem
         private System.Windows.Forms.Button appendRectButton;
         private System.Windows.Forms.Button measureDistanceButton;
         private System.Windows.Forms.Label measureResultLabel;
+        private System.Windows.Forms.Panel imageHostPanel;
+        private System.Windows.Forms.Panel resultBannerPanel;
+        private System.Windows.Forms.Label resultBannerLabel;
+        private System.Windows.Forms.Label emptyStateGuideLabel;
         private System.Windows.Forms.Label angleModeLabel;
         private System.Windows.Forms.ComboBox angleModeCombo;
         private System.Windows.Forms.Button measureAngleButton;
