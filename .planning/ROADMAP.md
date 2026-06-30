@@ -18,7 +18,7 @@ required. Hardware- and external-spec-blocked work is tracked separately (see De
 - Integer phases (1, 2, 3): Planned milestone work
 - Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
 
-- [ ] **Phase 1: Operator Experience** - Empty-state guidance, PASS/FAIL banner, tolerance-limit display, in-editor trial measure
+- [x] **Phase 1: Operator Experience** - Empty-state guidance, PASS/FAIL banner, tolerance-limit display, in-editor trial measure
 - [ ] **Phase 2: 2D Metrology Model** - Auto-placed measure rectangles and robust one-click multi-feature measurement (mainstream differentiator)
 - [ ] **Phase 3: Production Robustness** - Fuzzy/robust edge measurement + GR&R/repeatability self-test
 - [ ] **Phase 4: PDF Reporting** - Formatted PDF measurement reports beyond CSV
@@ -127,7 +127,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Operator Experience | 0/2 | Not started | - |
+| 1. Operator Experience | 2/2 | Complete | 2026-06-30 |
 | 2. 2D Metrology Model | 0/TBD | Not started | - |
 | 3. Production Robustness | 0/TBD | Not started | - |
 | 4. PDF Reporting | 0/TBD | Not started | - |
