@@ -67,6 +67,7 @@
     <Compile Include="CoordinateSystem\ICoordinateMapper.cs" />
     <Compile Include="Calibration\ICalibrator.cs" />
     <Compile Include="Calibration\ICalibrationStore.cs" />
+    <Compile Include="MetrologyModel\IMetrologyModelRunner.cs" />
     <Compile Include="Roi\IRecipeStore.cs" />
     <Compile Include="Reporting\IMeasurementReportWriter.cs" />
   </ItemGroup>

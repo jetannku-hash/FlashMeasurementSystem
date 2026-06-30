@@ -147,6 +147,8 @@ namespace FlashMeasurementSystem.Tests
             Console.WriteLine("RecipeValidatorTests passed");
             CsvReportWriterTests.Run();
             Console.WriteLine("CsvReportWriterTests passed");
+            MetrologyModelDomainTests.Run();
+            Console.WriteLine("MetrologyModelDomainTests passed");
             Console.WriteLine("EdgeDetectionDomainTests passed");
             return 0;
         }

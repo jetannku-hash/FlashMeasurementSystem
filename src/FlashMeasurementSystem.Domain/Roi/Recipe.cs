@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using FlashMeasurementSystem.Domain.MetrologyModel;
 
 namespace FlashMeasurementSystem.Domain.Roi
 {
@@ -17,7 +18,9 @@ namespace FlashMeasurementSystem.Domain.Roi
         // v5：GD&T 形位公差工具（roundness/straightness/parallelism/perpendicularity/
         //     concentricity + MeasurementTool.Gdt）。純加欄位，向後相容、無遷移碼：
         //     舊檔載入時 Gdt=null、無 GD&T 工具，行為不變。
-        public int SchemaVersion { get; set; } = 5;
+        // v6：2D 量測模型（MetrologyModel，加性 nullable 欄）。純加欄位、向後相容、無遷移碼：
+        //     舊檔載入時 MetrologyModel=null，1D 流程行為不變。
+        public int SchemaVersion { get; set; } = 6;
         public string RecipeId { get; set; } = "";
         public string Name { get; set; } = "";
 
@@ -33,6 +36,10 @@ namespace FlashMeasurementSystem.Domain.Roi
         public bool HasReferencePose { get; set; }
 
         public List<MeasurementTool> Tools { get; set; } = new List<MeasurementTool>();
+
+        // v6：選用的 2D 量測模型；null = 無（向後相容，舊 .zcp 載入時為 null、行為不變）。
+        // 與 Tools 並存：執行期 RecipeRunner 在 1D passes 之後加一個 metrology pass。
+        public MetrologyModelDef MetrologyModel { get; set; } = null;
 
         public DateTime CreatedAt { get; set; }
         public DateTime ModifiedAt { get; set; }

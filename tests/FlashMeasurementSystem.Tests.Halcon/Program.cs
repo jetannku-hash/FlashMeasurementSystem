@@ -18,6 +18,7 @@ namespace FlashMeasurementSystem.Tests.Halcon
                 AngleMeasurerTests.Run,
                 ImageQualityCheckerTests.Run,
                 TemplateMatcherTests.Run,
+                MetrologyModelHalconTests.Run,
             };
 
             int passed = 0, failed = 0;

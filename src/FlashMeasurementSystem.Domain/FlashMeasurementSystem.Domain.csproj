@@ -94,6 +94,11 @@
     <Compile Include="Gdt\GdtToleranceSpec.cs" />
     <Compile Include="Gdt\GdtCalculator.cs" />
     <Compile Include="Gdt\GdtEvaluation.cs" />
+    <Compile Include="MetrologyModel\MetrologyObjectType.cs" />
+    <Compile Include="MetrologyModel\MetrologyObjectDef.cs" />
+    <Compile Include="MetrologyModel\MetrologyModelDef.cs" />
+    <Compile Include="MetrologyModel\MetrologyObjectResult.cs" />
+    <Compile Include="MetrologyModel\MetrologyModelResult.cs" />
     <Compile Include="Roi\MeasurementTool.cs" />
     <Compile Include="Roi\Recipe.cs" />
     <Compile Include="Roi\RecipeIssue.cs" />
