@@ -62,7 +62,24 @@ Plans:
   3. A metrology model saves into a recipe and runs alongside the existing 1D pipeline without breaking it
   4. The operator can measure multiple features of a part with a single click
 
-**Plans**: TBD
+**Plans**: 4 plans
+Plans:
+**Wave 1**
+
+- [ ] 02-01-PLAN.md — Domain DTOs + Application interface + additive Recipe v6 + Wave-0 test scaffolds (MET2D-01, MET2D-03) — Wave 1
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 02-02-PLAN.md — HalconMetrologyModelRunner adapter + reference_system confirmation + synthetic-image fit tests (MET2D-02, MET2D-04) — Wave 2 (depends on 02-01)
+
+**Wave 3** *(blocked on Wave 2)*
+
+- [ ] 02-03-PLAN.md — RecipeRunner additive Pass 3 + MainWindow injection + metrology overlay (MET2D-03, MET2D-04) — Wave 3 (depends on 02-01, 02-02)
+
+**Wave 4** *(blocked on Wave 3)*
+
+- [ ] 02-04-PLAN.md — Metrology-model editor + synthetic images/ground-truth sheet + GUI acceptance (MET2D-01, MET2D-02, MET2D-04) — Wave 4 (depends on 02-01, 02-02, 02-03)
+
 **UI hint**: yes
 
 ### Phase 3: Production Robustness
@@ -128,7 +145,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Operator Experience | 2/2 | Complete | 2026-06-30 |
-| 2. 2D Metrology Model | 0/TBD | Not started | - |
+| 2. 2D Metrology Model | 0/4 | Not started | - |
 | 3. Production Robustness | 0/TBD | Not started | - |
 | 4. PDF Reporting | 0/TBD | Not started | - |
 | 5. Application Solutions Library | 0/TBD | Not started | - |
