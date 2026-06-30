@@ -90,7 +90,10 @@ namespace FlashMeasurementSystem
             int r = 0;
 
             _nameBox = (TextBox)AddRow(t, "Name", ref r, new TextBox { Dock = DockStyle.Fill });
-            _nameBox.TextChanged += (s, e) => { if (!_updating && _selected != null) { _selected.Name = _nameBox.Text; RefreshSelectedItemText(); } };
+            // 只更新名稱欄位值；清單標籤改在離開欄位時刷新。直接在 TextChanged 重設 ListBox.Items[idx]
+            // 會把焦點搶回清單，導致每打一字就跳開。
+            _nameBox.TextChanged += (s, e) => { if (!_updating && _selected != null) _selected.Name = _nameBox.Text; };
+            _nameBox.Leave += (s, e) => { if (!_updating) RefreshSelectedItemText(); };
 
             _shapeCombo = (ComboBox)AddRow(t, "Shape", ref r, new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList });
             _shapeCombo.Items.AddRange(new object[] { "Line", "Circle", "Ellipse", "Rectangle" });
