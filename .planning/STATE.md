@@ -2,17 +2,17 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 1
-current_phase_name: Operator Experience
-status: phase_complete
-stopped_at: Phase 1 complete — 01-01 (N3/N2) + 01-02 (N5/A1) done with Claude, GUI accepted, committed (935060a, 58eea73, aec4fa7)
+current_phase: 2
+current_phase_name: 2D Metrology Model
+status: planned
+stopped_at: Phase 2 planned (4 waves, plan-checker PASS) — ready for /gsd-execute-phase 2 with Claude. Phase 1 complete.
 last_updated: "2026-06-30T11:08:15.139Z"
 last_activity: 2026-06-30
-last_activity_desc: Completed Phase 1 Operator Experience (empty-state guide, PASS/FAIL banner, tolerance preview, in-editor trial measure)
+last_activity_desc: Planned Phase 2 (2D metrology model) — research + 4 plans + plan-checker PASS, committed fdf760c
 progress:
   total_phases: 5
   completed_phases: 1
-  total_plans: 2
+  total_plans: 6
   completed_plans: 2
   percent: 20
 ---
