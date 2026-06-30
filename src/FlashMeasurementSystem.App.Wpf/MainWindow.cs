@@ -200,7 +200,6 @@ namespace FlashMeasurementSystem
             {
                 Text = "Flash Measurement System - Template Matching (Halcon unavailable)";
             }
-            UpdateEmptyState();
         }
 
         private void NormalizeTemplateMatchingLayout()
@@ -421,7 +420,6 @@ namespace FlashMeasurementSystem
                 _imageHelper.DisplayImage(image);
                 ClearFittingState();
                 ClearResultDisplays();
-                UpdateEmptyState();
                 HOperatorSet.GetImageSize(image, out HTuple w, out HTuple h);
                 imageSizeLabel.Text = $"Size: {w.I} x {h.I}";
             }
@@ -429,25 +427,6 @@ namespace FlashMeasurementSystem
             {
                 MessageBox.Show($"Failed to load image: {ex.Message}", "Error");
             }
-        }
-
-        // N3 空狀態引導：依「影像 / 配方」狀態切換 emptyStateGuideLabel 的顯示。
-        // 無配方且無影像 → 顯示全亮白字三步驟；有影像但無配方 → 整段轉灰（步驟①完成）；
-        // 已載入配方 → 隱藏（操作者已進入量測流程，不再需要引導）。
-        // 僅在 UI thread 呼叫（建構式、載入/清除影像、載入/編輯配方等使用者流程）。
-        private void UpdateEmptyState()
-        {
-            if (emptyStateGuideLabel == null) return;
-            if (_loadedRecipe != null)
-            {
-                emptyStateGuideLabel.Visible = false;
-                return;
-            }
-            bool hasImage = _imageHelper != null && _imageHelper.CurrentImage != null;
-            emptyStateGuideLabel.Visible = true;
-            emptyStateGuideLabel.ForeColor = hasImage
-                ? Color.Gainsboro
-                : Color.White;
         }
 
         // 換圖後清掉所有結果顯示。ClearFittingState 只清擬合狀態欄位與兩個 fitting label，
@@ -465,8 +444,6 @@ namespace FlashMeasurementSystem
             measureResultLabel.Text = string.Empty;
             // 重置顏色：否則上一次配方 NG(紅)/OK(綠) 會殘留並染色後續無關文字。
             measureResultLabel.ForeColor = SystemColors.ControlText;
-            SetResultBanner(0, 0, false);
-            UpdateEmptyState();
 
             // 換圖必須清掉匹配姿態，否則 Run Recipe 守門（HasReferencePose && !_hasMatch）
             // 會放行，並用前一張影像的 _lastMatch* 對新影像做 ROI 變換，畫出錯誤的 OK/NG。
@@ -1238,14 +1215,12 @@ namespace FlashMeasurementSystem
                     "已載入配方 '{0}'（{1} 工具，SchemaVer {2}{3}）",
                     _loadedRecipe.Name, _loadedRecipe.Tools.Count, _loadedRecipe.SchemaVersion,
                     _loadedRecipe.HasReferencePose ? "，含參考姿態" : "，無參考姿態（需 Set Ref）");
-                UpdateEmptyState();
             }
             catch (Exception ex)
             {
                 _loadedRecipe = null;
                 _loadedRecipePath = null;
                 measureResultLabel.Text = "載入配方失敗: " + ex.Message;
-                UpdateEmptyState();
             }
         }
 
@@ -1444,30 +1419,6 @@ namespace FlashMeasurementSystem
                 _loadedRecipe != null ? _loadedRecipe.Name : "", results.Count, okCount, ngCount, pixelSizeSource);
             measureResultLabel.ForeColor = ngCount > 0 ? System.Drawing.Color.DarkRed
                 : (okCount > 0 ? System.Drawing.Color.DarkGreen : System.Drawing.SystemColors.ControlText);
-            SetResultBanner(okCount, ngCount, true);
-        }
-
-        // N2 大字 PASS/FAIL 橫幅：依 okCount/ngCount 切換顏色與文字。
-        // 未量測(measured=false) → 灰底 "—"；有 NG → 紅底 "FAIL（NG n）"；
-        // 全 OK → 綠底 "PASS"；okCount==0 && ngCount==0 但已量測 → 視為灰 "—"（無量測工具）。
-        private void SetResultBanner(int okCount, int ngCount, bool measured)
-        {
-            if (resultBannerPanel == null || resultBannerLabel == null) return;
-            if (measured && ngCount > 0)
-            {
-                resultBannerPanel.BackColor = Color.FromArgb(192, 0, 0);
-                resultBannerLabel.Text = string.Format(CultureInfo.InvariantCulture, "FAIL（NG {0}）", ngCount);
-            }
-            else if (measured && ngCount == 0 && okCount > 0)
-            {
-                resultBannerPanel.BackColor = Color.FromArgb(0, 128, 0);
-                resultBannerLabel.Text = "PASS";
-            }
-            else
-            {
-                resultBannerPanel.BackColor = Color.FromArgb(160, 160, 160);
-                resultBannerLabel.Text = "—";
-            }
         }
 
         // Pixel size 來源：配方 CalibrationProfileId 有設且檔案存在 → 用校正檔；否則退回量測分頁。
@@ -1618,7 +1569,6 @@ namespace FlashMeasurementSystem
                     measureResultLabel.Text = string.Format(CultureInfo.InvariantCulture,
                         "已從編輯器更新配方 '{0}'（{1} 工具）。可執行 Run Recipe。",
                         recipe.Name, recipe.Tools.Count);
-                    UpdateEmptyState();
                 });
             // 編輯器接管共用影像視窗做 ROI 編輯：先清掉主視窗殘留的偵測/擬合 overlay
             // （Edge Detection 藍框、邊緣十字、Run Recipe 結果等），讓編輯器從乾淨影像開始。
