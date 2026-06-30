@@ -1,6 +1,14 @@
+# ⚠️ DEPRECATED — 本檔已退役（2026-06-30）
+
+> **canonical 已改為 `.planning/ROADMAP.md`（GSD，納管 git）。**
+> 本檔的 §5 延後決策理由 + §6 里程碑已併入 `.planning/PROJECT.md` 的 Key Decisions / Completed Milestones。
+> 保留僅供歷史對照，**請勿更新**；新規劃一律走 `.planning/`。確認無誤後可刪除本檔。
+
+---
+
 # ROADMAP — 待辦、決策與工作紀錄（單一儀表板）
 
-> 最後更新：2026-06-27
+> 最後更新：2026-06-29
 > 用途：全專案待辦/卡關/延後決策的**單一索引**。本檔只記「狀態 + 解鎖條件 + 連結」，細節在各 spec/plan/memory，不在此重抄。
 > 維護：每次任務開工/完工、或討論後做出延後決策時，更新對應列與「決策紀錄」。
 > 相關總表：能力差距清單 `docs/superpowers/plans/2026-06-25_現況到主流量測儀_能力差距清單.md`（A1–A5 / B1–B4 全貌）。
@@ -19,7 +27,8 @@
 
 | 項目 | 狀態 | 連結 | 備註 |
 |------|------|------|------|
-| **GD&T 形位公差 v1**（真圓度/真直度/平行/垂直/同心，單一基準） | **T1–T9 完成並 commit；待 T10 GUI 目視 + merge** | spec `specs/2026-06-27-gdt-tolerance-v1-design.md`、plan `plans/2026-06-27-gdt-tolerance-v1.md` | 分支 `feature/gdt-tolerance-v1`（8 commit，d47be03…81b1bb6）。Domain 三項幾何+單邊判定閉合解全綠；RecipeRunner/編輯器/overlay/報表/schema v5 接完；合成影像已生。**剩**：用 `data/images/gdt_*.png` 在 GUI 逐項目視（建工具→量測→overlay/OK-NG/CSV），通過後 merge 回 main。收 A5 殘留（切線 defer、基準縮為單一 datum）。真實準度仍待硬體。 |
+| （無進行中項目） | — | — | GD&T v1、N1 配方驗證皆已完成並 merge（見 §6）。 |
+| **下一步（建議，待拍板）** | 未開始 | [[gui-optimization-plan-2026-06-25]] | 熱身：GUI **N3 空狀態引導 + N2 PASS/FAIL 橫幅**（各 ~1hr、零風險、立刻見效）→ 主攻：**A2 2D 量測模型**（§2，主流量測儀分水嶺）。 |
 
 ---
 
@@ -29,23 +38,23 @@
 |------|-----------|------|------|
 | **A2 2D Metrology Model** | 能力差距清單 A2 | ~10–16 天 | 主流量測儀分水嶺；可在 replay 影像驗。較大，需設計 GUI 佈設與既有 recipe 整合。 |
 | **應用級量測方案庫**（齒輪數/節距、PCD、針距、直徑、角度…） | [[measurement-solutions-direction]]、`plans/2026-06-26_應用落地量測方案庫_建議文件.md` | 分批 | 把現有基元包成「選任務→框特徵→出值+PASS/FAIL+報表」。齒輪分析為首個範本。**使用者決定：基元做完才動。** |
-| **GUI 優化 backlog（12 項）** | [[gui-optimization-plan-2026-06-25]]、`plans/GUI建議優化項目計畫書.md` | 各 0.5–4 hr | 最高值：N1 配方驗證（目前完全無）。待審閱。起手建議 N3+N2→N5→N1。 |
+| **GUI 優化 backlog（剩 11 項）** | [[gui-optimization-plan-2026-06-25]]、`plans/GUI建議優化項目計畫書.md` | 各 0.5–4 hr | **N1 配方驗證 ✅ 已完成（見 §6）**。剩：N3 空狀態引導、N2 PASS/FAIL 橫幅、N5 公差上下限即時顯示、A1 編輯器內試測、N6 快捷鍵/拖放、A3 即時邊緣預覽…起手建議 N3+N2→N5。 |
 | **B2 GR&R / 重複性自助工具** | 能力差距清單 B2、手冊 §6.3 | ~3–5 天 | 純統計，現在即可跑、可 demo 系統能力。 |
 | **B1 fuzzy / robust 邊緣量測** | 能力差距清單 B1 | ~3–5 天 | 抗雜訊/反光，量產穩健度。與現有 measure_pos 並存。 |
 | **B3 PDF 報表**（MES 另計，見 §4） | 能力差距清單 B3 | ~3–5 天 | 現只有 CSV。純整合，不卡硬體。 |
 | **HALCON adapter 真實影像單元測試** | [[m4-post-completion-gap-analysis]] | ~4–6 天 | 需 HALCON 授權執行；目前 adapter 僅 GUI 手動驗。**部分卡「真實影像」**（合成影像可先做一部分）。 |
-| **UI overlay 審查殘留項**（次要 UI 顯示缺陷） | [[ui-overlay-audit-2026-06-27]] | 各 ~0.5–2 hr | 2026-06-27 三代理審查後**已修 8 項主要缺陷**；剩低頻/設計層級項待處理（見下）。 |
+| **UI overlay 審查殘留項**（次要 UI 顯示缺陷） | [[ui-overlay-audit-2026-06-27]] | ~~各 ~0.5–2 hr~~ ✅ 已修 | 2026-06-27 三代理審查共 13 項：主要 8 項於 `feature/gdt-tolerance-v1` 修復；殘留 5 項（H2/M2/L1/L2/Tab）於 6/28 `fix/ui-overlay-residuals` 修復並 merge 回 main。**全部完成。** |
 
 ### UI overlay 審查殘留項（細目，2026-06-27）
-> 主要缺陷已修並 commit（branch `feature/gdt-tolerance-v1`）；以下為刻意留待之後處理的次要項。詳見 [[ui-overlay-audit-2026-06-27]]。
+> ✅ **全部已修並 merge**（6/28，branch `fix/ui-overlay-residuals`，commit `395f55d`→merge `32961b8`）。以下保留為歷史記錄。詳見 [[ui-overlay-audit-2026-06-27]]。
 
-| 項 | 內容 | 嚴重度 | 注意 |
-|----|------|--------|------|
-| **H2 殘留** | RunMatching、獨立 Measure Distance/Angle/Contour 的 overlay producer 也應在接管前結束殘留 rect2/arc 編輯把手（Run Recipe/一鍵/Detect Arc 已修） | Med | **不可**塞進 `SetPersistentOverlayAction`——`ShowFittingOverlay` 在 Detect 後也呼叫它，會誤殺邊緣 ROI 編輯把手工作流；須維持 per-producer |
-| **M2（設計）** | Inspection「Draw ROI Region」(template ROI) 與 edge ROI 共用 `RoiSelected`→`OnImageRoiSelected`，template 繪製會誤灌進 edge 狀態；且 `roiModeCheck` 畫完不取消勾選 | Med | 建議 template 改走專屬 `RequestRoi` |
-| **L2（ownership）** | RecipeEditor 非模態與主視窗共用 `_imageHelper`，關閉時 `EndRect2Edit` 會誤關主視窗自己的邊緣編輯；兩者搶單一編輯槽 | Low | 需 edit 槽 ownership 追蹤 |
-| **L1** | CreateTemplate「Model saved」框畫在 persistent slot 外，pan/zoom 後消失 | Low | 純 cosmetic；改畫進 persistent overlay |
-| **Tab 切換** | 切換分頁無 handler 取消進行中的 ROI draw / 編輯 / pending RequestRoi | Low | 影像區共用，影響低 |
+| 項 | 內容 | 狀態 |
+|----|------|------|
+| **H2 殘留** | RunMatching/DrawMeasurement/DrawAngle/DrawContour overlay producer 接管前結束把手（5 處；ShowFittingOverlay 保留） | ✅ |
+| **M2（設計）** | roiModeCheck 畫完後同步取消勾選 | ✅ |
+| **L1** | "Model saved" 改走 persistent overlay | ✅ |
+| **L2（ownership）** | RecipeEditor._editorOwnsEdit 追蹤編輯持有權 | ✅ |
+| **Tab 切換** | FeatureTabControl_SelectedIndexChanged 清除把手/ROI draw | ✅ |
 
 ---
 
@@ -92,8 +101,11 @@
 | M0–M4 核心（影像品質→樣板→邊緣→線/圓擬合→距離/角度→公差→標註→一鍵流程） | [[session_checkpoint_2026-06-22]] |
 | A3 幾何基元擴充（橢圓/矩形/弧/點，含弧形卡尺互動編輯） | [[arc-caliper-usability-improvements]] |
 | A5 幾何構造（intersection/midline/projection），併入 main | [[a5-geometry-construction]] |
+| **GD&T 形位公差 v1**（真圓度/真直度/平行/垂直/同心，單邊判定），併入 main `375c5c2` | [[gdt-tolerance-v1]] |
+| **N1 配方驗證**（執行前診斷：Error 阻擋/Warning 詢問），併入 main `8abaa99`（`--no-ff`） | [[gui-optimization-plan-2026-06-25]] |
 | Deep audit P0/P1/P2 修復 | [[deep-audit-2026-06-25]] |
 | GUI 審查（前一輪 8/12 已修） | [[gui-review-2026-06-24]] |
+| UI overlay 殘留 13 項全修（merge `32961b8`） | [[ui-overlay-audit-2026-06-27]] |
 
 ---
 
