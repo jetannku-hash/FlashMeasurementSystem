@@ -1,3 +1,538 @@
+# GSD Phase 1 & 2 — Consolidated Spec / Design (backup)
+
+> 由 `.planning/` 於 2026-07-01 整合備份（移除 GSD 工具前）。內容為專案總述、需求、路線圖，以及 Phase 2 的鎖定決策(CONTEXT)、技術研究(RESEARCH)、驗證策略(VALIDATION)。日期以昨日 2026-06-30 命名。原始逐檔內容依序保留於下。
+
+---
+
+
+<!-- ===================================================== -->
+# 原始檔：.planning/PROJECT.md
+<!-- ===================================================== -->
+
+# FlashMeasurementSystem
+
+## What This Is
+
+A Windows machine-vision dimensional measurement system ("一鍵式閃測儀") for flash/part
+metrology. A single operator builds a measurement recipe and runs pass/fail dimensional
+measurements on replay images using MVTec HALCON 17.12. It already does 1D caliper +
+XLD line/circle/ellipse/rectangle/arc fitting + template matching + geometry construction
++ GD&T form tolerance, with CSV reporting. Built for one operator and one builder.
+
+## Core Value
+
+An operator can build a measurement recipe and run reliable pass/fail dimensional
+measurements on replay images — with results they can trust and report. The north star
+is reaching mainstream measurement-instrument capability.
+
+## Requirements
+
+### Validated
+
+<!-- Shipped and confirmed (baseline; see Completed Milestones below). -->
+
+- ✓ M0–M4 core pipeline: image quality → template match → subpixel edge → line/circle fit → distance/angle → tolerance OK/NG → overlay annotation → one-click flow
+- ✓ A3 geometry-primitive breadth: ellipse / arc / rectangle / point fitting (incl. interactive arc caliper)
+- ✓ A5 geometry construction: line intersection / symmetric midline / point-to-line projection
+- ✓ A4 (partial) GD&T form tolerance v1: roundness, straightness, parallelism, perpendicularity, concentricity (single-datum, single-sided)
+- ✓ N1 recipe validation: pre-run diagnostics (Error blocks / Warning prompts)
+- ✓ Pixel→mm calibration (2-point isotropic), recipe persistence, CSV reporting
+
+### Active
+
+<!-- Forward scope toward mainstream measurement-instrument capability. See ROADMAP.md. -->
+
+- [ ] Operator experience polish — empty-state guidance, PASS/FAIL banner, tolerance-limit display, in-editor trial measure
+- [ ] A2 2D Metrology Model — auto-placed measure rectangles on nominal geometry; robust multi-feature one-click measure (the mainstream differentiator)
+- [ ] Production robustness — fuzzy/robust edge measurement (B1) + GR&R / repeatability self-test (B2)
+- [ ] PDF measurement reporting (B3 PDF)
+- [ ] Application-level measurement solutions library — gear count/pitch, PCD, diameter, pin-pitch templates
+
+### Out of Scope
+
+- Full WPF migration / dark mode / full localization — outside measurement-core value, high risk / low return
+- BackgroundWorker threading / full MainWindow split — sub-second ops not worth the threading risk; split is low-value / high-risk
+- Recipe-creation Wizard — over-designed for a single operator; replaced by empty-state guidance (N3)
+
+## Context
+
+- Stack: .NET Framework 4.8, WinForms, MVTec HALCON 17.12 (HALCON runs 64-bit).
+  Strict one-way layering: Domain ← Application ← {Halcon, Mes, Reporting, Infrastructure} ← App.Wpf.
+  Domain stays HALCON-free. (`.App.Wpf` is a historical name — the UI is WinForms.)
+- Feature-adapter pattern: each feature = Domain DTO + Application interface + Halcon adapter
+  + console test + WinForms wiring. Old-style `.csproj` (explicit `<Compile Include>`).
+- Tests are console-style (`tests/.../*.exe`), not a framework. HALCON adapters are verified
+  manually in the GUI; Domain/Application contracts are unit-tested.
+- HALCON operator parameter order must be verified against the bundled offline reference
+  (`halcon_pdf/reference/`), never from memory.
+- **Hardware reality:** no camera, no calibration board (caltab), no standard artifacts, no
+  Z-axis. Any item requiring real metrological accuracy cannot be verified yet — replay-image
+  software work only.
+- The capability-gap list (A1–A5 / B1–B4 in `docs/superpowers/plans/2026-06-25_現況到主流量測儀_能力差距清單.md`)
+  is the roadmap backbone; the canonical dashboard is **`.planning/ROADMAP.md`** (the legacy
+  `docs/ROADMAP_待辦與決策.md` was retired on 2026-06-30 when this GSD bootstrap became canonical).
+
+## Constraints
+
+- **Tech stack**: .NET Framework 4.8 / WinForms / HALCON 17.12 — fixed; do not migrate to WPF.
+- **Architecture**: strict one-way layering, Domain HALCON-free — enforced by `AGENTS.md` checklist.
+- **Hardware**: no camera / caltab / standard parts / Z-axis — blocks A1 full calibration, B4 autofocus, CMM benchmarking, full real-image adapter tests.
+- **External dependency**: MES integration blocked on the customer's MES protocol spec.
+- **Verification**: replay-image + synthetic-image verifiable only; no real metrological truth available.
+
+## Key Decisions
+
+> Deferred/pending decisions (from the legacy ROADMAP §5) — each deliberately postponed to avoid
+> re-litigating. Promote to a LOCKED decision (ADR-class) only when re-tagged via manifest + re-run.
+
+| Decision | Rationale | Date | Outcome |
+|----------|-----------|------|---------|
+| Defer all A1 calibration (full + anisotropic half) until camera + standard parts arrive | No hardware = no truth to calibrate against; building now is idle motion | 2026-06-27 | Pending |
+| GD&T position/symmetry/orientation + full datum frame → v2 | Needs complete datum reference frame + CMM benchmarking; highest error risk without standard parts | 2026-06-27 | Pending |
+| Defer tangent-line construction | Not a prerequisite for any GD&T tolerance; no current part needs it; not building just to fill a list | 2026-06-27 | Pending |
+| Straightness true value (peak-to-peak perpendicular band) → v2 | v1 uses ResidualRms (RMS approximation, labeled "approx" in UI/report); upgrade = add max−min band in HalconLineFitter. User has no camera/caltab → get algorithm online first | 2026-06-27 | Pending |
+| Build measurement-solutions library only after primitives complete | Primitives are the building blocks — they are now done, so the library is unblocked | 2026-06-26 | Pending |
+| Recipe-creation Wizard → withdrawn; use empty-state guidance (N3) instead | Over-designed for a single operator | 2026-06-25 | Withdrawn |
+| No full WPF migration / dark mode / full localization | Outside measurement-core value, high risk / low return | 2026-06-25 | Rejected |
+| No BackgroundWorker threading / full MainWindow split | Sub-second ops not worth the threading risk; split is low-value / high-risk | 2026-06-25 | Rejected |
+| Keep 1D + 2D metrology coexisting (not replacing) | Avoid breaking the existing verified pipeline | 2026-06-30 | Pending |
+
+## Completed Milestones
+
+> Detail links live in the cross-referenced memory entries / specs.
+
+- M0–M4 core pipeline (image quality → template → edge → line/circle fit → distance/angle → tolerance → annotation → one-click)
+- A3 geometry-primitive breadth (ellipse / rectangle / arc / point, incl. interactive arc caliper)
+- A5 geometry construction (line intersection / symmetric midline / point-to-line projection)
+- GD&T form-tolerance v1 (roundness / straightness / parallelism / perpendicularity / concentricity)
+- Deep-audit P0/P1/P2 fixes
+- UI overlay residual fixes (13 items)
+- N1 recipe validation (pre-run diagnostics)
+
+
+---
+*Last updated: 2026-06-30 after ingest bootstrap (gsd-roadmapper)*
+
+
+<!-- ===================================================== -->
+# 原始檔：.planning/REQUIREMENTS.md
+<!-- ===================================================== -->
+
+# Requirements: FlashMeasurementSystem
+
+**Defined:** 2026-06-30
+**Core Value:** An operator can build a recipe and run trustworthy pass/fail dimensional measurements on replay images, driving toward mainstream measurement-instrument capability.
+
+> Scope note: This file tracks the **forward milestone** (current → mainstream measurement
+> instrument). The shipped baseline (M0–M4, A3, A5, GD&T v1, N1) is recorded as Validated in
+> PROJECT.md and is not re-listed here as v1. v1 below = actionable, hardware-unblocked work
+> derived from the capability-gap list (A1–A5 / B1–B4) and the GUI backlog.
+
+## v1 Requirements
+
+### Operator Experience (GUI)
+
+- [ ] **GUI-01**: Operator sees empty-state guidance (next-step hints) when no recipe/image is loaded (N3)
+- [ ] **GUI-02**: Operator sees a prominent PASS/FAIL banner after a measurement run (N2)
+- [ ] **GUI-03**: Operator sees tolerance upper/lower limits alongside each measured value in real time (N5)
+- [ ] **GUI-04**: Operator can run a trial measurement from inside the recipe editor without leaving it (A1)
+
+### 2D Metrology Model (MET2D)
+
+- [ ] **MET2D-01**: Operator can define a metrology model that auto-places measure rectangles along nominal geometry
+- [ ] **MET2D-02**: Applying the model to a replay image robustly fits line/circle/ellipse/rectangle and returns parameters + measure points
+- [ ] **MET2D-03**: A metrology model is saved in a recipe and coexists with the existing 1D measurement pipeline
+- [ ] **MET2D-04**: Operator can measure multiple part features in one click via the metrology model
+
+### Production Robustness (RBST)
+
+- [ ] **RBST-01**: Operator can run fuzzy/robust edge measurement that rejects noise/glare/interfering edges (B1)
+- [ ] **RBST-02**: Operator can run a GR&R / repeatability self-test (repeat a recipe N times, get 6σ and repeatability/reproducibility %) (B2)
+
+### Reporting (RPT)
+
+- [ ] **RPT-01**: Operator can export a measurement run as a formatted PDF report (B3 PDF)
+
+### Application Solutions Library (SOL)
+
+- [ ] **SOL-01**: Operator can pick a named measurement solution (select task → frame features → value + PASS/FAIL + report) from a reusable framework
+- [ ] **SOL-02**: Operator can run the gear tooth-count / pitch solution (first template)
+- [ ] **SOL-03**: Operator can run the PCD / hole-array solution
+- [ ] **SOL-04**: Operator can run the shaft/bore-diameter and pin-pitch solution
+
+## v2 Requirements
+
+Deferred — blocked on hardware, external spec, or explicit decision. Not in the current roadmap.
+
+### Calibration (CAL) — blocked: hardware
+
+- **CAL-01**: Full camera calibration + lens-distortion + world-plane metrology (A1 full) — needs caltab + camera
+- **CAL-02**: Anisotropic X/Y half-calibration (A1 half) — needs two orthogonal standard parts; no truth without them (deferred per ROADMAP §5)
+
+### Autofocus (AF) — blocked: hardware
+
+- **AF-01**: Z-axis autofocus to acquire sharpest image (B4) — needs Z-axis motor
+
+### MES (MES) — blocked: external spec
+
+- **MES-01**: MES integration skeleton / result upload (B3 MES) — needs customer's MES protocol spec
+
+### Benchmarking (BENCH) — blocked: hardware
+
+- **BENCH-01**: Real metrological-accuracy validation / CMM benchmarking — needs standard parts + camera + CMM
+
+### GD&T v2 (GDT) — deferred decision
+
+- **GDT-02**: Position / symmetry / orientation tolerance + full A+B+C datum frame — needs CMM benchmarking; highest error risk without standard parts
+- **GDT-03**: True peak-to-peak straightness band (replace RMS approximation)
+
+### Adapter testing (ADP) — partially blocked
+
+- **ADP-01**: Full real-image HALCON adapter unit tests — needs real imaging (synthetic-image subset possible sooner)
+
+## Out of Scope
+
+| Feature | Reason |
+|---------|--------|
+| Full WPF migration / dark mode / full localization | Outside measurement-core value; high risk, low return |
+| BackgroundWorker threading / full MainWindow split | Sub-second ops not worth threading risk; split low-value / high-risk |
+| Recipe-creation Wizard | Over-designed for a single operator; replaced by empty-state guidance (N3) |
+| Tangent-line construction | Not a prerequisite for any GD&T tolerance; no concrete part needs it |
+
+## Traceability
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| GUI-01 | Phase 1 | Pending |
+| GUI-02 | Phase 1 | Pending |
+| GUI-03 | Phase 1 | Pending |
+| GUI-04 | Phase 1 | Pending |
+| MET2D-01 | Phase 2 | Pending |
+| MET2D-02 | Phase 2 | Pending |
+| MET2D-03 | Phase 2 | Pending |
+| MET2D-04 | Phase 2 | Pending |
+| RBST-01 | Phase 3 | Pending |
+| RBST-02 | Phase 3 | Pending |
+| RPT-01 | Phase 4 | Pending |
+| SOL-01 | Phase 5 | Pending |
+| SOL-02 | Phase 5 | Pending |
+| SOL-03 | Phase 5 | Pending |
+| SOL-04 | Phase 5 | Pending |
+
+**Coverage:**
+- v1 requirements: 15 total
+- Mapped to phases: 15
+- Unmapped: 0 ✓
+
+---
+*Requirements defined: 2026-06-30*
+*Last updated: 2026-06-30 after ingest bootstrap*
+
+
+<!-- ===================================================== -->
+# 原始檔：.planning/ROADMAP.md
+<!-- ===================================================== -->
+
+# Roadmap: FlashMeasurementSystem
+
+## Overview
+
+The system already runs a complete pass/fail measurement pipeline (1D caliper + XLD fitting +
+template matching + geometry construction + GD&T form tolerance, with CSV reporting). This
+roadmap covers the forward journey from that baseline toward **mainstream measurement-instrument
+capability**. It starts with low-risk operator-experience polish, then delivers the mainstream
+differentiator (the 2D Metrology Model), hardens measurement for production (fuzzy edge + GR&R),
+adds professional PDF reporting, and finally packages everything into reusable application-level
+measurement solutions. All phases are verifiable on replay/synthetic images — no hardware
+required. Hardware- and external-spec-blocked work is tracked separately (see Deferred & Blocked).
+
+## Phases
+
+**Phase Numbering:**
+
+- Integer phases (1, 2, 3): Planned milestone work
+- Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
+
+- [x] **Phase 1: Operator Experience** - Empty-state guidance, PASS/FAIL banner, tolerance-limit display, in-editor trial measure
+- [ ] **Phase 2: 2D Metrology Model** - Auto-placed measure rectangles and robust one-click multi-feature measurement (mainstream differentiator)
+- [ ] **Phase 3: Production Robustness** - Fuzzy/robust edge measurement + GR&R/repeatability self-test
+- [ ] **Phase 4: PDF Reporting** - Formatted PDF measurement reports beyond CSV
+- [ ] **Phase 5: Application Solutions Library** - Named measurement solutions (gear, PCD, diameter, pin-pitch) on existing primitives
+
+## Phase Details
+
+### Phase 1: Operator Experience
+
+**Goal**: An operator can read measurement state and outcomes at a glance, and tune a recipe without leaving the editor.
+**Depends on**: Nothing (first phase)
+**Requirements**: GUI-01, GUI-02, GUI-03, GUI-04
+**Success Criteria** (what must be TRUE):
+
+  1. With no recipe/image loaded, the operator sees clear next-step guidance instead of an empty window
+  2. After a run, the operator sees an unmissable PASS or FAIL banner reflecting the overall result
+  3. Each measured value is shown next to its tolerance upper/lower limits as the operator works
+  4. The operator can trigger a trial measurement from inside the recipe editor and see the result without switching context
+
+**Plans**: 2 plans
+Plans:
+**Wave 1**
+
+- [ ] 01-01-PLAN.md — Empty-state guidance (GUI-01/N3) + PASS/FAIL banner (GUI-02/N2) — Wave 1
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 01-02-PLAN.md — Live tolerance-limit display (GUI-03/N5) + in-editor trial measure (GUI-04/A1) — Wave 2 (depends on 01-01)
+
+**UI hint**: yes
+
+### Phase 2: 2D Metrology Model
+
+**Goal**: An operator can define a metrology model on nominal geometry and measure many features of a part in one robust, repeatable pass.
+**Depends on**: Phase 1
+**Requirements**: MET2D-01, MET2D-02, MET2D-03, MET2D-04
+**Success Criteria** (what must be TRUE):
+
+  1. The operator can lay out a metrology model whose measure rectangles auto-distribute along the nominal geometry
+  2. Applying the model to a replay image fits line/circle/ellipse/rectangle and returns parameters plus measure points
+  3. A metrology model saves into a recipe and runs alongside the existing 1D pipeline without breaking it
+  4. The operator can measure multiple features of a part with a single click
+
+**Plans**: 4 plans
+Plans:
+**Wave 1**
+
+- [ ] 02-01-PLAN.md — Domain DTOs + Application interface + additive Recipe v6 + Wave-0 test scaffolds (MET2D-01, MET2D-03) — Wave 1
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 02-02-PLAN.md — HalconMetrologyModelRunner adapter + reference_system confirmation + synthetic-image fit tests (MET2D-02, MET2D-04) — Wave 2 (depends on 02-01)
+
+**Wave 3** *(blocked on Wave 2)*
+
+- [ ] 02-03-PLAN.md — RecipeRunner additive Pass 3 + MainWindow injection + metrology overlay (MET2D-03, MET2D-04) — Wave 3 (depends on 02-01, 02-02)
+
+**Wave 4** *(blocked on Wave 3)*
+
+- [ ] 02-04-PLAN.md — Metrology-model editor + synthetic images/ground-truth sheet + GUI acceptance (MET2D-01, MET2D-02, MET2D-04) — Wave 4 (depends on 02-01, 02-02, 02-03)
+
+**UI hint**: yes
+
+### Phase 3: Production Robustness
+
+**Goal**: An operator can get stable measurements on noisy/reflective parts and prove the system's measurement capability with statistics.
+**Depends on**: Phase 2
+**Requirements**: RBST-01, RBST-02
+**Success Criteria** (what must be TRUE):
+
+  1. The operator can switch a measurement to fuzzy/robust mode and get the correct edge despite noise, glare, or interfering edges
+  2. Fuzzy mode coexists with existing `measure_pos` measurements without changing their results
+  3. The operator can repeat a recipe N times and read a GR&R report with 6σ and repeatability/reproducibility percentages
+
+**Plans**: TBD
+
+### Phase 4: PDF Reporting
+
+**Goal**: An operator can hand off a professional, shareable measurement report, not just a CSV dump.
+**Depends on**: Phase 3
+**Requirements**: RPT-01
+**Success Criteria** (what must be TRUE):
+
+  1. The operator can export a completed measurement run as a formatted PDF report
+  2. The PDF includes per-feature measured values, tolerances, and overall PASS/FAIL
+  3. Existing CSV export continues to work unchanged
+
+**Plans**: TBD
+
+### Phase 5: Application Solutions Library
+
+**Goal**: An operator can pick a named, end-to-end measurement solution for a real part class and get value + PASS/FAIL + report without assembling primitives by hand.
+**Depends on**: Phase 4
+**Requirements**: SOL-01, SOL-02, SOL-03, SOL-04
+**Success Criteria** (what must be TRUE):
+
+  1. The operator can choose a named solution and follow a "select task → frame features → value + PASS/FAIL + report" flow
+  2. The gear tooth-count / pitch solution produces a correct count and pitch on a replay image
+  3. The PCD / hole-array solution reports center, diameter, and hole spacing
+  4. The shaft/bore-diameter and pin-pitch solution reports diameters and pitch with PASS/FAIL
+
+**Plans**: TBD
+**UI hint**: yes
+
+## Deferred & Blocked
+
+Not numbered phases — tracked in REQUIREMENTS.md (v2). Promote to a phase when the unlock condition is met.
+
+| Capability | Req | Blocked by |
+|------------|-----|------------|
+| A1 full camera calibration + distortion + world-plane | CAL-01 | Hardware: caltab + camera |
+| A1 anisotropic X/Y half-calibration | CAL-02 | Hardware: two orthogonal standard parts (no truth without them) |
+| B4 Z-axis autofocus | AF-01 | Hardware: Z-axis motor |
+| MES integration skeleton | MES-01 | External: customer MES protocol spec |
+| CMM benchmarking / metrological-accuracy validation | BENCH-01 | Hardware: standard parts + camera + CMM |
+| GD&T position/symmetry/orientation + full datum frame | GDT-02 | Decision: needs CMM benchmarking; deferred to v2 |
+| Full real-image HALCON adapter unit tests | ADP-01 | Hardware: real imaging (synthetic subset possible sooner) |
+
+## Progress
+
+**Execution Order:**
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 1. Operator Experience | 2/2 | Complete | 2026-06-30 |
+| 2. 2D Metrology Model | 0/4 | Not started | - |
+| 3. Production Robustness | 0/TBD | Not started | - |
+| 4. PDF Reporting | 0/TBD | Not started | - |
+| 5. Application Solutions Library | 0/TBD | Not started | - |
+
+
+<!-- ===================================================== -->
+# 原始檔：.planning/phases/02-2d-metrology-model/02-CONTEXT.md
+<!-- ===================================================== -->
+
+# Phase 2: 2D Metrology Model - Context
+
+**Gathered:** 2026-06-30
+**Status:** Ready for planning
+**Source:** Direct discussion (operator + Claude), 2026-06-30
+
+<domain>
+## Phase Boundary
+
+Add a **2D metrology model** measurement layer on top of the existing system:
+HALCON's metrology-model workflow (define nominal geometry → auto-distribute
+measure rectangles → apply to image → robustly fit line/circle/ellipse/rectangle
+→ return parameters + measure points). It sits ON TOP of the existing template
+matching (locating master, `.shm`) and COEXISTS with the existing 1D
+`measure_pos` / fit pipeline (RecipeRunner) — it does not replace it.
+
+Requirements in scope: **MET2D-01, MET2D-02, MET2D-03, MET2D-04**.
+
+This phase delivers and is verified entirely in **pixel space on synthetic /
+replay images** — the same trust level as the already-shipped 1D pipeline
+(M1–M4), which was also built and verified without hardware calibration.
+</domain>
+
+<decisions>
+## Implementation Decisions (LOCKED)
+
+### Master / reference geometry
+- **Master = nominal geometry parameters (Option A).** The metrology model's
+  nominal geometry (line endpoints, circle center/radius, ellipse axes, rect
+  pose/size), defined when building the model and stored in the recipe, IS the
+  master. Deviations are computed as fitted-vs-nominal.
+- **CAD / DXF master import (Option B) is DEFERRED** to a later, separately
+  evaluated phase. Do NOT implement DXF/CAD contour import in Phase 2.
+
+### Units / calibration constraint
+- **No hardware calibration.** Pixel↔mm calibration (CAL-01/02) remains
+  deferred (no camera, no caltab, no standard parts → no truth). Therefore:
+  - Phase 2 outputs and acceptance are in **pixel units** (plus parameters /
+    measure points). Absolute mm metrological accuracy is **NOT** a success
+    criterion of this phase.
+  - mm conversion, if shown at all, reuses the existing manual pixel-size path
+    (same as the 1D pipeline) — it is display-only, not validated here.
+
+### Coexistence (MET2D-03)
+- A metrology model **saves into the existing recipe (`.zcp`)** and runs
+  **alongside** the existing 1D pipeline without changing existing 1D results.
+  Loading/running an old recipe with no metrology model must behave exactly as
+  before (backward compatible).
+
+### HALCON usage
+- Use HALCON 17.12 metrology-model operators (`create_metrology_model`,
+  `add_metrology_object_*_measure`, `apply_metrology_model`,
+  `get_metrology_object_result` / `_measures`, etc.). **Confirm every operator
+  name, parameter order, and value list against `halcon_pdf/reference`** — never
+  from memory (project rule).
+- HALCON belongs only in the `FlashMeasurementSystem.Halcon` adapter project.
+
+### Architecture / process
+- Follow the existing **"feature adapter" pattern** (CLAUDE.md): Domain DTOs
+  (Parameters/Result, no HALCON) → Application interface over Domain types →
+  Halcon adapter (validate, build HObject in `using`, call operator, map back,
+  convert HalconException to failed result) → console test suite wired into
+  `Main()` → WinForms wiring. Old-style `.csproj`: new files need explicit
+  `<Compile Include>`.
+- Verify under **x64** (HALCON) in addition to Any CPU.
+- **Execution must be done with Claude, not the GLM executor** (prior GLM
+  execute-phase run corrupted the UI; see project history).
+
+### Verification
+- Verified on **synthetic images with known pixel ground-truth**. Acceptance
+  uses **tolerance bands** (sub-pixel fitting residual), not exact equality.
+- Standard gates: `dotnet build … x64` 0/0, `Tests.exe` all pass,
+  GUI human acceptance.
+- Claude will **generate the synthetic test images + a ground-truth answer
+  sheet** at the end of the phase for the operator's functional testing.
+
+### Claude's Discretion
+- Domain DTO shapes, exact UI placement of the metrology-model editor controls,
+  measure-rectangle auto-distribution spacing defaults, how the metrology model
+  serializes inside the recipe schema (additive, backward compatible).
+</decisions>
+
+<canonical_refs>
+## Canonical References
+
+**Downstream agents MUST read these before planning or implementing.**
+
+### Phase scope & requirements
+- `.planning/ROADMAP.md` — Phase 2 goal + success criteria
+- `.planning/REQUIREMENTS.md` — MET2D-01..04 definitions; deferred CAL/BENCH
+
+### Project rules & patterns
+- `CLAUDE.md` — feature-adapter pattern, one-way layering, WinForms/HALCON
+  display gotchas, build/test commands, HALCON measurement semantics
+- `AGENTS.md` — mandatory operating checklist (no speculative abstraction)
+- `docs/本手冊/FlashMeasurementSystem_開發手冊.md` — domain reference
+
+### HALCON offline reference (confirm operator signatures here)
+- `halcon_pdf/reference/reference_hdevelop.txt` — full 17.12 operator text
+- `halcon_pdf/reference/halcon_operator_index.md` — operator → line lookup
+- `halcon_pdf/reference/halcon_chapter_intros.md` — per-chapter concepts
+
+### Integration points (existing code to extend, not rewrite)
+- `src/FlashMeasurementSystem.App.Wpf/RecipeRunner.cs` — 1D pipeline; coexist
+- `src/FlashMeasurementSystem.Domain/Roi/Recipe.cs` + `MeasurementTool.cs` —
+  recipe/tool model the metrology model must save alongside
+- `src/FlashMeasurementSystem.App.Wpf/RecipeEditor.cs` — recipe editor UI
+- `src/FlashMeasurementSystem.App.Wpf/OverlayAnnotator.cs` — drawing primitives
+</canonical_refs>
+
+<specifics>
+## Specific Ideas
+
+- MET2D-01: operator lays out a metrology model whose measure rectangles
+  auto-distribute along nominal geometry.
+- MET2D-02: applying the model to a replay image fits line/circle/ellipse/
+  rectangle and returns parameters + measure points.
+- MET2D-03: metrology model saves into a recipe; runs alongside the 1D pipeline
+  without breaking it (old recipes still work).
+- MET2D-04: one click measures multiple features of a part.
+</specifics>
+
+<deferred>
+## Deferred Ideas
+
+- **Option B — CAD / DXF master import** as nominal geometry (separate later
+  decision; absolute-mm comparison would also require calibration).
+- mm absolute metrological accuracy / calibration (CAL-01/02) — blocked on
+  hardware, no truth.
+- CMM benchmarking (BENCH-01) — blocked on hardware.
+- Phase 3 fuzzy/robust edge mode and GR&R — later phases.
+</deferred>
+
+---
+
+*Phase: 02-2d-metrology-model*
+*Context gathered: 2026-06-30 via direct discussion*
+
+
+<!-- ===================================================== -->
+# 原始檔：.planning/phases/02-2d-metrology-model/02-RESEARCH.md
+<!-- ===================================================== -->
+
 # Phase 2: 2D Metrology Model — Research
 
 **Researched:** 2026-06-30
@@ -1159,3 +1694,136 @@ No missing dependencies.
 
 **Research date:** 2026-06-30
 **Valid until:** 2026-09-30 (HALCON 17.12 is a pinned version; no API churn expected)
+
+
+<!-- ===================================================== -->
+# 原始檔：.planning/phases/02-2d-metrology-model/02-VALIDATION.md
+<!-- ===================================================== -->
+
+---
+phase: 2
+slug: 2d-metrology-model
+status: draft
+nyquist_compliant: true
+wave_0_complete: false
+created: 2026-06-30
+---
+
+# Phase 2 — Validation Strategy
+
+> Per-phase validation contract for feedback sampling during execution.
+> Derived from 02-RESEARCH.md "## Validation Architecture". Verification is in
+> PIXEL space on synthetic images with known ground-truth (no mm/calibration).
+
+---
+
+## Test Infrastructure
+
+| Property | Value |
+|----------|-------|
+| **Framework** | Console Exe with Assert helper (same as existing suites) |
+| **Config file** | none — old-style console Exe |
+| **Quick run command** | `.\tests\FlashMeasurementSystem.Tests\bin\x64\Debug\FlashMeasurementSystem.Tests.exe` |
+| **Full suite command** | quick + `.\tests\FlashMeasurementSystem.Tests.Halcon\bin\x64\Debug\FlashMeasurementSystem.Tests.Halcon.exe` |
+| **Estimated runtime** | ~5s (Domain) / ~30s (incl. HALCON integration) |
+
+---
+
+## Sampling Rate
+
+- **After every task commit:** Run quick command (Domain tests, <5s)
+- **After every plan wave:** Run full suite (incl. HALCON integration, <30s)
+- **Before `/gsd-verify-work`:** Full suite green + GUI human acceptance
+- **Max feedback latency:** ~30 seconds
+
+---
+
+## Per-Task Verification Map
+
+> Exact task IDs (02-0X-YY) are assigned by the planner; mapped here by requirement.
+
+| Requirement | Behavior | Test Type | Automated Command | File Exists | Status |
+|-------------|----------|-----------|-------------------|-------------|--------|
+| MET2D-01 | Measure-region count meets minimum after add | unit (Domain) | Tests.exe | ❌ W0 | ⬜ pending |
+| MET2D-01 | Measure regions present before apply | integration (HALCON) | Tests.Halcon.exe | ❌ W0 | ⬜ pending |
+| MET2D-02 line | Fitted line params within ±0.5 px on synthetic | integration (HALCON) | Tests.Halcon.exe | ❌ W0 | ⬜ pending |
+| MET2D-02 circle | Fitted circle params within ±0.5 px on synthetic | integration (HALCON) | Tests.Halcon.exe | ❌ W0 | ⬜ pending |
+| MET2D-02 ellipse | Fitted ellipse params within ±1 px on synthetic | integration (HALCON) | Tests.Halcon.exe | ❌ W0 | ⬜ pending |
+| MET2D-02 rect | Fitted rect params within ±1 px on synthetic | integration (HALCON) | Tests.Halcon.exe | ❌ W0 | ⬜ pending |
+| MET2D-03 | Old recipe (no MetrologyModel) loads without exception | unit (Domain) | Tests.exe | ❌ W0 | ⬜ pending |
+| MET2D-03 | Recipe round-trip preserves metrology model def | unit (Domain) | Tests.exe | ❌ W0 | ⬜ pending |
+| MET2D-04 | 3-object model returns 3 results in one Apply | integration (HALCON) | Tests.Halcon.exe | ❌ W0 | ⬜ pending |
+
+*Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
+
+---
+
+## Wave 0 Requirements
+
+- [ ] `tests/FlashMeasurementSystem.Tests/MetrologyModelDomainTests.cs` — stubs for MET2D-01, MET2D-03 (Domain: region-count, recipe round-trip + backward-compat)
+- [ ] `tests/FlashMeasurementSystem.Tests.Halcon/MetrologyModelHalconTests.cs` — stubs for MET2D-02, MET2D-04 (synthetic-image fit within tolerance bands; multi-object one-pass)
+- [ ] Wire `MetrologyModelDomainTests.Run()` into the Tests `Main()` (EdgeDetectionDomainTests.cs)
+- [ ] Wire `MetrologyModelHalconTests.Run()` into the Tests.Halcon `Main()`
+- [ ] Add `<Compile Include="...">` entries for all new files in each old-style .csproj
+
+---
+
+## Manual-Only Verifications
+
+| Behavior | Requirement | Why Manual | Test Instructions |
+|----------|-------------|------------|-------------------|
+| Measure-rectangle layout looks right on the image; one-click measures all features; overlays draw correctly and coexist with 1D results | MET2D-01, MET2D-04 | HALCON display + operator visual judgment (project convention: HALCON GUI checked manually) | Launch app x64, load synthetic image, build metrology model, apply, observe fits + measure points drawn |
+
+*Synthetic test images + a ground-truth answer sheet will be generated at phase end for this manual functional testing.*
+
+---
+
+## Validation Sign-Off
+
+- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
+- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
+- [ ] Wave 0 covers all MISSING references
+- [ ] No watch-mode flags
+- [ ] Feedback latency < 30s
+- [x] `nyquist_compliant: true` set in frontmatter
+
+**Approval:** pending
+
+<!-- ===================================================== -->
+# 附錄：Phase 2 執行結果彙整（由 .planning/phases/02-*/*-SUMMARY.md 濃縮，2026-07-01 移除 GSD 前保存）
+<!-- ===================================================== -->
+
+> 上面各節是「計畫/研究/驗證」；本附錄記錄 **實際寫進程式的內容與 commit**。狀態：waves 1–4 全用 Claude 主迴圈實作完成，每 wave `dotnet build` x64 + Any CPU 皆 0/0、測試綠、逐 wave commit。**GUI 人工驗收（02-04 Task 3）進行中**，尚未 sign-off。逐日細節見 `docs/每日進度/2026-07-01_工作彙整_Phase1收尾與Phase2.md`。
+
+## Wave 1 — Domain + Application 契約 + 加性 Recipe v6（commit e983ef1，MET2D-01/03）
+- 5 個 Domain DTO（`FlashMeasurementSystem.Domain.MetrologyModel`，純資料）：`MetrologyObjectType`(enum)、`MetrologyObjectDef`（標稱幾何 + 量測參數 + `MinMeasureRegions` 2/3/5/8）、`MetrologyModelDef`、`MetrologyObjectResult`、`MetrologyModelResult`。
+- Application `IMetrologyModelRunner<TImage>`（generic over image type，Application 維持 HALCON-free，鏡射 `IEdgeDetector<TImage>`）。
+- **Recipe v6**：加性 nullable `MetrologyModel` 欄（預設 null）、`SchemaVersion` 5→6；無 migration，舊 `.zcp` 反序列化為 null、行為不變。
+- 連帶修：`RoiDomainTests.cs` 兩處硬編 `SchemaVersion == 5` → 6（v5→v6 bump 正確打破，僅修本次造成的破壞）。
+
+## Wave 2 — HALCON 適配器 + 合成圖擬合測試（commit 8dd8154，MET2D-02/04）
+- `HalconMetrologyModelRunner`：每次 `Apply()` 現建 handle（create → add objects → align → apply → query → clear，try/finally），recipe 只存可序列化 DTO，不存 HALCON handle。
+- `apply_metrology_model` 需**單通道影像**（同 `measure_pos` 陷阱，先 `rgb1_to_gray`）。
+- 開放問題 A1 確認：`set_metrology_model_param 'reference_system'` 格式 = `[row, column, angle]`。
+
+## Wave 3 — RecipeRunner Pass 3 + 注入 + overlay（commit 4cdbbbc，MET2D-03/04）
+- RecipeRunner 新增 **Pass 3**：`recipe.MetrologyModel != null` 時，在既有 1D passes 之後執行 nullable runner；1D 行為完全不變（共存，非取代）。
+- `ToolRunResult` 擴充：ellipse 用 `FitPhi/FitRadius1/FitRadius2`、rectangle 用 `FitPhi/FitLength1/FitLength2`。
+- MainWindow 注入 + on-image overlay（cyan 量測點 + 擬合輪廓）。
+
+## Wave 4 — 編輯器 + 合成圖 + 答案表（commit 8044100，MET2D-01/02/04）
+- `MetrologyModelEditorForm`（純程式碼建構、無 Designer，最低風險/易 rollback）：物件清單 + Add/Remove、shape combo 閘門對應可用的標稱幾何欄、量測參數 numerics（預填 DTO 預設）、per-object Name、MeasureLength1 非阻斷警告。Save 提交至 `recipe.MetrologyModel`（+ ImageWidth/Height hint）→ 直接流入 Pass 3。**不做量測矩形佈點數學**，只設 MeasureDistance/NumMeasures，交 HALCON auto-distribute。
+- MainWindow「Metrology Model」按鈕 + `OpenMetrologyModelEditor`，有路徑時 `_recipeStore.Save`。
+- `SyntheticMetrologyImageGenerator`（Tests.Halcon）：寫 5 張 PNG 到 `data/images`（line/circle/ellipse/rectangle/composite）＋ `SYNTHETIC_METROLOGY_GROUNDTRUTH.md` 答案表。註：`data/images` 為 gitignore，PNG 跑 `Tests.Halcon.exe` 重生。
+
+## GUI 驗收期間的 bug 修正（commits）
+- **6ab879e**：1D「Edit Recipe」存檔會洗掉 MetrologyModel → `CopyRecipeMetadata` 補帶。
+- **f879689**：純量測模型配方被參考姿態守門擋住 + 失敗物件結果表空白 → 守門只在有 1D 工具時擋、補 `ValueText`。
+- **5ce575b（改壞）→ 6713fcc（正解）**：擅自把量測模型改「一律絕對座標」改壞對齊與一鍵量測；正解＝對齊改用與 1D 相同的剛體變換（`CreateFromMatch → TransformRoi` 預轉標稱幾何再以絕對座標套用），取代不穩的 HALCON `reference_system`/`align_metrology_model`。
+- **906e003**：編輯器 Name 欄跳焦點（TextChanged 只寫值、Leave 才刷清單）。
+
+## ⚠️ 未解 landmine 與待辦（交接）
+- **`MainWindow.Designer.cs` 有未提交的 VS WinForms Designer 重新生成（~444 行，控制項重排）**，已確認掉了 `emptyStateGuideLabel.BringToFront()`（HEAD 有、工作區無）→ N3 空狀態引導恐被 HALCON 控制項蓋住。建議 `git checkout HEAD -- MainWindow.Designer.cs` 還原已提交良好版再 rebuild（待使用者決定，勿擅自還原）。
+- 對齊修正（6713fcc）需在**旋轉工件**的 GUI 場景複驗；**補對齊路徑自動測試**（Wave 2 測試全 `hasReferencePose=false`，從未測對齊＝驗證洞，正是害這次的根因）。
+- 通過後：STATE → phase_complete、ROADMAP Phase 2 打勾。
+- 教訓：**GSD 綠燈 ≠ 驗證到位；未提交的 Designer 亂改是地雷；風險/視覺路徑動手前先自造情境驗證。**
