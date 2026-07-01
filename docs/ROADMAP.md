@@ -15,12 +15,12 @@
 | # | Phase | 目標 | 狀態 |
 |---|-------|------|------|
 | 1 | Operator Experience | 空狀態引導、PASS/FAIL 橫幅、公差上下限即時顯示、編輯器內試測 | ✅ 完成 2026-06-30 |
-| 2 | **2D Metrology Model** | 標稱幾何上自動佈點的量測矩形 + 穩健一鍵多特徵量測（主流差異化） | 🔄 程式完成、**待 GUI 人工驗收**（見備份附錄） |
+| 2 | **2D Metrology Model** | 標稱幾何上自動佈點的量測矩形 + 穩健一鍵多特徵量測（主流差異化） | ✅ 完成 2026-07-01（GUI 驗收通過，fix d08bc33） |
 | 3 | Production Robustness | fuzzy/robust 邊緣量測（B1）+ GR&R/重複性自測（B2） | ⬜ 未開始 |
 | 4 | PDF Reporting | 格式化 PDF 量測報表（超越 CSV） | ⬜ 未開始 |
 | 5 | Application Solutions Library | 命名量測方案（齒輪齒數/齒距、PCD、直徑、pin 間距）疊在既有基元上 | ⬜ 未開始 |
 
-Phase 2 待辦（交接）：①`MainWindow.Designer.cs` 未提交 Designer 重生 landmine（掉了 `emptyStateGuideLabel.BringToFront()`，建議 `git checkout HEAD -- MainWindow.Designer.cs`）；②旋轉工件 GUI 複驗對齊（6713fcc）；③補對齊路徑自動測試（驗證洞）；④通過後 ROADMAP 打勾。詳見備份附錄與 memory `phase2-2d-metrology-plan`。
+Phase 2 已驗收並 push（`origin/main`）。驗收期補了 6 個「純 2D 量測模型配方一等公民 + on-image 標籤可讀性」修正（d08bc33）。Designer 重生 landmine 已還原 HEAD、未帶進版控（⚠️用 VS 開專案會再自動重生，commit 前檢查 `git status`）。**剩餘非阻擋測試強化**：①旋轉工件 GUI 複驗對齊（commit 6713fcc 的剛體變換對齊）；②補「對齊路徑」自動測試（現有 Wave 2 測試全 `hasReferencePose=false`，從未測有旋轉/姿態的對齊，是先前對齊 bug 5ce575b/6713fcc 的根因所在＝驗證洞）。詳見備份附錄與 memory `phase2-2d-metrology-plan`。
 
 ## 關鍵決策（延後/否決，避免反覆爭論）
 
