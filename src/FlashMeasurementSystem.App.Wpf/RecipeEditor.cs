@@ -795,11 +795,19 @@ namespace FlashMeasurementSystem
 
         // ─── Save ──────────────────────────────────────────────────────
 
+        // 一份配方只要有 1D 工具「或」量測模型物件即為有效內容。純 2D 量測模型
+        // 配方（0 個 1D 工具）不該被擋存——量測模型隨 CopyRecipeMetadata 一併保存。
+        private bool HasSavableContent()
+            => _tools.Count > 0
+               || (_recipe != null && _recipe.MetrologyModel != null
+                   && _recipe.MetrologyModel.Objects != null
+                   && _recipe.MetrologyModel.Objects.Count > 0);
+
         private void OnSave(object sender, EventArgs e)
         {
-            if (_tools.Count == 0)
+            if (!HasSavableContent())
             {
-                MessageBox.Show(this, "No tools in recipe.", "Save",
+                MessageBox.Show(this, "Recipe has no 1D tools and no metrology model.", "Save",
                     MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
@@ -827,9 +835,9 @@ namespace FlashMeasurementSystem
 
         private void OnSaveAs(object sender, EventArgs e)
         {
-            if (_tools.Count == 0)
+            if (!HasSavableContent())
             {
-                MessageBox.Show(this, "No tools in recipe.", "Save As",
+                MessageBox.Show(this, "Recipe has no 1D tools and no metrology model.", "Save As",
                     MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }

@@ -35,9 +35,16 @@ namespace FlashMeasurementSystem.Domain.Roi
                 issues.Add(new RecipeIssue(RecipeIssueSeverity.Error, "", "", "配方為空 (null)"));
                 return issues;
             }
-            if (recipe.Tools == null || recipe.Tools.Count == 0)
+            // 一份配方只要有 1D 工具「或」2D 量測模型物件即為有效內容。純量測模型配方
+            // （0 個 1D 工具）不該被擋。tools 正規化為非 null，讓後續迴圈在空清單下安全略過。
+            var tools = recipe.Tools ?? new List<MeasurementTool>();
+            bool hasMetrology = recipe.MetrologyModel != null
+                && recipe.MetrologyModel.Objects != null
+                && recipe.MetrologyModel.Objects.Count > 0;
+            if (tools.Count == 0 && !hasMetrology)
             {
-                issues.Add(new RecipeIssue(RecipeIssueSeverity.Error, "", "", "配方沒有任何量測工具"));
+                issues.Add(new RecipeIssue(RecipeIssueSeverity.Error, "", "",
+                    "配方沒有任何量測工具或量測模型"));
                 return issues;
             }
 
@@ -51,7 +58,7 @@ namespace FlashMeasurementSystem.Domain.Roi
 
             // 建立 Id→工具索引，順帶偵測重複 Id（會讓參考解析錯亂）。
             var byId = new Dictionary<string, MeasurementTool>();
-            foreach (MeasurementTool tool in recipe.Tools)
+            foreach (MeasurementTool tool in tools)
             {
                 if (tool == null || string.IsNullOrEmpty(tool.Id)) continue;
                 if (byId.ContainsKey(tool.Id))
@@ -65,7 +72,7 @@ namespace FlashMeasurementSystem.Domain.Roi
                 }
             }
 
-            foreach (MeasurementTool tool in recipe.Tools)
+            foreach (MeasurementTool tool in tools)
             {
                 if (tool == null)
                 {

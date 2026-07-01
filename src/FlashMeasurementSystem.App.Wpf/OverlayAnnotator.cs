@@ -160,10 +160,14 @@ namespace FlashMeasurementSystem
 
         public void DrawText(string message, int row, int col, string color = null)
         {
-            HOperatorSet.SetColor(_window, color ?? "yellow");
+            if (string.IsNullOrEmpty(message)) return;
             SetAvailableFont(10);
-            HOperatorSet.SetTposition(_window, row, col);
-            HOperatorSet.WriteString(_window, message);
+            // disp_text（image 座標，隨縮放/平移正確定位）附「深色半透明底框」，讓文字在
+            // 白底影像或亮特徵上仍清楚可讀，取代無底框的 write_string。
+            HTuple genNames = new HTuple(new string[] { "box", "box_color" });
+            HTuple genValues = new HTuple(new string[] { "true", "#000000c0" });
+            HOperatorSet.DispText(_window, message, "image", row, col,
+                color ?? "yellow", genNames, genValues);
         }
 
         public void DrawMatchResult(double row, double col, double angleDeg, double score,

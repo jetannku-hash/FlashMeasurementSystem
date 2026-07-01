@@ -1415,11 +1415,17 @@ namespace FlashMeasurementSystem
                     {
                         string circleColor = r.IsOk == true ? "green" : (r.IsOk == false ? "red" : "yellow");
                         an.DrawCircle(r.FitCenterRow, r.FitCenterCol, r.FitRadiusPx, circleColor);
+                        // 數值畫在影像上（比照 2D 量測模型/distance/angle）：錨在擬合圓心。
+                        an.DrawText(r.ValueText ?? string.Empty, (int)r.FitCenterRow, (int)r.FitCenterCol, circleColor);
                     }
                     else if (r.Measured && r.ToolType == "line")
                     {
                         string lineColor = r.IsOk == true ? "green" : (r.IsOk == false ? "red" : "yellow");
                         an.DrawLine(r.LineRow1, r.LineCol1, r.LineRow2, r.LineCol2, lineColor);
+                        // 數值畫在影像上（比照 2D 量測模型/distance/angle）：錨在擬合線中點「上方」
+                        // 一段距離，避開亮線本體與橘色名稱標籤，落在深色背景上更清楚。
+                        an.DrawText(r.ValueText ?? string.Empty,
+                            (int)((r.LineRow1 + r.LineRow2) / 2.0) - 22, (int)((r.LineCol1 + r.LineCol2) / 2.0), lineColor);
                     }
                     else if (r.Measured && r.ToolType == "distance")
                     {
@@ -1678,9 +1684,10 @@ namespace FlashMeasurementSystem
         {
             if (_loadedRecipe == null)
             {
-                MessageBox.Show(this, "請先載入或建立配方，再定義量測模型。", "Metrology Model",
-                    MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return;
+                // 純 2D 量測模型配方無需先備妥一份 1D 配方：就地建立空白配方
+                // （無 1D 工具、無參考姿態），讓操作員直接定義量測模型並 Run Recipe。
+                _loadedRecipe = Recipe.Default();
+                _loadedRecipe.HasReferencePose = false;
             }
 
             int imgW = 0, imgH = 0;
@@ -1698,6 +1705,25 @@ namespace FlashMeasurementSystem
                 (recipe) =>
                 {
                     _loadedRecipe = recipe;
+
+                    // 尚無檔案路徑（例如全新的純量測模型配方）→ 跳「另存新檔」讓操作員取檔名，
+                    // 量測模型編輯器即可自給自足存檔，不必再繞 Edit Recipe。已有路徑則直接覆寫。
+                    if (string.IsNullOrEmpty(_loadedRecipePath))
+                    {
+                        using (var save = new SaveFileDialog
+                        {
+                            Filter = "Recipe (*.zcp)|*.zcp|All Files|*.*",
+                            DefaultExt = ".zcp",
+                            Title = "Save Metrology Recipe As"
+                        })
+                        {
+                            string dir = ResolveRecipesDir();
+                            if (Directory.Exists(dir)) save.InitialDirectory = dir;
+                            if (save.ShowDialog(this) == DialogResult.OK)
+                                _loadedRecipePath = save.FileName;
+                        }
+                    }
+
                     if (!string.IsNullOrEmpty(_loadedRecipePath))
                     {
                         try { _recipeStore.Save(_loadedRecipe, _loadedRecipePath); }
@@ -1707,10 +1733,13 @@ namespace FlashMeasurementSystem
                                 MessageBoxButtons.OK, MessageBoxIcon.Warning);
                         }
                     }
+
                     int count = _loadedRecipe.MetrologyModel != null && _loadedRecipe.MetrologyModel.Objects != null
                         ? _loadedRecipe.MetrologyModel.Objects.Count : 0;
+                    string savedNote = string.IsNullOrEmpty(_loadedRecipePath)
+                        ? "（未存檔，僅暫存記憶體）" : "（已存至 " + Path.GetFileName(_loadedRecipePath) + "）";
                     measureResultLabel.Text = string.Format(CultureInfo.InvariantCulture,
-                        "已更新量測模型（{0} 物件）。可執行 Run Recipe。", count);
+                        "已更新量測模型（{0} 物件）{1}。可執行 Run Recipe。", count, savedNote);
                 }))
             {
                 editor.ShowDialog(this);
