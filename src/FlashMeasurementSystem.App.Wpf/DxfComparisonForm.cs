@@ -1,6 +1,5 @@
 using System;
 using System.Windows.Forms;
-using FlashMeasurementSystem.Application.DxfComparison;
 using FlashMeasurementSystem.Domain.DxfComparison;
 using HalconDotNet;
 
@@ -13,7 +12,7 @@ namespace FlashMeasurementSystem
     public sealed class DxfComparisonForm : Form
     {
         private readonly HWindowControlHelper _imageHelper;
-        private readonly IDxfContourComparer<HImage> _comparer;
+        private readonly FlashMeasurementSystem.Halcon.DxfComparison.HalconDxfContourComparer _comparer;
 
         private TextBox _dxfPathBox;
         private NumericUpDown _toleranceNumeric;
@@ -22,7 +21,13 @@ namespace FlashMeasurementSystem
         private Button _runButton;
         private Label _resultLabel;
 
-        public DxfComparisonForm(HWindowControlHelper imageHelper, IDxfContourComparer<HImage> comparer)
+        // 三個 iconic 各自的唯一 owner：本表單負責釋放（DisposeIconics），即使 CompareWithOverlay
+        // 回傳 FAILED 結果，alignedNominal 仍可能非 null（見 Task 5 註解），故不可只在成功分支釋放。
+        private HObject _previewContour;
+        private HObject _alignedNominal;
+        private HObject _actualEdges;
+
+        public DxfComparisonForm(HWindowControlHelper imageHelper, FlashMeasurementSystem.Halcon.DxfComparison.HalconDxfContourComparer comparer)
         {
             _imageHelper = imageHelper ?? throw new ArgumentNullException(nameof(imageHelper));
             _comparer = comparer ?? throw new ArgumentNullException(nameof(comparer));
@@ -58,12 +63,41 @@ namespace FlashMeasurementSystem
             };
         }
 
+        private DxfComparisonParameters BuildParams() => new DxfComparisonParameters
+        {
+            TolerancePx = (double)_toleranceNumeric.Value,
+            MinScore = (double)_minScoreNumeric.Value,
+            ScaleSeedPxPerMm = (double)_scaleSeedNumeric.Value
+        };
+
+        private void DisposeIconics()
+        {
+            _previewContour?.Dispose(); _previewContour = null;
+            _alignedNominal?.Dispose(); _alignedNominal = null;
+            _actualEdges?.Dispose(); _actualEdges = null;
+        }
+
         private void OnBrowse(object sender, EventArgs e)
         {
             using (var dlg = new OpenFileDialog { Filter = "DXF (*.dxf)|*.dxf", Title = "選擇 DXF 標稱輪廓" })
             {
-                if (dlg.ShowDialog(this) == DialogResult.OK)
-                    _dxfPathBox.Text = dlg.FileName;
+                if (dlg.ShowDialog(this) != DialogResult.OK) return;
+                _dxfPathBox.Text = dlg.FileName;
+            }
+
+            // 幽靈預覽：讀取標稱輪廓並置中縮放顯示，讓使用者在執行比對前先確認 DXF 讀對了。
+            DisposeIconics();
+            _previewContour = _comparer.LoadNominalContour(_dxfPathBox.Text, BuildParams());
+            if (_previewContour == null)
+            {
+                MessageBox.Show(this, "無法讀取 DXF 標稱輪廓（可能非 AC1009/R12 或實體不支援）。", "DXF 比對");
+                return;
+            }
+            if (_imageHelper.CurrentImage != null)
+            {
+                HOperatorSet.GetImageSize(_imageHelper.CurrentImage, out HTuple iw, out HTuple ih);
+                var prev = _previewContour; double w = iw.D, h = ih.D;
+                _imageHelper.SetPersistentOverlayAction(() => _imageHelper.Annotator.DrawContourFitted(prev, w, h, "gray"));
             }
         }
 
@@ -78,20 +112,31 @@ namespace FlashMeasurementSystem
                 MessageBox.Show(this, "請先選 DXF 檔。", "DXF 比對"); return;
             }
 
-            var pars = new DxfComparisonParameters
-            {
-                TolerancePx = (double)_toleranceNumeric.Value,
-                MinScore = (double)_minScoreNumeric.Value,
-                ScaleSeedPxPerMm = (double)_scaleSeedNumeric.Value
-            };
-
             Cursor = Cursors.WaitCursor;
             try
             {
-                DxfComparisonResult r = _comparer.Compare(_imageHelper.CurrentImage, _dxfPathBox.Text, pars);
+                // 釋放上一輪 iconic：即使上一輪 CompareWithOverlay 回傳 FAILED，
+                // _alignedNominal/_actualEdges 仍可能持有非 null 句柄（Task 5 行為），此處一併清掉。
+                DisposeIconics();
+                DxfComparisonResult r = _comparer.CompareWithOverlay(_imageHelper.CurrentImage, _dxfPathBox.Text, BuildParams(),
+                    out _alignedNominal, out _actualEdges, out double[] overRows, out double[] overCols);
                 _resultLabel.Text = r.Message;
                 _resultLabel.ForeColor = !r.Success ? System.Drawing.SystemColors.ControlText
                     : (r.IsPass ? System.Drawing.Color.DarkGreen : System.Drawing.Color.DarkRed);
+                if (r.Success)
+                {
+                    var aligned = _alignedNominal; var actual = _actualEdges;
+                    const int maxMarks = 200;
+                    int step = overRows.Length > maxMarks ? (int)Math.Ceiling(overRows.Length / (double)maxMarks) : 1;
+                    _imageHelper.SetPersistentOverlayAction(() =>
+                    {
+                        var an = _imageHelper.Annotator;
+                        an.DrawContour(aligned, "blue");
+                        an.DrawContour(actual, "green");
+                        for (int i = 0; i < overRows.Length; i += step)
+                            an.DrawCross(overRows[i], overCols[i], 12, "red");
+                    });
+                }
             }
             catch (Exception ex)
             {
@@ -99,6 +144,13 @@ namespace FlashMeasurementSystem
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally { Cursor = Cursors.Default; }
+        }
+
+        protected override void OnFormClosed(FormClosedEventArgs e)
+        {
+            _imageHelper.ClearOverlay();
+            DisposeIconics();
+            base.OnFormClosed(e);
         }
     }
 }
