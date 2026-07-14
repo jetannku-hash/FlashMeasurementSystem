@@ -42,6 +42,7 @@ namespace FlashMeasurementSystem
         private bool _updatingControls;
         private bool _dirty;
         private bool _editorOwnsEdit;  // L2：追蹤編輯把手是否為編輯器持有，關閉時只拆自己的
+        private bool _editorInstalledOverlay;  // #3：試測是否在共用 helper 裝過 persistent overlay，關閉時清掉
         private string _savePath;
 
         // ── Toolbar controls ──
@@ -134,6 +135,9 @@ namespace FlashMeasurementSystem
                 // L2：只拆除編輯器自己持有的 edit/highlight，不誤殺主視窗的。
                 if (_editorOwnsEdit) { _imageHelper.EndRect2Edit(); _editorOwnsEdit = false; }
                 _imageHelper.ClearSelectionHighlight();
+                // #3：試測會把 persistent overlay 裝在共用主視窗 helper 上；只有裝過才清除，
+                // 避免殘留橘色試測 ROI + 綠擬合，也避免無試測時誤清主視窗自身的 overlay。
+                if (_editorInstalledOverlay) { _imageHelper.ClearOverlay(); _editorInstalledOverlay = false; }
             };
         }
 
@@ -665,6 +669,7 @@ namespace FlashMeasurementSystem
                     roi != null ? (int)roi.CenterRow : 20,
                     roi != null ? (int)roi.CenterCol + 18 : 20, "green");
             });
+            _editorInstalledOverlay = true;  // #3：記錄已佔用共用 overlay slot，關閉編輯器時清除
         }
 
         private void WriteGdt()
@@ -1448,6 +1453,7 @@ namespace FlashMeasurementSystem
             if (disposing)
             {
                 _tools.Clear();
+                _toolTip?.Dispose();  // ToolTip 未加入 components 容器；編輯器可重複開關，手動釋放原生 handle
             }
             base.Dispose(disposing);
         }

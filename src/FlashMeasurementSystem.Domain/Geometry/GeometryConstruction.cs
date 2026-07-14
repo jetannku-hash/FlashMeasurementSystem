@@ -7,11 +7,18 @@ namespace FlashMeasurementSystem.Domain.Geometry
     /// </summary>
     public static class GeometryConstruction
     {
-        /// <summary>方向外積絕對值門檻，低於此視為平行。</summary>
+        /// <summary>退化長度 / 分母守衛門檻。</summary>
         public const double ParallelEpsilon = 1e-9;
 
         /// <summary>
-        /// 兩條無限直線交點。以方向向量外積為分母求解；平行（|cross| &lt; eps）回 false。
+        /// 正規化後方向夾角 |sinθ| 門檻，低於此視為平行。用「正規化外積」判平行是
+        /// scale-invariant；若直接對原始向量外積比較固定門檻，平行/相交的分類會隨
+        /// 線段長度改變（同一夾角，長線判相交、短線判平行）。
+        /// </summary>
+        public const double ParallelSinEpsilon = 1e-9;
+
+        /// <summary>
+        /// 兩條無限直線交點。以正規化外積（=兩線夾角 sinθ）判平行；平行或線段退化回 false。
         /// </summary>
         public static bool TryLineIntersection(
             double a_r1, double a_c1, double a_r2, double a_c2,
@@ -20,8 +27,17 @@ namespace FlashMeasurementSystem.Domain.Geometry
         {
             double dAr = a_r2 - a_r1, dAc = a_c2 - a_c1;
             double dBr = b_r2 - b_r1, dBc = b_c2 - b_c1;
-            double denom = dAr * dBc - dAc * dBr;   // 方向外積
-            if (Math.Abs(denom) < ParallelEpsilon)
+            double lenA = Math.Sqrt(dAr * dAr + dAc * dAc);
+            double lenB = Math.Sqrt(dBr * dBr + dBc * dBc);
+            // 退化線段（近乎零長）無方向 → 無交點；同時避免下方除以零。
+            if (lenA < ParallelEpsilon || lenB < ParallelEpsilon)
+            {
+                row = 0; col = 0;
+                return false;
+            }
+            double denom = dAr * dBc - dAc * dBr;    // 原始外積（供求解 t）
+            double sinTheta = denom / (lenA * lenB); // 正規化外積 = sinθ（scale-invariant）
+            if (Math.Abs(sinTheta) < ParallelSinEpsilon)
             {
                 row = 0; col = 0;
                 return false;
@@ -83,11 +99,12 @@ namespace FlashMeasurementSystem.Domain.Geometry
             // 消除線無向性：讓 B 方向與 A 同半邊。
             if (uAr * uBr + uAc * uBc < 0.0) { uBr = -uBr; uBc = -uBc; }
 
-            double cross = dAr * dBc - dAc * dBr;
+            // 正規化外積（=夾角 sinθ）判平行，與 TryLineIntersection 一致、scale-invariant。
+            double crossUnit = uAr * uBc - uAc * uBr;
             double cr, cc;     // 中線通過點
             double dirR, dirC; // 中線方向
 
-            if (Math.Abs(cross) < ParallelEpsilon)
+            if (Math.Abs(crossUnit) < ParallelSinEpsilon)
             {
                 // 平行：方向取 A，通過點取「A 中點與其在 B 上垂足」的中點。
                 dirR = uAr; dirC = uAc;
