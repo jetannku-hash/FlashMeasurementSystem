@@ -100,4 +100,32 @@ Domain  ←  Application  ←  Halcon  ←  App.Wpf
 
 ## 10. 後續增量（v2+，非本 spec）
 
-有號偏差 / 缺料 vs 毛邊、非對稱公差、雙向距離抓缺料/缺特徵、配方整合 + 一鍵 + 報表自動化、非 R12 自動轉換、多零件、mm 絕對準度（需硬體校正）。
+有號偏差 / 缺料 vs 毛邊、非對稱公差、雙向距離抓缺料/缺特徵、配方整合 + 一鍵 + 報表自動化、非 R12 自動轉換、多零件、mm 絕對準度（需硬體校正）、連續色階 heatmap 偏差圖。
+
+## 11. 視覺化增補（v1.1，2026-07-14 GUI 驗收後追加）
+
+v1 只有文字 PASS/FAIL、影像上無任何顯示 → 對專業量測儀不夠直覺。v1.1 補兩塊 on-image 視覺化（決策：1a ghost 預覽 + 兩色綠/紅；連續 heatmap 延 v2）。**Domain 層零改動**；純 `DxfComparisonResult` 與 `IDxfContourComparer` 介面不變。
+
+### 11.1 載入 DXF 即時預覽（問題 1）
+選完 DXF 就把**標稱輪廓**畫在主視窗上（ghost：淡色/虛線），讓操作員確認「檔案／形狀對不對」。未定位，僅作形狀確認——auto-fit 置中（依影像尺寸縮放標稱外接矩形到畫面約 60%），標「標稱預覽（未定位）」。
+
+### 11.2 結果三色偏差圖（問題 2）
+執行後在工件影像上疊：
+- **藍**：對位後的標稱輪廓（應在位置）。
+- **綠**：實際輪廓（`edges_sub_pix` 取得，框帶內）。
+- **紅**：超差點（偏差 > T）以紅十字標出，數量比照 `MaxOverlayCrosses` 均勻抽樣上限避免壅塞。
+文字統計（max/mean/超差點數）保留。缺陷（如 bump）會直接亮紅，一眼定位。
+
+### 11.3 架構：具體 adapter 暴露 iconic、UI 繪製
+`DxfComparisonResult` 不含 HALCON 物件（Domain 純淨），故 overlay 資料由**具體 `HalconDxfContourComparer`** 額外提供（UI 屬 App.Wpf、本就相依 HALCON）：
+- `LoadNominalContour(dxfFilePath, parameters) → HObject`：讀 DXF 回標稱輪廓供預覽（失敗回 null）。呼叫端 dispose。
+- `CompareWithOverlay(image, dxfFilePath, parameters, out HObject alignedNominal, out HObject actualEdges, out double[] overRows, out double[] overCols) → DxfComparisonResult`：管線同 §5，但額外回傳對位標稱、實際邊（iconic）與超差點座標。呼叫端 dispose iconic。
+- 介面 `Compare(...)`（Application）維持不變：內部委派 `CompareWithOverlay` 並釋放 iconic，回傳純結果（DRY，介面契約不動）。
+
+UI 側：
+- `DxfComparisonForm` 改持有具體 `HalconDxfContourComparer`（MainWindow 本就以具體型別注入）。
+- 預覽/結果 overlay 皆經既有 `SetPersistentOverlayAction` + `OverlayAnnotator`；`OverlayAnnotator` 增最小 helper：`DrawContour(HObject, color)`、`DrawContourFitted(HObject, imgW, imgH, color)`（ghost 置中）、紅十字（可重用既有 cross 繪製）。
+- **生命週期**：Form 以欄位持有 iconic（預覽輪廓、對位標稱、實際邊），換檔/重跑/關閉時先 dispose 舊 iconic 再換；關閉表單 `ClearOverlay()`（沿用 deep-audit #3 旗標教訓，避免殘留與洩漏）。
+
+### 11.4 驗證
+用既有合成 fixture（`data/dxf/test_house.dxf` + `data/images/dxf_house_ok.png`/`_ng.png`）GUI 複驗：載入 DXF 見 ghost 預覽；OK 圖執行見藍+綠貼合、無紅、PASS；NG 圖見右側 bump 亮紅、FAIL。Domain 測試不受影響（零改動）。

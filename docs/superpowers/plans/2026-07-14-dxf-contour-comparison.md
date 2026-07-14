@@ -742,3 +742,225 @@ git commit -m "feat(dxf): add standalone DXF comparison form + launch button"
 **Type consistency:** `DxfComparisonParameters`/`DxfComparisonResult`/`DxfDeviationEvaluator.Evaluate`/`IDxfContourComparer<TImage>.Compare` names and signatures are identical across Tasks 1-4. `Failed(string)` / `Default()` factories used consistently. ✓
 
 **Known implementation risk flagged for the executor:** the HALCON supporting operators (band generation, hom_mat2d chain, attribute extraction) must be signature-verified against the offline reference during Task 3 Step 3 — the pipeline structure is correct and the core operators are pre-verified (spec §9), but exact HTuple overloads/param order may need adjustment at build time.
+
+---
+
+# v1.1 Visualization Increment (added 2026-07-14, post GUI-acceptance)
+
+Spec §11. Same branch `feature/dxf-contour-comparison`. Decisions: **1a ghost preview** on DXF load; **two-color (green within / red over-tolerance) deviation overlay** + blue aligned nominal on run. Domain layer unchanged. Reference path: `F:\C#\FlashMeasurementSystem\halcon_pdf\reference\`. Verify each HALCON op signature against it before building.
+
+## Task 5: Expose iconic overlay data from the HALCON adapter
+
+**Files:**
+- Modify: `src/FlashMeasurementSystem.Halcon/DxfComparison/HalconDxfContourComparer.cs`
+
+Refactor so the concrete adapter can hand iconic objects to the UI without polluting the Domain result or the Application interface.
+
+- [ ] **Step 1: Add `LoadNominalContour` (preview) + `CompareWithOverlay` (iconic result); make `Compare` delegate.** Keep the existing pipeline body; move it into `CompareWithOverlay`, which returns the aligned nominal + actual edges + over-tolerance point coords via `out` params (caller owns/disposes the two `HObject`s). `Compare` (the interface method) calls it and disposes the iconics. Signatures:
+
+```csharp
+// Preview: read DXF -> nominal contour for on-load ghost display. Caller disposes. null on failure.
+public HObject LoadNominalContour(string dxfFilePath, DxfComparisonParameters parameters)
+{
+    var p = parameters ?? DxfComparisonParameters.Default();
+    if (string.IsNullOrEmpty(dxfFilePath)) return null;
+    HObject nominal = null;
+    try
+    {
+        HTuple genNames = new HTuple(new string[] { "min_num_points", "max_approx_error" });
+        HTuple genVals = new HTuple(new HTuple(p.MinNumPoints)).TupleConcat(new HTuple(p.MaxApproxError));
+        HOperatorSet.ReadContourXldDxf(out nominal, dxfFilePath, genNames, genVals, out HTuple _);
+        HOperatorSet.CountObj(nominal, out HTuple n);
+        if (n.Length == 0 || n.I == 0) { nominal?.Dispose(); return null; }
+        return nominal; // caller disposes
+    }
+    catch (HalconException) { nominal?.Dispose(); return null; }
+}
+
+// Same pipeline as Compare, but returns iconic overlay pieces (caller disposes alignedNominal & actualEdges).
+public DxfComparisonResult CompareWithOverlay(HImage image, string dxfFilePath, DxfComparisonParameters parameters,
+    out HObject alignedNominal, out HObject actualEdges, out double[] overRows, out double[] overCols)
+```
+
+Inside `CompareWithOverlay`, transplant the existing Compare pipeline with these changes:
+- Initialize `alignedNominal = null; actualEdges = null; overRows = new double[0]; overCols = new double[0];` at the top so every early-`return Failed(...)` path leaves valid out-values.
+- Assign the pipeline's aligned-nominal result to the `alignedNominal` out-param (was the local `alignedNominal`) and the edges to `actualEdges` — and **do NOT dispose these two in `finally`** (ownership passes to caller). Everything else (nominal, modelContours, distContour, band, bandMargin, reduced, gray, modelId) is still disposed in `finally`.
+- After the distance loop, capture over-tolerance point locations. In the same per-contour loop that reads the `distance` attribute, also read the point coordinates and collect those over T:
+```csharp
+var devs = new List<double>();
+var oRows = new List<double>();
+var oCols = new List<double>();
+HOperatorSet.CountObj(distContour, out HTuple nDist);
+for (int i = 1; i <= nDist.I; i++)
+{
+    HObject one = null;
+    try
+    {
+        HOperatorSet.SelectObj(distContour, out one, i);
+        HOperatorSet.GetContourAttribXld(one, "distance", out HTuple d);
+        HOperatorSet.GetContourXld(one, out HTuple pr, out HTuple pc);
+        for (int k = 0; k < d.Length; k++)
+        {
+            double dev = Math.Abs(d[k].D);
+            devs.Add(dev);
+            if (dev > p.TolerancePx && k < pr.Length && k < pc.Length)
+            { oRows.Add(pr[k].D); oCols.Add(pc[k].D); }
+        }
+    }
+    finally { one?.Dispose(); }
+}
+overRows = oRows.ToArray();
+overCols = oCols.ToArray();
+```
+- `Compare` becomes:
+```csharp
+public DxfComparisonResult Compare(HImage image, string dxfFilePath, DxfComparisonParameters parameters)
+{
+    HObject aligned = null, actual = null;
+    try { return CompareWithOverlay(image, dxfFilePath, parameters, out aligned, out actual, out double[] _, out double[] _); }
+    finally { aligned?.Dispose(); actual?.Dispose(); }
+}
+```
+
+Verify `get_contour_xld` signature (returns Row, Col tuples) against the reference before building.
+
+- [ ] **Step 2: Build x64 (adapter compiles, existing Compare path unchanged behaviorally).**
+`dotnet build ... /p:Platform=x64` → 0/0. Run tests → `EXITCODE=0` (Domain unaffected).
+
+- [ ] **Step 3: Commit:**
+```bash
+git add src/FlashMeasurementSystem.Halcon/DxfComparison/HalconDxfContourComparer.cs
+git commit -m "feat(dxf): expose aligned nominal + actual + over-tolerance points for overlay"
+```
+
+## Task 6: Ghost preview + two-color deviation overlay in the UI
+
+**Files:**
+- Modify: `src/FlashMeasurementSystem.App.Wpf/OverlayAnnotator.cs`
+- Modify: `src/FlashMeasurementSystem.App.Wpf/DxfComparisonForm.cs`
+
+- [ ] **Step 1: Add two OverlayAnnotator helpers.** `DrawContour` (solid colored contour) and `DrawContourFitted` (ghost: dashed, scaled ~60% and centered in the image, for the not-yet-located preview). Compute the bbox by iterating the contour array's points in C# (robust vs a single-contour operator):
+```csharp
+public void DrawContour(HObject contour, string color = null)
+{
+    if (contour == null) return;
+    HOperatorSet.SetColor(_window, color ?? "cyan");
+    HOperatorSet.SetLineWidth(_window, 2);
+    HOperatorSet.SetDraw(_window, "margin");
+    HOperatorSet.DispObj(contour, _window);
+}
+
+public void DrawContourFitted(HObject contour, double imgWidth, double imgHeight, string color = null)
+{
+    if (contour == null) return;
+    HObject moved = null;
+    try
+    {
+        double minR = double.MaxValue, minC = double.MaxValue, maxR = double.MinValue, maxC = double.MinValue;
+        HOperatorSet.CountObj(contour, out HTuple n);
+        for (int i = 1; i <= n.I; i++)
+        {
+            HObject one = null;
+            try
+            {
+                HOperatorSet.SelectObj(contour, out one, i);
+                HOperatorSet.GetContourXld(one, out HTuple pr, out HTuple pc);
+                for (int k = 0; k < pr.Length; k++)
+                {
+                    double r = pr[k].D, c = pc[k].D;
+                    if (r < minR) minR = r; if (r > maxR) maxR = r;
+                    if (c < minC) minC = c; if (c > maxC) maxC = c;
+                }
+            }
+            finally { one?.Dispose(); }
+        }
+        if (maxR <= minR || maxC <= minC) return;
+        double w = maxC - minC, h = maxR - minR;
+        double s = 0.6 * Math.Min(imgWidth / w, imgHeight / h);
+        double cx = (minC + maxC) / 2.0, cy = (minR + maxR) / 2.0;
+        HOperatorSet.HomMat2dIdentity(out HTuple hom);
+        HOperatorSet.HomMat2dTranslate(hom, -cy, -cx, out hom);
+        HOperatorSet.HomMat2dScale(hom, s, s, 0, 0, out hom);
+        HOperatorSet.HomMat2dTranslate(hom, imgHeight / 2.0, imgWidth / 2.0, out hom);
+        HOperatorSet.AffineTransContourXld(contour, out moved, hom);
+        HOperatorSet.SetColor(_window, color ?? "gray");
+        HOperatorSet.SetLineWidth(_window, 1);
+        HOperatorSet.SetDraw(_window, "margin");
+        HOperatorSet.DispObj(moved, _window);
+    }
+    finally { moved?.Dispose(); }
+}
+```
+Verify `get_contour_xld`, `hom_mat2d_*`, `affine_trans_contour_xld` signatures against the reference. (Dashed styling via `set_line_style` is optional polish; a distinct gray at width 1 already reads as a ghost. If you add `set_line_style`, reset it to solid after.)
+
+- [ ] **Step 2: Rewire `DxfComparisonForm` to the concrete adapter + hold iconic state + draw overlays.** Change the ctor param type from `IDxfContourComparer<HImage>` to the concrete `FlashMeasurementSystem.Halcon.DxfComparison.HalconDxfContourComparer` (MainWindow already injects the concrete instance — no call-site change). Add fields to own the iconic objects across events and dispose them on replace/close (reuse the deep-audit #3 discipline). Key changes:
+  - Fields: `private HObject _previewContour; private HObject _alignedNominal; private HObject _actualEdges;` and a helper `DisposeIconics()` that disposes and nulls all three.
+  - `OnBrowse` (after setting the path): load the nominal and draw the ghost preview:
+```csharp
+DisposeIconics();
+_previewContour = _comparer.LoadNominalContour(_dxfPathBox.Text, BuildParams());
+if (_previewContour == null)
+{
+    MessageBox.Show(this, "無法讀取 DXF 標稱輪廓（可能非 AC1009/R12 或實體不支援）。", "DXF 比對");
+    return;
+}
+if (_imageHelper.CurrentImage != null)
+{
+    HOperatorSet.GetImageSize(_imageHelper.CurrentImage, out HTuple w, out HTuple h);
+    var prev = _previewContour;
+    double iw = w.D, ih = h.D;
+    _imageHelper.SetPersistentOverlayAction(() =>
+        _imageHelper.Annotator.DrawContourFitted(prev, iw, ih, "gray"));
+}
+```
+  - Extract a `BuildParams()` from the existing `OnRun` param construction (DRY, used by both).
+  - `OnRun`: call `CompareWithOverlay`, keep the text result, and install the three-color overlay:
+```csharp
+DisposeIconics();
+DxfComparisonResult r = _comparer.CompareWithOverlay(_imageHelper.CurrentImage, _dxfPathBox.Text, BuildParams(),
+    out _alignedNominal, out _actualEdges, out double[] overRows, out double[] overCols);
+_resultLabel.Text = r.Message;
+_resultLabel.ForeColor = !r.Success ? System.Drawing.SystemColors.ControlText
+    : (r.IsPass ? System.Drawing.Color.DarkGreen : System.Drawing.Color.DarkRed);
+if (r.Success)
+{
+    var aligned = _alignedNominal; var actual = _actualEdges;
+    // cap red markers like MaxOverlayCrosses to avoid clutter (even sampling)
+    const int maxMarks = 200;
+    int step = overRows.Length > maxMarks ? (int)Math.Ceiling(overRows.Length / (double)maxMarks) : 1;
+    _imageHelper.SetPersistentOverlayAction(() =>
+    {
+        var an = _imageHelper.Annotator;
+        an.DrawContour(aligned, "blue");                 // nominal (should-be)
+        an.DrawContour(actual, "green");                 // actual contour
+        for (int i = 0; i < overRows.Length; i += step)  // over-tolerance points
+            an.DrawCross(overRows[i], overCols[i], 12, "red");
+    });
+}
+```
+  - On failure (`!r.Success`), `_alignedNominal`/`_actualEdges` are null (adapter guarantees) — do not draw; the text message shows the reason.
+  - Form close: dispose iconics + clear overlay. Add:
+```csharp
+protected override void OnFormClosed(FormClosedEventArgs e)
+{
+    _imageHelper.ClearOverlay();
+    DisposeIconics();
+    base.OnFormClosed(e);
+}
+```
+  - Add `using HalconDotNet;` (already present) and confirm `_imageHelper.Annotator` is the public accessor (it is — used by RecipeEditor's trial overlay).
+
+- [ ] **Step 3: Build x64 + tests.** `dotnet build ... /p:Platform=x64` → 0/0; test exe → `EXITCODE=0`.
+
+- [ ] **Step 4: Manual GUI verification (human-driven) with the existing fixtures.** Load `data/images/dxf_house_ok.png`; click DXF 比對…; select `data/dxf/test_house.dxf` → **ghost preview appears** (gray shape). Set scale 種子=8, T=3, 執行 → **blue nominal + green actual coincide, no red, PASS**. Load `dxf_house_ng.png`, 執行 → **right-edge bump lights up red, FAIL**. Close form → overlay clears, no leak.
+
+- [ ] **Step 5: Commit:**
+```bash
+git add src/FlashMeasurementSystem.App.Wpf/OverlayAnnotator.cs src/FlashMeasurementSystem.App.Wpf/DxfComparisonForm.cs
+git commit -m "feat(dxf): ghost DXF preview on load + two-color deviation overlay on result"
+```
+
+## Self-review (v1.1)
+- Spec §11.1 preview → Task 6 OnBrowse + DrawContourFitted. §11.2 two-color overlay → Task 6 OnRun (blue/green/red). §11.3 adapter exposes iconics, interface/Domain unchanged → Task 5. §11.3 lifecycle (dispose on replace/close, ClearOverlay) → Task 6 DisposeIconics + OnFormClosed. §11 red-marker cap → Task 6 maxMarks sampling. ✓
+- Ownership: CompareWithOverlay/LoadNominalContour hand HObjects to the Form; the Form is the sole owner and disposes via DisposeIconics on every replace and on close. Compare (interface) still self-disposes. No double-free (Form path never calls the self-disposing Compare for its overlay).
+- Type consistency: `LoadNominalContour`, `CompareWithOverlay`, `DrawContour`, `DrawContourFitted`, `DisposeIconics`, `BuildParams` names consistent across Tasks 5-6.
