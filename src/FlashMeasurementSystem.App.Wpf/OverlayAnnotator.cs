@@ -189,6 +189,59 @@ namespace FlashMeasurementSystem
             HOperatorSet.WriteString(_window, $"score: {score:F4}");
         }
 
+        // 通用輪廓上色（DXF 比對：對位標稱/實際邊緣），無 score 分色，不畫十字/文字。
+        public void DrawContour(HObject contour, string color = null)
+        {
+            if (contour == null) return;
+            HOperatorSet.SetColor(_window, color ?? "cyan");
+            HOperatorSet.SetLineWidth(_window, 2);
+            HOperatorSet.SetDraw(_window, "margin");
+            HOperatorSet.DispObj(contour, _window);
+        }
+
+        // DXF 載入預覽用「幽靈輪廓」：尚未定位，僅將輪廓外接矩形置中縮放到影像 60%，
+        // 讓使用者確認讀到的形狀正確，不代表最終對位結果。
+        public void DrawContourFitted(HObject contour, double imgWidth, double imgHeight, string color = null)
+        {
+            if (contour == null) return;
+            HObject moved = null;
+            try
+            {
+                double minR = double.MaxValue, minC = double.MaxValue, maxR = double.MinValue, maxC = double.MinValue;
+                HOperatorSet.CountObj(contour, out HTuple n);
+                for (int i = 1; i <= n.I; i++)
+                {
+                    HObject one = null;
+                    try
+                    {
+                        HOperatorSet.SelectObj(contour, out one, i);
+                        HOperatorSet.GetContourXld(one, out HTuple pr, out HTuple pc);
+                        for (int k = 0; k < pr.Length; k++)
+                        {
+                            double r = pr[k].D, c = pc[k].D;
+                            if (r < minR) minR = r; if (r > maxR) maxR = r;
+                            if (c < minC) minC = c; if (c > maxC) maxC = c;
+                        }
+                    }
+                    finally { one?.Dispose(); }
+                }
+                if (maxR <= minR || maxC <= minC) return;
+                double w = maxC - minC, h = maxR - minR;
+                double s = 0.6 * Math.Min(imgWidth / w, imgHeight / h);
+                double cx = (minC + maxC) / 2.0, cy = (minR + maxR) / 2.0;
+                HOperatorSet.HomMat2dIdentity(out HTuple hom);
+                HOperatorSet.HomMat2dTranslate(hom, -cy, -cx, out hom);
+                HOperatorSet.HomMat2dScale(hom, s, s, 0, 0, out hom);
+                HOperatorSet.HomMat2dTranslate(hom, imgHeight / 2.0, imgWidth / 2.0, out hom);
+                HOperatorSet.AffineTransContourXld(contour, out moved, hom);
+                HOperatorSet.SetColor(_window, color ?? "gray");
+                HOperatorSet.SetLineWidth(_window, 1);
+                HOperatorSet.SetDraw(_window, "margin");
+                HOperatorSet.DispObj(moved, _window);
+            }
+            finally { moved?.Dispose(); }
+        }
+
         public void DrawMatchContour(HObject contour, double row, double col, double angleDeg, double score)
         {
             if (contour == null) return;

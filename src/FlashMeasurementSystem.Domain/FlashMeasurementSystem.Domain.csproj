@@ -82,6 +82,9 @@
     <Compile Include="Tolerance\ToleranceItemInput.cs" />
     <Compile Include="Tolerance\ItemJudgment.cs" />
     <Compile Include="Tolerance\OverallJudgment.cs" />
+    <Compile Include="DxfComparison\DxfComparisonParameters.cs" />
+    <Compile Include="DxfComparison\DxfComparisonResult.cs" />
+    <Compile Include="DxfComparison\DxfDeviationEvaluator.cs" />
     <Compile Include="CoordinateSystem\RigidTransform.cs" />
     <Compile Include="CoordinateSystem\TransformedRoi.cs" />
     <Compile Include="Calibration\CalibrationProfile.cs" />

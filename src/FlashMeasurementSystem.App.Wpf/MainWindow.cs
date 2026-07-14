@@ -81,6 +81,9 @@ namespace FlashMeasurementSystem
         private CheckBox _skipIqcCheckBox;
         private ToolTip _toolTip;
 
+        private readonly FlashMeasurementSystem.Halcon.DxfComparison.HalconDxfContourComparer _dxfComparer
+            = new FlashMeasurementSystem.Halcon.DxfComparison.HalconDxfContourComparer();
+
         public MainWindow()
         {
             InitializeComponent();
@@ -165,6 +168,11 @@ namespace FlashMeasurementSystem
                 Margin = new Padding(4, 6, 4, 0)
             };
 
+            // 獨立動作按鈕（Task 4）：DXF/CAD 輪廓度比對。比照 Edit Recipe / Metrology Model，
+            // 非配方/一鍵量測流程的一環，僅開一個獨立面板操作目前共用影像。
+            var dxfButton = new Button { Text = "DXF 比對...", Width = 84, Height = 26 };
+            dxfButton.Click += OpenDxfComparisonForm;
+
             // Toolbar tooltips
             _toolTip.SetToolTip(calibButton, "Open pixel-size calibration dialog");
             _toolTip.SetToolTip(loadRecipeButton, "Load a measurement recipe (.zcp)");
@@ -174,6 +182,7 @@ namespace FlashMeasurementSystem
             _toolTip.SetToolTip(metrologyButton, "Define the 2D metrology model for the loaded recipe");
             _toolTip.SetToolTip(oneClickButton, "Run full pipeline: IQC → Match → Measure → Evaluate → Report");
             _toolTip.SetToolTip(_skipIqcCheckBox, "Skip image quality check (for testing with synthetic images)");
+            _toolTip.SetToolTip(dxfButton, "Open standalone DXF/CAD contour comparison panel");
 
             topToolbar.Controls.Add(calibButton);
             topToolbar.Controls.Add(loadRecipeButton);
@@ -183,6 +192,7 @@ namespace FlashMeasurementSystem
             topToolbar.Controls.Add(metrologyButton);
             topToolbar.Controls.Add(oneClickButton);
             topToolbar.Controls.Add(_skipIqcCheckBox);
+            topToolbar.Controls.Add(dxfButton);
             measurementTabPage.Controls.Add(topToolbar);
             // WinForms docking 依「反 z-order」處理：最後面(SendToBack)的先 dock 佔邊，
             // 最前面(BringToFront)的後 dock 佔剩餘。故 Top 工具列要在後、Fill 內容要在前。
@@ -1750,6 +1760,14 @@ namespace FlashMeasurementSystem
             {
                 editor.ShowDialog(this);
             }
+        }
+
+        // 獨立動作（Task 4）：DXF/CAD 輪廓度比對面板。非配方/一鍵量測流程的一環，
+        // 僅開一個獨立面板操作目前共用影像（比照 Edit Recipe / Metrology Model）。
+        private void OpenDxfComparisonForm(object sender, EventArgs e)
+        {
+            var form = new DxfComparisonForm(_imageHelper, _dxfComparer);
+            form.Show(this);
         }
 
         // 單一 overlay slot 的共用底層：把目前有效的偵測/擬合狀態（ROI 框 + 邊緣十字 +
