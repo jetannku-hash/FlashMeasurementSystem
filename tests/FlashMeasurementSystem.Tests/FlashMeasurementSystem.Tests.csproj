@@ -74,6 +74,7 @@
     <Compile Include="CsvReportWriterTests.cs" />
     <Compile Include="WorkflowDomainTests.cs" />
     <Compile Include="MetrologyModelDomainTests.cs" />
+    <Compile Include="DxfComparisonDomainTests.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\FlashMeasurementSystem.Domain\FlashMeasurementSystem.Domain.csproj">
