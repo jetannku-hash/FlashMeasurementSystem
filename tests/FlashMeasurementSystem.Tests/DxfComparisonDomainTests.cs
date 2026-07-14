@@ -45,6 +45,20 @@ namespace FlashMeasurementSystem.Tests
             // ─── 空/null → Success=false ───
             AssertEqual(false, DxfDeviationEvaluator.Evaluate(new double[0], 2.0).Success, "empty → fail");
             AssertEqual(false, DxfDeviationEvaluator.Evaluate(null, 2.0).Success, "null → fail");
+
+            // ─── 介面契約（Fake）───
+            FlashMeasurementSystem.Application.DxfComparison.IDxfContourComparer<object> fake =
+                new FakeDxfComparer();
+            var fr = fake.Compare(new object(), "x.dxf", DxfComparisonParameters.Default());
+            AssertEqual(true, fr.Success, "Fake comparer satisfies interface contract");
+            AssertEqual(true, fr.IsPass, "Fake comparer returns pass");
+        }
+
+        private sealed class FakeDxfComparer
+            : FlashMeasurementSystem.Application.DxfComparison.IDxfContourComparer<object>
+        {
+            public DxfComparisonResult Compare(object image, string dxfFilePath, DxfComparisonParameters parameters)
+                => new DxfComparisonResult { Success = true, IsPass = true, Message = "FAKE" };
         }
 
         private static void AssertEqual<T>(T expected, T actual, string name)

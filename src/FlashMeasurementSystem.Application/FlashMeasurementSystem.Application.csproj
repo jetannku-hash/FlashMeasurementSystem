@@ -64,6 +64,7 @@
     <Compile Include="DistanceMeasurement\IDistanceMeasurer.cs" />
     <Compile Include="AngleMeasurement\IAngleMeasurer.cs" />
     <Compile Include="Tolerance\IToleranceJudger.cs" />
+    <Compile Include="DxfComparison\IDxfContourComparer.cs" />
     <Compile Include="CoordinateSystem\ICoordinateMapper.cs" />
     <Compile Include="Calibration\ICalibrator.cs" />
     <Compile Include="Calibration\ICalibrationStore.cs" />
