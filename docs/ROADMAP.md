@@ -18,9 +18,14 @@
 | 2 | **2D Metrology Model** | 標稱幾何上自動佈點的量測矩形 + 穩健一鍵多特徵量測（主流差異化） | ✅ 完成 2026-07-01（GUI 驗收通過，fix d08bc33） |
 | 3 | Production Robustness | fuzzy/robust 邊緣量測（B1）+ GR&R/重複性自測（B2） | ⬜ 未開始 |
 | 4 | PDF Reporting | 格式化 PDF 量測報表（超越 CSV） | ⬜ 未開始 |
-| 5 | Application Solutions Library | 命名量測方案（齒輪齒數/齒距、PCD、直徑、pin 間距）疊在既有基元上 | ⬜ 未開始 |
+| 5 | Application Solutions Library | 命名量測方案（齒輪齒數/齒距、PCD、直徑、pin 間距）+ **DXF/CAD 輪廓比對**，疊在既有基元上 | ⬜ 未開始 |
 
 Phase 2 已驗收並 push（`origin/main`）。驗收期補了 6 個「純 2D 量測模型配方一等公民 + on-image 標籤可讀性」修正（d08bc33）。Designer 重生 landmine 已還原 HEAD、未帶進版控（⚠️用 VS 開專案會再自動重生，commit 前檢查 `git status`）。**剩餘非阻擋測試強化**：①旋轉工件 GUI 複驗對齊（commit 6713fcc 的剛體變換對齊）；②補「對齊路徑」自動測試（現有 Wave 2 測試全 `hasReferencePose=false`，從未測有旋轉/姿態的對齊，是先前對齊 bug 5ce575b/6713fcc 的根因所在＝驗證洞）。詳見備份附錄與 memory `phase2-2d-metrology-plan`。
+
+**Phase 5「DXF/CAD 輪廓比對」**（把量到的輪廓疊到 CAD 標準輪廓找偏差/缺料/毛邊）：
+- **像素空間可做（無硬體）**：`read_contour_xld_dxf` 讀入標稱輪廓 → `find_shape_model`/仿射對位 → `dist_contour_xld` 類算點到輪廓偏差 → 偏差圖/超差標記。演算法可用合成/replay 影像全驗。
+- **mm 絕對準度待硬體**：要輸出真實 mm 偏差需相機 + 校正片校正；無硬體時只能做像素/相對比對。
+- 淵源：Phase 2 曾評估「Option B — CAD/DXF master import」當標稱來源，當時鎖定 Option A（標稱參數）並**延後** Option B（見 `docs/superpowers/specs/2026-06-30-gsd-phase1-2-design.md` Locked Decisions）；本項即該延後想法在應用庫層的落地。
 
 ## 關鍵決策（延後/否決，避免反覆爭論）
 
