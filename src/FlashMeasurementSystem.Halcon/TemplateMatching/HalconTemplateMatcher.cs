@@ -54,16 +54,22 @@ namespace FlashMeasurementSystem.Halcon.TemplateMatching
 
             HImage searchImage = null;
             bool ownsSearchImage = false;
+            HImage grayImage = null;
             try
             {
+                // find_shape_model 要求單通道影像；彩色（多通道）圖直接傳入會拋 HalconException、
+                // 每個 part 都回「模板匹配錯誤」。與其他 adapter 相同慣例：先轉單通道再 reduce/find。
+                grayImage = EnsureSingleChannel(image);
+                HImage baseImage = grayImage ?? image;
+
                 if (searchRegion != null)
                 {
-                    searchImage = image.ReduceDomain(searchRegion);
+                    searchImage = baseImage.ReduceDomain(searchRegion);
                     ownsSearchImage = true;
                 }
                 else
                 {
-                    searchImage = image;
+                    searchImage = baseImage;
                 }
 
                 HOperatorSet.FindShapeModel(
@@ -105,6 +111,7 @@ namespace FlashMeasurementSystem.Halcon.TemplateMatching
             finally
             {
                 if (ownsSearchImage) searchImage?.Dispose();
+                grayImage?.Dispose();  // 僅在多通道轉換時新建，需釋放（單通道路徑為 null）
             }
         }
         /// <summary>
@@ -149,6 +156,16 @@ namespace FlashMeasurementSystem.Halcon.TemplateMatching
             _modelAngleStartRad = 0.0;
             _modelAngleExtentRad = 0.0;
             _loadedModelPath = null;
+        }
+
+        // 回傳 null 表示原圖已是單通道（直接用原圖）；非 null 為新建的單通道影像，由呼叫端 dispose。
+        // 3 通道用 rgb1_to_gray（加權灰階），其他取第 1 通道。與其他 HALCON adapter 相同慣例。
+        private static HImage EnsureSingleChannel(HImage source)
+        {
+            HOperatorSet.CountChannels(source, out HTuple channels);
+            int channelCount = (channels != null && channels.Length > 0) ? channels.I : 1;
+            if (channelCount <= 1) return null;
+            return channelCount == 3 ? source.Rgb1ToGray() : source.AccessChannel(1);
         }
     }
 }

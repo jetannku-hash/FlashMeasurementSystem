@@ -87,6 +87,22 @@ namespace FlashMeasurementSystem.Tests
             try { AssertThrows(() => new CalibrationStore().Load(corrupt), "Load corrupt calibration JSON throws"); }
             finally { if (File.Exists(corrupt)) File.Delete(corrupt); }
 
+            // ─── #7：缺像素尺寸欄位/非正值 → 擲例外，不得靜默載入 10µm/px 錯誤比例 ──
+            // 有效 JSON 但缺 PixelSizeUmX/Y（例如 {} 或截斷檔）：舊行為靜默補 10.0，是計量比例災難。
+            AssertLoadThrows("{}", "Empty JSON (missing pixel size) throws, not silent 10µm");
+            AssertLoadThrows("{ \"ProfileId\": \"X\" }", "JSON without pixel-size keys throws");
+            AssertLoadThrows("{ \"PixelSizeUmX\": 10.0 }", "JSON missing PixelSizeUmY throws");
+            // 欄位存在但非正/非有限值
+            AssertLoadThrows("{ \"PixelSizeUmX\": 0.0, \"PixelSizeUmY\": 10.0 }", "Zero pixel size throws");
+            AssertLoadThrows("{ \"PixelSizeUmX\": -5.0, \"PixelSizeUmY\": 10.0 }", "Negative pixel size throws");
+            // 兩軸皆有效正值 → 正常載入
+            AssertLoadSucceeds("{ \"PixelSizeUmX\": 8.0, \"PixelSizeUmY\": 12.0 }",
+                loadedOk =>
+                {
+                    AssertClose(8.0, loadedOk.PixelSizeUmX, 1e-9, "Valid X loaded");
+                    AssertClose(12.0, loadedOk.PixelSizeUmY, 1e-9, "Valid anisotropic Y loaded");
+                });
+
             // ─── 原子覆寫：覆寫既有檔後仍正確載回新內容，且不殘留 .tmp ──
             string ovr = Path.Combine(Path.GetTempPath(),
                 "fms_cal_ovr_" + Guid.NewGuid().ToString("N").Substring(0, 8) + ".json");
@@ -109,6 +125,26 @@ namespace FlashMeasurementSystem.Tests
             try { action(); }
             catch { return; }
             throw new InvalidOperationException(name + " — expected an exception but none was thrown");
+        }
+
+        // #7：把 JSON 內容寫成暫存校正檔，載入應擲例外。
+        private static void AssertLoadThrows(string jsonContent, string name)
+        {
+            string path = Path.Combine(Path.GetTempPath(),
+                "fms_cal_v_" + Guid.NewGuid().ToString("N").Substring(0, 8) + ".json");
+            File.WriteAllText(path, jsonContent);
+            try { AssertThrows(() => new CalibrationStore().Load(path), name); }
+            finally { if (File.Exists(path)) File.Delete(path); }
+        }
+
+        // #7：有效校正 JSON 應正常載入，並套用檢查委派。
+        private static void AssertLoadSucceeds(string jsonContent, Action<CalibrationProfile> check)
+        {
+            string path = Path.Combine(Path.GetTempPath(),
+                "fms_cal_v_" + Guid.NewGuid().ToString("N").Substring(0, 8) + ".json");
+            File.WriteAllText(path, jsonContent);
+            try { check(new CalibrationStore().Load(path)); }
+            finally { if (File.Exists(path)) File.Delete(path); }
         }
 
         private static void AssertEqual<T>(T expected, T actual, string name)

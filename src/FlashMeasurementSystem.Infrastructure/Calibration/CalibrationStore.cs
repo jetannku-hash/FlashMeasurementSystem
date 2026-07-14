@@ -1,8 +1,10 @@
 using System;
+using System.Globalization;
 using System.IO;
 using FlashMeasurementSystem.Application.Calibration;
 using FlashMeasurementSystem.Domain.Calibration;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace FlashMeasurementSystem.Infrastructure.Calibration
 {
@@ -44,20 +46,47 @@ namespace FlashMeasurementSystem.Infrastructure.Calibration
                 throw new InvalidOperationException("讀取校正檔失敗：" + filePath + " — " + ex.Message, ex);
             }
 
-            CalibrationProfile profile;
+            JObject parsed;
             try
             {
-                profile = JsonConvert.DeserializeObject<CalibrationProfile>(json);
+                parsed = JObject.Parse(json);
             }
             catch (JsonException ex)
             {
                 throw new InvalidOperationException("校正檔格式錯誤（JSON 解析失敗）：" + filePath + " — " + ex.Message, ex);
             }
 
+            CalibrationProfile profile;
+            try
+            {
+                profile = parsed.ToObject<CalibrationProfile>();
+            }
+            catch (JsonException ex)
+            {
+                throw new InvalidOperationException("校正檔格式錯誤（欄位型別不符）：" + filePath + " — " + ex.Message, ex);
+            }
+
             if (profile == null)
                 throw new InvalidOperationException("校正檔內容為空或無效：" + filePath);
 
+            // #7：缺 PixelSizeUmX/Y 欄位時，CalibrationProfile 的 C# 初始值(10.0 µm/px) 會被靜默補上，
+            // 下游每個尺寸量測都被錯誤比例縮放且無任何警告。改為明確要求關鍵欄位存在且為正有限值，
+            // 否則擲例外讓操作員看到，而非載入一個看似有效、實則錯誤比例的校正。
+            if (parsed["PixelSizeUmX"] == null || parsed["PixelSizeUmY"] == null)
+                throw new InvalidOperationException(
+                    "校正檔缺少 PixelSizeUmX/PixelSizeUmY 欄位，無法確定像素尺寸：" + filePath);
+
+            if (!IsPositiveFinite(profile.PixelSizeUmX) || !IsPositiveFinite(profile.PixelSizeUmY))
+                throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture,
+                    "校正檔像素尺寸無效（需為正有限值）：X={0}, Y={1} — {2}",
+                    profile.PixelSizeUmX, profile.PixelSizeUmY, filePath));
+
             return profile;
+        }
+
+        private static bool IsPositiveFinite(double v)
+        {
+            return !double.IsNaN(v) && !double.IsInfinity(v) && v > 0.0;
         }
     }
 }
