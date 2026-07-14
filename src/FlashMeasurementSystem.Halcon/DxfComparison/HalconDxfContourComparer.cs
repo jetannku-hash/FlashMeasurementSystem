@@ -14,14 +14,45 @@ namespace FlashMeasurementSystem.Halcon.DxfComparison
     /// </summary>
     public class HalconDxfContourComparer : IDxfContourComparer<HImage>
     {
+        // 讀 DXF，回傳標稱輪廓供載入時預覽（呼叫端 dispose；失敗回 null）。
+        public HObject LoadNominalContour(string dxfFilePath, DxfComparisonParameters parameters)
+        {
+            var p = parameters ?? DxfComparisonParameters.Default();
+            if (string.IsNullOrEmpty(dxfFilePath)) return null;
+            HObject nominal = null;
+            try
+            {
+                HTuple genNames = new HTuple(new string[] { "min_num_points", "max_approx_error" });
+                HTuple genVals = new HTuple(new HTuple(p.MinNumPoints)).TupleConcat(new HTuple(p.MaxApproxError));
+                HOperatorSet.ReadContourXldDxf(out nominal, dxfFilePath, genNames, genVals, out HTuple _);
+                HOperatorSet.CountObj(nominal, out HTuple n);
+                if (n.Length == 0 || n.I == 0) { nominal?.Dispose(); return null; }
+                return nominal; // caller disposes
+            }
+            catch (HalconException) { nominal?.Dispose(); return null; }
+        }
+
+        // 介面方法：委派 CompareWithOverlay 並釋放回傳的 iconic（維持原行為，不外拋）。
         public DxfComparisonResult Compare(HImage image, string dxfFilePath, DxfComparisonParameters parameters)
         {
+            HObject aligned = null, actual = null;
+            try { return CompareWithOverlay(image, dxfFilePath, parameters, out aligned, out actual, out double[] _, out double[] _); }
+            finally { aligned?.Dispose(); actual?.Dispose(); }
+        }
+
+        // 與 Compare 相同管線，但將對位標稱輪廓 + 實際邊 + 超差點座標交給 UI 疊圖。
+        // alignedNominal / actualEdges 所有權移交呼叫端（不在此 finally 釋放）；其餘 iconic 內部釋放。
+        public DxfComparisonResult CompareWithOverlay(HImage image, string dxfFilePath, DxfComparisonParameters parameters,
+            out HObject alignedNominal, out HObject actualEdges, out double[] overRows, out double[] overCols)
+        {
+            alignedNominal = null; actualEdges = null; overRows = new double[0]; overCols = new double[0];
+
             var p = parameters ?? DxfComparisonParameters.Default();
             if (image == null) return DxfComparisonResult.Failed("影像為空");
             if (string.IsNullOrEmpty(dxfFilePath)) return DxfComparisonResult.Failed("未指定 DXF 檔");
 
-            HObject nominal = null, modelContours = null, alignedNominal = null;
-            HObject actualEdges = null, distContour = null;
+            HObject nominal = null, modelContours = null;
+            HObject distContour = null;
             HObject bandMargin = null, band = null, reduced = null;
             HImage gray = null;
             HTuple modelId = null;
@@ -90,6 +121,8 @@ namespace FlashMeasurementSystem.Halcon.DxfComparison
                 HOperatorSet.DistanceContoursXld(actualEdges, alignedNominal, out distContour, "point_to_segment");
 
                 var devs = new List<double>();
+                var oRows = new List<double>();
+                var oCols = new List<double>();
                 HOperatorSet.CountObj(distContour, out HTuple nDist);
                 for (int i = 1; i <= nDist.I; i++)
                 {
@@ -97,11 +130,20 @@ namespace FlashMeasurementSystem.Halcon.DxfComparison
                     try
                     {
                         HOperatorSet.SelectObj(distContour, out one, i);
-                        HOperatorSet.GetContourAttribXld(one, "distance", out HTuple d);
-                        for (int k = 0; k < d.Length; k++) devs.Add(d[k].D);
+                        HOperatorSet.GetContourAttribXld(one, "distance", out HTuple dAttr);
+                        HOperatorSet.GetContourXld(one, out HTuple pr, out HTuple pc);
+                        for (int k = 0; k < dAttr.Length; k++)
+                        {
+                            double dev = Math.Abs(dAttr[k].D);
+                            devs.Add(dev);
+                            if (dev > p.TolerancePx && k < pr.Length && k < pc.Length)
+                            { oRows.Add(pr[k].D); oCols.Add(pc[k].D); }
+                        }
                     }
                     finally { one?.Dispose(); }
                 }
+                overRows = oRows.ToArray();
+                overCols = oCols.ToArray();
 
                 // 8. 判定（純 Domain）+ 附姿態
                 DxfComparisonResult result = DxfDeviationEvaluator.Evaluate(devs.ToArray(), p.TolerancePx);
@@ -126,8 +168,6 @@ namespace FlashMeasurementSystem.Halcon.DxfComparison
             {
                 nominal?.Dispose();
                 modelContours?.Dispose();
-                alignedNominal?.Dispose();
-                actualEdges?.Dispose();
                 distContour?.Dispose();
                 bandMargin?.Dispose();
                 band?.Dispose();
