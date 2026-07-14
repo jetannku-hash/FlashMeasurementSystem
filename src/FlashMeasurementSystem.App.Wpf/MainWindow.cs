@@ -526,6 +526,9 @@ namespace FlashMeasurementSystem
                 _edgeDrawRoiCheck.Checked = false;
             }
 
+            // _imageHelper 於 OnLoad 才建立；比照 EdgeDrawRoiCheck_CheckedChanged 防呆，
+            // 避免 Designer 若在 InitializeComponent 期間觸發此事件時 NRE。
+            if (_imageHelper == null) return;
             _imageHelper.IsRoiMode = roiModeCheck.Checked;
         }
 
@@ -1511,7 +1514,9 @@ namespace FlashMeasurementSystem
             pxUmX = (double)measurementPixelSizeXNumeric.Value;
             pxUmY = (double)measurementPixelSizeYNumeric.Value;
             source = "量測分頁";
-            if (!string.IsNullOrEmpty(_loadedRecipe.CalibrationProfileId))
+            // 試測路徑允許尚未載入配方（暫態單工具配方），此時 _loadedRecipe 為 null，
+            // 直接沿用量測分頁數值，不查校正檔。
+            if (_loadedRecipe != null && !string.IsNullOrEmpty(_loadedRecipe.CalibrationProfileId))
             {
                 try
                 {
@@ -1596,6 +1601,7 @@ namespace FlashMeasurementSystem
             finally
             {
                 Cursor = Cursors.Default;
+                ClearProgress();  // 比照 RunRecipeButton：狀態列還原 Ready，不卡在「一鍵量測：…」
             }
         }
 
@@ -2135,6 +2141,10 @@ namespace FlashMeasurementSystem
                 (double)_edgeScanLengthNumeric.Value / 2.0,
                 (double)_edgeRoiWidthNumeric.Value / 2.0,
                 (double)_edgeAngleNumeric.Value * Math.PI / 180.0);
+            // 種下編輯中心：OnEdgeRoiNumericChanged 會用 _editCenterRow/Col 重建 ROI。
+            // 若不在此 seed，畫完 ROI 後「先改數值框、還沒拖曳把手」會用預設 0 → ROI 跳到 (0,0)。
+            _editCenterRow = _latestEdgeRoi.CenterRow;
+            _editCenterCol = _latestEdgeRoi.CenterCol;
             InvalidateEdgeState();
             // 畫新的邊緣 rect ROI = 改用邊緣 ROI，對稱於 ArcEditCheck：清掉殘留的圓弧帶並
             // 同步取消「互動編輯」勾選（BeginRect2Edit 已關掉 arc 編輯把手，這裡只補狀態/UI）。
@@ -2282,6 +2292,7 @@ namespace FlashMeasurementSystem
             _matchContour = null;
             _templateMatcher.Dispose();
             _imageHelper?.Dispose();
+            _toolTip?.Dispose();  // ToolTip 未加入 components 容器，手動釋放原生 handle
             base.OnFormClosed(e);
         }
 

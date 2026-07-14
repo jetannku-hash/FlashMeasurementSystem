@@ -11,8 +11,46 @@ namespace FlashMeasurementSystem.Tests
             TestPrimitiveFactories();
             TestTryAsPoint();
             TestLineIntersection();
+            TestLineIntersectionScaleInvariance();
             TestProjectPointOntoLine();
             TestMidline();
+        }
+
+        // 迴歸：平行/相交的分類必須 scale-invariant（只依夾角，不依線段長度），
+        // 且退化線段（零長）不得除零回 NaN。對應 deep-audit 2026-07-01 #6。
+        private static void TestLineIntersectionScaleInvariance()
+        {
+            // 近平行但確有夾角（0.5°）：不論線段多長皆應判「相交」，不得誤判平行。
+            double ang = 0.5 * Math.PI / 180.0;
+            foreach (double len in new[] { 5.0, 50.0, 5000.0 })
+            {
+                bool ok = GeometryConstruction.TryLineIntersection(
+                    0, 0, 0, len,                                   // A：水平，長度 len
+                    0, 0, Math.Sin(ang) * len, Math.Cos(ang) * len, // B：傾斜 0.5°，長度 len
+                    out double _, out double _);
+                if (!ok)
+                    throw new InvalidOperationException($"near-parallel 0.5° (len={len}) should intersect");
+            }
+
+            // 完全平行（同方向）：不論長度皆回 false。
+            foreach (double len in new[] { 5.0, 5000.0 })
+            {
+                bool par = GeometryConstruction.TryLineIntersection(
+                    0, 0, 0, len,
+                    10, 0, 10, len,
+                    out double _, out double _);
+                if (par)
+                    throw new InvalidOperationException($"parallel (len={len}) should return false");
+            }
+
+            // 退化線段（A 縮成一點）：回 false，且輸出不得為 NaN。
+            bool deg = GeometryConstruction.TryLineIntersection(
+                3, 3, 3, 3,
+                0, 0, 10, 10,
+                out double dr, out double dc);
+            if (deg) throw new InvalidOperationException("degenerate segment should return false");
+            if (double.IsNaN(dr) || double.IsNaN(dc))
+                throw new InvalidOperationException("degenerate segment must not produce NaN");
         }
 
         private static void TestPrimitiveFactories()
