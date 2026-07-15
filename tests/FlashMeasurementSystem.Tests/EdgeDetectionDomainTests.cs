@@ -151,6 +151,8 @@ namespace FlashMeasurementSystem.Tests
             Console.WriteLine("MetrologyModelDomainTests passed");
             DxfComparisonDomainTests.Run();
             Console.WriteLine("DxfComparisonDomainTests passed");
+            ArcRecipeToolDomainTests.Run();
+            Console.WriteLine("ArcRecipeToolDomainTests passed");
             Console.WriteLine("EdgeDetectionDomainTests passed");
             return 0;
         }

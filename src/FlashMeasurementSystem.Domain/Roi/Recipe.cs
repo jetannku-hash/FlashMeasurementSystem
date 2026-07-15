@@ -20,7 +20,9 @@ namespace FlashMeasurementSystem.Domain.Roi
         //     舊檔載入時 Gdt=null、無 GD&T 工具，行為不變。
         // v6：2D 量測模型（MetrologyModel，加性 nullable 欄）。純加欄位、向後相容、無遷移碼：
         //     舊檔載入時 MetrologyModel=null，1D 流程行為不變。
-        public int SchemaVersion { get; set; } = 6;
+        // v7：弧形 ROI（MeasurementTool.ArcRoi，加性 nullable 欄）+ ToolType="arc" 弧形卡尺工具。
+        //     純加欄位、向後相容、無遷移碼：舊檔載入時 ArcRoi=null、無 arc 工具，1D 流程行為不變。
+        public int SchemaVersion { get; set; } = 7;
         public string RecipeId { get; set; } = "";
         public string Name { get; set; } = "";
 
