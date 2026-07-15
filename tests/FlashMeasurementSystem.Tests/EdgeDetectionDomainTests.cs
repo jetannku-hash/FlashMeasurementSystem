@@ -177,6 +177,13 @@ namespace FlashMeasurementSystem.Tests
             {
                 return new EdgeResult { Success = true };
             }
+
+            public EdgeResult DetectEdgesOnArc(object image, ArcMeasureRoi arcRoi, EdgeDetectionParameters parameters)
+            {
+                var r = new EdgeResult();
+                r.EdgePoints.Add(new EdgePoint { Row = 1.0, Column = 2.0, Amplitude = 30.0, Distance = 0.0 });
+                return r;
+            }
         }
     }
 }
