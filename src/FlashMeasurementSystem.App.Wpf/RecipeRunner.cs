@@ -52,6 +52,10 @@ namespace FlashMeasurementSystem
         // metrology 量測區邊點（供顯示 cyan 十字）
         public List<double> MetrologyMeasureRows = new List<double>();
         public List<double> MetrologyMeasureCols = new List<double>();
+        // v7 弧形工具：變換後的弧（供 overlay 畫弧）與偵測到的邊點（供 overlay 十字）。
+        public ArcMeasureRoi PlacedArc;
+        public List<double> ArcEdgeRows = new List<double>();
+        public List<double> ArcEdgeCols = new List<double>();
         public double DistMm;          // distance：距離 (mm)
         public double DistRow1, DistCol1, DistRow2, DistCol2;  // distance 連線兩端（供繪製）
         public double AngleDeg;         // angle：夾角 AcuteAngleDeg (0~90)
@@ -163,6 +167,54 @@ namespace FlashMeasurementSystem
                 if (!string.IsNullOrEmpty(tool.Id)) byId[tool.Id] = res;
             }
 
+            // ── Pass 1.2：弧形卡尺工具（自足元素工具；量圓周邊數）──
+            // 弧形工具用 ArcRoi（非 rect2 Roi），故不與 Pass 1 共用迴圈。
+            foreach (MeasurementTool tool in recipe.Tools)
+            {
+                if (tool == null || tool.ToolType != "arc") continue;
+                if (tool.ArcRoi == null) continue;   // Validator 已擋；此處防禦性略過
+
+                ArcMeasureRoi placed = ArcRoiTransform.TransformArc(_mapper, tool.ArcRoi, transform);
+
+                var res = new ToolRunResult
+                {
+                    Name = tool.Name,
+                    ToolType = tool.ToolType,
+                    Roi = new PlacedRoi
+                    {
+                        Row = placed.CenterRow, Col = placed.CenterCol, AngleRad = placed.AngleStart,
+                        Length1 = placed.Radius, Length2 = placed.AnnulusRadius, Name = tool.Name
+                    },
+                    PlacedArc = placed,
+                    Supported = true
+                };
+
+                EdgeResult er = _edgeDetector.DetectEdgesOnArc(image, placed,
+                    tool.EdgeParameters ?? EdgeDetectionParameters.Default());
+                if (!er.Success)
+                {
+                    res.Measured = false;
+                    res.ValueText = "弧形卡尺量測失敗";
+                    res.Message = string.IsNullOrEmpty(er.ErrorMessage) ? "弧形卡尺量測失敗" : er.ErrorMessage;
+                    results.Add(res);
+                    if (!string.IsNullOrEmpty(tool.Id)) byId[tool.Id] = res;
+                    continue;
+                }
+
+                foreach (EdgePoint p in er.EdgePoints)
+                {
+                    res.ArcEdgeRows.Add(p.Row);
+                    res.ArcEdgeCols.Add(p.Column);
+                }
+
+                res.Measured = true;
+                res.ValueText = string.Format(CultureInfo.InvariantCulture, "邊數={0}", er.EdgePoints.Count);
+                JudgeSingle(res, tool, er.EdgePoints.Count);
+
+                results.Add(res);
+                if (!string.IsNullOrEmpty(tool.Id)) byId[tool.Id] = res;
+            }
+
             // ── Pass 1.5：構造工具（intersection / midline / projection）──
             // 僅參照基礎元件（line/circle），不支援鏈式構造。
             foreach (MeasurementTool tool in recipe.Tools)
@@ -195,6 +247,7 @@ namespace FlashMeasurementSystem
             {
                 if (tool == null) continue;
                 if (tool.ToolType == "circle" || tool.ToolType == "line") continue;  // 已於 Pass 1 處理
+                if (tool.ToolType == "arc") continue;  // 已於 Pass 1.2 處理
                 if (tool.ToolType == "intersection" || tool.ToolType == "midline" || tool.ToolType == "projection") continue;  // 已於 Pass 1.5 處理
                 if (IsGdtType(tool.ToolType)) continue;  // 已於 Pass 1.7 處理
 
@@ -332,6 +385,22 @@ namespace FlashMeasurementSystem
             return res;
         }
 
+        // 以既有 ToleranceJudger 對單一量測值判定，並回填 IsOk（與 circle 相同語意：
+        // 無公差 → 不判定(null)；Judge 無回傳項 → 不判定(null)）。
+        private void JudgeSingle(ToolRunResult res, MeasurementTool tool, double value)
+        {
+            if (tool.Tolerance == null) { res.IsOk = null; return; }
+            var input = new ToleranceItemInput
+            {
+                ToolId = tool.Id,
+                ToolName = tool.Name,
+                MeasuredValue = value,
+                Spec = tool.Tolerance
+            };
+            OverallJudgment overall = _judger.Judge(new List<ToleranceItemInput> { input });
+            res.IsOk = overall.Items.Count > 0 ? overall.Items[0].IsOk : (bool?)null;
+        }
+
         private void MeasureCircle(HImage image, ToolRunResult res, MeasurementTool tool,
             double row, double col, double ang, double length1, double length2, double pixelSizeUm)
         {
@@ -368,21 +437,7 @@ namespace FlashMeasurementSystem
                 res.DiameterMm = circle.DiameterPx * pixelSizeUm / 1000.0;
                 res.ValueText = string.Format(CultureInfo.InvariantCulture, "D={0:F4}mm", res.DiameterMm);
 
-                if (tool.Tolerance != null)
-                {
-                    var input = new ToleranceItemInput
-                    {
-                        ToolId = tool.Id,
-                        ToolName = tool.Name,
-                        MeasuredValue = res.DiameterMm,
-                        Spec = tool.Tolerance
-                    };
-                    OverallJudgment overall = _judger.Judge(new List<ToleranceItemInput> { input });
-                    if (overall.Items.Count > 0)
-                    {
-                        res.IsOk = overall.Items[0].IsOk;
-                    }
-                }
+                JudgeSingle(res, tool, res.DiameterMm);
             }
             catch (HalconException ex)
             {
