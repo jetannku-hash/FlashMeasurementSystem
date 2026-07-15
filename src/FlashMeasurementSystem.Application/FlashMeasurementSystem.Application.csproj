@@ -66,6 +66,7 @@
     <Compile Include="Tolerance\IToleranceJudger.cs" />
     <Compile Include="DxfComparison\IDxfContourComparer.cs" />
     <Compile Include="CoordinateSystem\ICoordinateMapper.cs" />
+    <Compile Include="CoordinateSystem\ArcRoiTransform.cs" />
     <Compile Include="Calibration\ICalibrator.cs" />
     <Compile Include="Calibration\ICalibrationStore.cs" />
     <Compile Include="MetrologyModel\IMetrologyModelRunner.cs" />
