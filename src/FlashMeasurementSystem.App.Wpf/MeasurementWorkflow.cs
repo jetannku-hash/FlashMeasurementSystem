@@ -293,6 +293,11 @@ namespace FlashMeasurementSystem
                 }
                 return r.LineAngleDeg;
             }
+            // 弧形卡尺量的是邊數：報表值必須與 RecipeRunner/overlay 判定的同一個量（邊數），
+            // 否則會落到下方 return 0 被重新判定，CSV 與畫面互相矛盾（比照 GD&T 的相同陷阱）。
+            // 量測失敗時 ArcEdgeRows 為空 → 0，與 circle 失敗時 DiameterMm=0 一致。
+            if (r.ToolType == "arc")
+                return r.ArcEdgeRows.Count;
             if (r.ToolType == "distance")
                 return r.DistMm;
             if (r.ToolType == "angle")

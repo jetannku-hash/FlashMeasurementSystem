@@ -759,6 +759,8 @@ namespace FlashMeasurementSystem
             var tolerance = ToleranceSpec.Default();
             // Angle is measured in degrees; distance/diameter in mm.
             if (toolType == "angle") tolerance.Unit = "deg";
+            // 弧形卡尺量的是邊數（無因次計數），不是長度，故單位不能沿用預設 "mm"。
+            if (toolType == "arc") tolerance.Unit = "count";
 
             var tool = new MeasurementTool
             {
