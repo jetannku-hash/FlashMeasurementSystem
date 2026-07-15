@@ -1501,6 +1501,30 @@ namespace FlashMeasurementSystem
 
                     rows.Add(new OverlayResultRow { Name = r.Name, ValueText = r.ValueText, IsOk = r.IsOk });
                 }
+
+                // Arc 卡尺結果：Roi 刻意留 null（見上方 Pass 1.2 註解），畫框那段不會經過，
+                // 故弧本體/邊點十字/名稱標籤需在此自行補畫。
+                foreach (ToolRunResult r in results)
+                {
+                    if (r == null || r.ToolType != "arc" || r.PlacedArc == null) continue;
+                    string arcColor = r.IsOk == true ? "green" : (r.IsOk == false ? "red" : "yellow");
+                    ArcMeasureRoi a = r.PlacedArc;
+                    string pointOrder = a.AngleExtent > 0 ? "positive" : "negative";
+                    an.DrawArc(a.CenterRow, a.CenterCol, a.Radius,
+                        a.AngleStart, a.AngleStart + a.AngleExtent, pointOrder, arcColor);
+
+                    // 邊點十字：等間距抽樣至多 MaxOverlayCrosses 個（同 metrology/1D 慣例）。
+                    int aTotal = Math.Min(r.ArcEdgeRows.Count, r.ArcEdgeCols.Count);
+                    if (aTotal > 0)
+                    {
+                        int aStep = aTotal <= MaxOverlayCrosses ? 1 : (int)Math.Ceiling((double)aTotal / MaxOverlayCrosses);
+                        for (int ai = 0; ai < aTotal; ai += aStep)
+                            an.DrawCross(r.ArcEdgeRows[ai], r.ArcEdgeCols[ai], 10, arcColor);
+                    }
+
+                    // 名稱標籤：錨在弧心（比照 Roi 分支把名稱標在 Roi.Row/Col 的慣例）。
+                    an.DrawText(r.Name ?? string.Empty, (int)a.CenterRow, (int)a.CenterCol, arcColor);
+                }
                 an.DrawResultTable(rows);
             });
 
