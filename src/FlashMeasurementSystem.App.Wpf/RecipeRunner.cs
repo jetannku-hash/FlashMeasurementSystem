@@ -176,22 +176,19 @@ namespace FlashMeasurementSystem
 
                 ArcMeasureRoi placed = ArcRoiTransform.TransformArc(_mapper, tool.ArcRoi, transform);
 
+                // 不設 Roi：Roi 是 rect2 語意，overlay 會把任何非 null 的 Roi 無條件畫成橘色矩形，
+                // 對弧形工具是無意義的框（比照 Pass 1.5/1.7/2/3 皆留 null）。弧的真實幾何在 PlacedArc。
                 var res = new ToolRunResult
                 {
                     Name = tool.Name,
                     ToolType = tool.ToolType,
-                    Roi = new PlacedRoi
-                    {
-                        Row = placed.CenterRow, Col = placed.CenterCol, AngleRad = placed.AngleStart,
-                        Length1 = placed.Radius, Length2 = placed.AnnulusRadius, Name = tool.Name
-                    },
                     PlacedArc = placed,
                     Supported = true
                 };
 
                 EdgeResult er = _edgeDetector.DetectEdgesOnArc(image, placed,
                     tool.EdgeParameters ?? EdgeDetectionParameters.Default());
-                if (!er.Success)
+                if (!er.Success || er.EdgePoints == null)
                 {
                     res.Measured = false;
                     res.ValueText = "弧形卡尺量測失敗";
