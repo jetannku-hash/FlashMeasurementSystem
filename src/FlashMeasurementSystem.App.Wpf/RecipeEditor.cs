@@ -805,6 +805,9 @@ namespace FlashMeasurementSystem
 
                 // 弧形/齒輪結果：畫量測帶 + 抽樣邊點十字 + 數值，比照 MainWindow.DrawRecipeResults 的弧形分支。
                 // 齒輪重用弧卡尺量測環（PlacedArc/ArcEdge*）+ 以 ValueText 顯示齒數/齒距/齒寬判定訊息。
+                // 【刻意分工，勿當 parity bug 統一】此處（編輯器試測，調機視圖）對齒輪刻意畫「原始邊點」，
+                // 讓操作者在調 ROI/Sigma/Threshold 時確認每對進/出齒被乾淨抓到；主頁一鍵量測則畫「齒中心」結果
+                // （見 MainWindow.DrawRecipeResults 齒輪分支：每齒一十字＝齒數、缺齒洋紅）。兩處視圖不同是設計，不是缺陷。
                 if ((result.ToolType == "arc" || result.ToolType == "gear") && result.PlacedArc != null)
                 {
                     ArcMeasureRoi a = result.PlacedArc;
