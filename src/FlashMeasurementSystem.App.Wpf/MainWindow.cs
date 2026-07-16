@@ -1525,6 +1525,32 @@ namespace FlashMeasurementSystem
                     // 名稱標籤：錨在弧心（比照 Roi 分支把名稱標在 Roi.Row/Col 的慣例）。
                     an.DrawText(r.Name ?? string.Empty, (int)a.CenterRow, (int)a.CenterCol, arcColor);
                 }
+
+                // 齒輪工具結果：與 arc 同樣 Roi 刻意留 null（見 RecipeRunner Pass 1.3），畫框那段不會經過。
+                // 幾何在 PlacedArc（已 pose 轉換）。畫量測環帶 + 每齒中心十字 + 缺齒提示（洋紅大十字）+ 名稱/數值。
+                // 角度→(row,col) 採全專案慣例 row = cr + R·sinθ、col = cc + R·cosθ（同 GearToothAnalyzer 的 atan2(row-cr, col-cc)
+                // 與 DrawAngle/DrawArcBand），確保標記落在環帶上。齒角度為「度」，先轉弧度。
+                foreach (ToolRunResult r in results)
+                {
+                    if (r == null || r.ToolType != "gear" || r.PlacedArc == null) continue;
+                    string gearColor = r.IsOk == true ? "green" : (r.IsOk == false ? "red" : "yellow");
+                    ArcMeasureRoi a = r.PlacedArc;
+                    an.DrawArcBand(a.CenterRow, a.CenterCol, a.Radius, a.AngleStart, a.AngleExtent, a.AnnulusRadius);
+                    if (r.Gear != null && r.Gear.Success)
+                    {
+                        foreach (var tooth in r.Gear.Teeth)
+                        {
+                            double th = tooth.CenterAngleDeg * Math.PI / 180.0;
+                            an.DrawCross(a.CenterRow + a.Radius * Math.Sin(th), a.CenterCol + a.Radius * Math.Cos(th), 12, gearColor);
+                        }
+                        foreach (double hintDeg in r.Gear.MissingToothHintsDeg)
+                        {
+                            double th = hintDeg * Math.PI / 180.0;
+                            an.DrawCross(a.CenterRow + a.Radius * Math.Sin(th), a.CenterCol + a.Radius * Math.Cos(th), 18, "magenta");
+                        }
+                    }
+                    an.DrawText(r.ValueText ?? (r.Name ?? string.Empty), (int)a.CenterRow, (int)a.CenterCol, gearColor);
+                }
                 an.DrawResultTable(rows);
             });
 
