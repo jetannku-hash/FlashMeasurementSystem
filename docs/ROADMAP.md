@@ -18,7 +18,7 @@
 | 2 | **2D Metrology Model** | 標稱幾何上自動佈點的量測矩形 + 穩健一鍵多特徵量測（主流差異化） | ✅ 完成 2026-07-01（GUI 驗收通過，fix d08bc33） |
 | 3 | Production Robustness | fuzzy/robust 邊緣量測（B1）+ GR&R/重複性自測（B2） | ⬜ 未開始 |
 | 4 | PDF Reporting | 格式化 PDF 量測報表（超越 CSV） | ⬜ 未開始 |
-| 5 | Application Solutions Library | 命名量測方案（齒輪齒數/齒距、PCD、直徑、pin 間距）+ DXF/CAD 輪廓比對，疊在既有基元上 | 🔄 進行中：**DXF/CAD 輪廓度比對 v1+v1.1**（2026-07-14，merge 5b67bae）+ **弧形卡尺工具進配方 v1**（2026-07-16，merge 8a34cb5；schema v7、圓周邊數計數、共用基礎建設**解鎖 gear/PCD/孔陣列**）已交付；齒輪齒數/齒距方案已有 spec（`2026-07-15-gear-tooth-analysis-design.md`）待實作，其餘未開始 |
+| 5 | Application Solutions Library | 命名量測方案（齒輪齒數/齒距、PCD、直徑、pin 間距）+ DXF/CAD 輪廓比對，疊在既有基元上 | 🔄 進行中：**DXF/CAD 輪廓度比對 v1+v1.1**（2026-07-14，merge 5b67bae）+ **弧形卡尺工具進配方 v1**（2026-07-16，merge 8a34cb5；schema v7、圓周邊數計數、共用基礎建設**解鎖 gear/PCD/孔陣列**）+ **齒輪齒數/齒距/齒寬方案**（2026-07-16，merge 7585741；schema v8、`ToolType="gear"`、純 Domain 分析器、三判定 CSV、齒中心/缺齒 overlay；GUI 驗收修正 HALCON 弧掃描 handedness 極性 + 缺齒提示定位）已交付；PCD/孔陣列/pin 間距/直徑未開始，皆可重用弧形 ROI 基礎建設 |
 
 Phase 2 已驗收並 push（`origin/main`）。驗收期補了 6 個「純 2D 量測模型配方一等公民 + on-image 標籤可讀性」修正（d08bc33）。Designer 重生 landmine 已還原 HEAD、未帶進版控（⚠️用 VS 開專案會再自動重生，commit 前檢查 `git status`）。**剩餘非阻擋測試強化**：①旋轉工件 GUI 複驗對齊（commit 6713fcc 的剛體變換對齊）；②補「對齊路徑」自動測試（現有 Wave 2 測試全 `hasReferencePose=false`，從未測有旋轉/姿態的對齊，是先前對齊 bug 5ce575b/6713fcc 的根因所在＝驗證洞）。詳見備份附錄與 memory `phase2-2d-metrology-plan`。
 
