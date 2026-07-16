@@ -76,6 +76,8 @@
     <Compile Include="MetrologyModelDomainTests.cs" />
     <Compile Include="DxfComparisonDomainTests.cs" />
     <Compile Include="ArcRecipeToolDomainTests.cs" />
+    <Compile Include="GearAnalysisDomainTests.cs" />
+    <Compile Include="GearRecipeToolDomainTests.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\FlashMeasurementSystem.Domain\FlashMeasurementSystem.Domain.csproj">

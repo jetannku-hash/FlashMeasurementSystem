@@ -14,6 +14,7 @@ using FlashMeasurementSystem.Domain.CircleFitting;
 using FlashMeasurementSystem.Domain.CoordinateSystem;
 using FlashMeasurementSystem.Domain.DistanceMeasurement;
 using FlashMeasurementSystem.Domain.EdgeDetection;
+using FlashMeasurementSystem.Domain.GearAnalysis;
 using FlashMeasurementSystem.Domain.LineFitting;
 using FlashMeasurementSystem.Domain.MetrologyModel;
 using FlashMeasurementSystem.Domain.Roi;
@@ -56,6 +57,8 @@ namespace FlashMeasurementSystem
         public ArcMeasureRoi PlacedArc;
         public List<double> ArcEdgeRows = new List<double>();
         public List<double> ArcEdgeCols = new List<double>();
+        // v8 齒輪工具：分析結果（供 overlay 齒中心標記/缺齒提示 + MeasurementWorkflow 三判定）。
+        public GearAnalysisResult Gear;
         public double DistMm;          // distance：距離 (mm)
         public double DistRow1, DistCol1, DistRow2, DistCol2;  // distance 連線兩端（供繪製）
         public double AngleDeg;         // angle：夾角 AcuteAngleDeg (0~90)
@@ -212,6 +215,38 @@ namespace FlashMeasurementSystem
                 if (!string.IsNullOrEmpty(tool.Id)) byId[tool.Id] = res;
             }
 
+            // ── Pass 1.3：齒輪工具（重用弧卡尺量邊 → 純 Domain 齒輪分析）──
+            foreach (MeasurementTool tool in recipe.Tools)
+            {
+                if (tool == null || tool.ToolType != "gear") continue;
+                if (tool.ArcRoi == null || tool.Gear == null) continue;   // Validator 已擋
+
+                ArcMeasureRoi placed = ArcRoiTransform.TransformArc(_mapper, tool.ArcRoi, transform);
+                var res = new ToolRunResult { Name = tool.Name, ToolType = tool.ToolType, PlacedArc = placed, Supported = true };
+
+                // 齒配對需正負 amplitude → 強制 Polarity="all"；不可原地改 tool.EdgeParameters（會污染配方）。
+                EdgeDetectionParameters ep = CloneEdgeParams(tool.EdgeParameters ?? EdgeDetectionParameters.Default());
+                ep.Polarity = "all";
+                EdgeResult er = _edgeDetector.DetectEdgesOnArc(image, placed, ep);
+                if (!er.Success || er.EdgePoints == null)
+                {
+                    res.Measured = false;
+                    res.ValueText = "齒輪量測失敗";
+                    res.Message = string.IsNullOrEmpty(er.ErrorMessage) ? "弧卡尺量測失敗" : er.ErrorMessage;
+                    results.Add(res); if (!string.IsNullOrEmpty(tool.Id)) byId[tool.Id] = res; continue;
+                }
+                foreach (EdgePoint pt in er.EdgePoints) { res.ArcEdgeRows.Add(pt.Row); res.ArcEdgeCols.Add(pt.Column); }
+
+                GearAnalysisResult gr = GearToothAnalyzer.Analyze(
+                    er.EdgePoints, placed.CenterRow, placed.CenterCol, placed.Radius, tool.Gear);
+                res.Gear = gr;
+                res.Measured = gr.Success;
+                res.ValueText = gr.Message;
+                res.IsOk = gr.Success ? gr.IsPass : (bool?)null;
+                if (!gr.Success) res.Message = gr.Message;
+                results.Add(res); if (!string.IsNullOrEmpty(tool.Id)) byId[tool.Id] = res;
+            }
+
             // ── Pass 1.5：構造工具（intersection / midline / projection）──
             // 僅參照基礎元件（line/circle），不支援鏈式構造。
             foreach (MeasurementTool tool in recipe.Tools)
@@ -245,6 +280,7 @@ namespace FlashMeasurementSystem
                 if (tool == null) continue;
                 if (tool.ToolType == "circle" || tool.ToolType == "line") continue;  // 已於 Pass 1 處理
                 if (tool.ToolType == "arc") continue;  // 已於 Pass 1.2 處理
+                if (tool.ToolType == "gear") continue;  // 已於 Pass 1.3 處理
                 if (tool.ToolType == "intersection" || tool.ToolType == "midline" || tool.ToolType == "projection") continue;  // 已於 Pass 1.5 處理
                 if (IsGdtType(tool.ToolType)) continue;  // 已於 Pass 1.7 處理
 
@@ -380,6 +416,23 @@ namespace FlashMeasurementSystem
             if (string.IsNullOrEmpty(res.ValueText))
                 res.ValueText = !string.IsNullOrEmpty(o.ErrorMessage) ? o.ErrorMessage : (o.Success ? "(no value)" : "量測失敗");
             return res;
+        }
+
+        // 複製 EdgeDetectionParameters 的每個公開可設屬性。齒輪工具需強制 Polarity="all"，
+        // 但不可原地改 tool.EdgeParameters（那是配方持久化狀態，就地變更會污染配方）。
+        // 新增 EdgeDetectionParameters 欄位時務必同步在此複製，否則會靜默遺失使用者設定。
+        private static EdgeDetectionParameters CloneEdgeParams(EdgeDetectionParameters src)
+        {
+            return new EdgeDetectionParameters
+            {
+                Sigma = src.Sigma,
+                Threshold = src.Threshold,
+                Polarity = src.Polarity,
+                EdgeSelector = src.EdgeSelector,
+                HighThreshold = src.HighThreshold,
+                Interpolation = src.Interpolation,
+                MeasureMode = src.MeasureMode
+            };
         }
 
         // 以既有 ToleranceJudger 對單一量測值判定，並回填 IsOk（與 circle 相同語意：

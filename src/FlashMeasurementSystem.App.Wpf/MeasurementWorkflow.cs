@@ -214,6 +214,71 @@ namespace FlashMeasurementSystem
                         Message = r.Message ?? ""
                     });
                 }
+                else if (tool != null && tool.Gear != null)
+                {
+                    // 齒輪為三判定（齒數/齒距/齒寬），不走單值雙邊判定器（會用 MeasuredValue=0 誤判）。
+                    // 比照 GD&T：齒輪工具的「所有」報表列都由本分支發出，成功發三列、失敗發一列，
+                    // 兩種情況都不落入下方雙邊 Tolerance 分支。齒輪工具的 Tolerance 仍是預設 [0,0]
+                    // （非 null，與 GD&T 相同），若失敗時落入雙邊分支，GetMeasuredValue 會回 0，
+                    // 而 0∈[0,0] 會被判為 OK，與上方依 r.IsOk 累計的 NG 計數矛盾（正是本任務要避免的陷阱）。
+                    string baseName = tool.Name ?? r.Name;
+                    if (r.Gear != null && r.Gear.Success)
+                    {
+                        // 由 RecipeRunner 算好的 GearAnalysisResult 直接發三個 ItemJudgment → CSV 三列。
+                        var g = r.Gear;
+                        judgments.Add(new ItemJudgment
+                        {
+                            ToolId = tool.Id ?? "",
+                            ToolName = baseName + "-齒數",
+                            MeasuredValue = g.ToothCount,
+                            Nominal = tool.Gear.NominalToothCount,
+                            LowerLimit = tool.Gear.NominalToothCount,
+                            UpperLimit = tool.Gear.NominalToothCount,
+                            Unit = "count",
+                            Deviation = g.ToothCount - tool.Gear.NominalToothCount,
+                            IsOk = g.CountOk,
+                            Message = "齒數"
+                        });
+                        judgments.Add(new ItemJudgment
+                        {
+                            ToolId = tool.Id ?? "",
+                            ToolName = baseName + "-齒距",
+                            MeasuredValue = g.PitchMaxDevDeg,
+                            Nominal = 0,
+                            LowerLimit = 0,
+                            UpperLimit = tool.Gear.PitchToleranceDeg,
+                            Unit = "deg",
+                            Deviation = g.PitchMaxDevDeg,
+                            IsOk = g.PitchOk,
+                            Message = "齒距最大偏差"
+                        });
+                        judgments.Add(new ItemJudgment
+                        {
+                            ToolId = tool.Id ?? "",
+                            ToolName = baseName + "-齒寬",
+                            MeasuredValue = g.WidthMaxDevDeg,
+                            Nominal = 0,
+                            LowerLimit = 0,
+                            UpperLimit = tool.Gear.WidthToleranceDeg,
+                            Unit = "deg",
+                            Deviation = g.WidthMaxDevDeg,
+                            IsOk = g.WidthOk,
+                            Message = "齒寬最大偏差"
+                        });
+                    }
+                    else
+                    {
+                        // 量測失敗：發一列失敗訊息（比照最終空公差 else 列），不做雙邊重判。
+                        judgments.Add(new ItemJudgment
+                        {
+                            ToolId = tool.Id ?? "",
+                            ToolName = baseName,
+                            MeasuredValue = 0,
+                            IsOk = r.IsOk ?? false,
+                            Message = r.Message ?? ""
+                        });
+                    }
+                }
                 else if (tool != null && tool.Tolerance != null)
                 {
                     double measuredValue = GetMeasuredValue(r, tool);

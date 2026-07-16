@@ -5,6 +5,7 @@ using System.Globalization;
 using System.IO;
 using System.Windows.Forms;
 using FlashMeasurementSystem.Domain.EdgeDetection;
+using FlashMeasurementSystem.Domain.GearAnalysis;
 using FlashMeasurementSystem.Domain.Gdt;
 using FlashMeasurementSystem.Domain.Roi;
 using FlashMeasurementSystem.Domain.Tolerance;
@@ -52,6 +53,7 @@ namespace FlashMeasurementSystem
         private Button _addCircleButton;
         private Button _addLineButton;
         private Button _addArcButton;
+        private Button _addGearButton;
         private Button _addDistanceButton;
         private Button _addAngleButton;
         private Button _addIntersectionButton;
@@ -93,6 +95,13 @@ namespace FlashMeasurementSystem
         private NumericUpDown _arcAngleExtentNumeric;
         private NumericUpDown _arcAnnulusNumeric;
         private Button _captureArcButton;
+
+        // 齒輪工具（ToolType == "gear"）專屬參數群組：量測環（ArcRoi）沿用弧形群組，此處只放齒輪判定參數。
+        private GroupBox _gearGroup;
+        private NumericUpDown _gearCountNumeric;
+        private CheckBox _gearDarkCheck;
+        private NumericUpDown _gearPitchTolNumeric;
+        private NumericUpDown _gearWidthTolNumeric;
 
         private GroupBox _edgeGroup;
         private NumericUpDown _sigmaNumeric;
@@ -231,6 +240,8 @@ namespace FlashMeasurementSystem
             _addLineButton.Click += (s, e) => AddTool("line");
             _addArcButton = new Button { Text = "+ 弧形", Width = 70 };
             _addArcButton.Click += (s, e) => AddTool("arc");
+            _addGearButton = new Button { Text = "+ 齒輪", Width = 70 };
+            _addGearButton.Click += (s, e) => AddTool("gear");
             _addDistanceButton = new Button { Text = "+ Distance", Width = 80 };
             _addDistanceButton.Click += (s, e) => AddTool("distance");
             _addAngleButton = new Button { Text = "+ Angle", Width = 70 };
@@ -265,6 +276,7 @@ namespace FlashMeasurementSystem
             bar.Controls.Add(_addCircleButton);
             bar.Controls.Add(_addLineButton);
             bar.Controls.Add(_addArcButton);
+            bar.Controls.Add(_addGearButton);
             bar.Controls.Add(_addDistanceButton);
             bar.Controls.Add(_addAngleButton);
             bar.Controls.Add(_addIntersectionButton);
@@ -295,6 +307,8 @@ namespace FlashMeasurementSystem
             _toleranceGroup = CreateGroupBox("Tolerance", parent, 215);
             _refGroup = CreateGroupBox("Reference Tools", parent, 95);
             _edgeGroup = CreateGroupBox("Edge Detection", parent, 210);
+            // 齒輪參數群組：4 列（齒數 / 極性核取 / 齒距公差 / 齒寬公差）× 28px + 標題與內距。
+            _gearGroup = CreateGroupBox("齒輪參數", parent, 150);
             // 7 列 × 28px（6 個數值 + 擷取按鈕）+ 標題與內距。roi 群組同構但少一列。
             _arcGroup = CreateGroupBox("Arc ROI", parent, 240);
             _roiGroup = CreateGroupBox("ROI Geometry", parent, 210);
@@ -303,6 +317,7 @@ namespace FlashMeasurementSystem
             FillCommonGroup(_commonGroup);
             FillRoiGroup(_roiGroup);
             FillArcGroup(_arcGroup);
+            FillGearGroup(_gearGroup);
             FillEdgeGroup(_edgeGroup);
             FillRefGroup(_refGroup);
             FillToleranceGroup(_toleranceGroup);
@@ -404,6 +419,26 @@ namespace FlashMeasurementSystem
             };
             _captureArcButton.Click += OnCaptureArc;
             AddRow(t, "", ref r, _captureArcButton);
+
+            gb.Controls.Add(t);
+        }
+
+        // 齒輪判定參數（背光剪影）：齒數為整數計數；齒暗核取決定邊配對極性；齒距/齒寬公差為角度（度）上限。
+        // 量測環（弧心/半徑/起訖角/環寬）沿用弧形 ROI 群組，故此處不含幾何欄位。
+        private void FillGearGroup(GroupBox gb)
+        {
+            var t = NewTable();
+            int r = 0;
+
+            _gearCountNumeric = AddNumericRow(t, "齒數", ref r, 1M, 10000M, 0, 20M, 1M);
+            _gearDarkCheck = AddRow(t, "", ref r, new CheckBox
+            {
+                Text = "齒為暗（背光）",
+                Checked = true,
+                Dock = DockStyle.Fill
+            });
+            _gearPitchTolNumeric = AddNumericRow(t, "齒距公差(度)", ref r, 0.01M, 360M, 2, 1M, 0.1M);
+            _gearWidthTolNumeric = AddNumericRow(t, "齒寬公差(度)", ref r, 0.01M, 360M, 2, 2M, 0.1M);
 
             gb.Controls.Add(t);
         }
@@ -581,6 +616,11 @@ namespace FlashMeasurementSystem
             _arcAngleExtentNumeric.ValueChanged += (s, e) => WriteArc();
             _arcAnnulusNumeric.ValueChanged += (s, e) => WriteArc();
 
+            _gearCountNumeric.ValueChanged += (s, e) => WriteGear();
+            _gearDarkCheck.CheckedChanged += (s, e) => WriteGear();
+            _gearPitchTolNumeric.ValueChanged += (s, e) => WriteGear();
+            _gearWidthTolNumeric.ValueChanged += (s, e) => WriteGear();
+
             _sigmaNumeric.ValueChanged += (s, e) => WriteEdgeParams();
             _thresholdNumeric.ValueChanged += (s, e) => WriteEdgeParams();
             _polarityCombo.SelectedIndexChanged += (s, e) => WriteEdgeParams();
@@ -638,6 +678,18 @@ namespace FlashMeasurementSystem
                 // 未進互動編輯時，仍要讓弧帶 persistent overlay 依更新後的 ArcRoi 重畫。
                 _imageHelper.Redraw();
             }
+            MarkDirty();
+        }
+
+        // 數值框/核取 → GearAnalysisParameters。比照 WriteArc：以 _updatingControls 守衛避免載入時誤標 dirty。
+        private void WriteGear()
+        {
+            if (_updatingControls || _selectedTool == null || _selectedTool.Gear == null) return;
+            GearAnalysisParameters g = _selectedTool.Gear;
+            g.NominalToothCount = (int)_gearCountNumeric.Value;
+            g.ToothIsDark = _gearDarkCheck.Checked;
+            g.PitchToleranceDeg = (double)_gearPitchTolNumeric.Value;
+            g.WidthToleranceDeg = (double)_gearWidthTolNumeric.Value;
             MarkDirty();
         }
 
@@ -709,7 +761,7 @@ namespace FlashMeasurementSystem
                 && _imageHelper != null && _imageHelper.CurrentImage != null
                 && _selectedTool != null
                 && (_selectedTool.ToolType == "circle" || _selectedTool.ToolType == "line"
-                    || _selectedTool.ToolType == "arc");
+                    || _selectedTool.ToolType == "arc" || _selectedTool.ToolType == "gear");
         }
 
         // A1：在編輯器內就地試測選中的 circle/line/arc 工具，把擬合結果畫在共用主視窗影像上。
@@ -730,27 +782,33 @@ namespace FlashMeasurementSystem
 
             var roi = tool.Roi;
             bool isArc = tool.ToolType == "arc";
+            bool isGear = tool.ToolType == "gear";
             ArcMeasureRoi arc = tool.ArcRoi;
             _imageHelper.SetPersistentOverlayAction(() =>
             {
                 OverlayAnnotator an = _imageHelper.Annotator;
                 if (an == null) return;
-                // 弧形工具的 Roi 是全零 rect2（未使用），畫出來會是 (0,0) 退化橘框——只有非弧形才畫 ROI 框。
-                if (roi != null && !isArc)
+                // 弧形/齒輪工具的 Roi 是全零 rect2（未使用），畫出來會是 (0,0) 退化橘框——只有非弧形/非齒輪才畫 ROI 框。
+                if (roi != null && !isArc && !isGear)
                     an.DrawRectangle2(roi.CenterRow, roi.CenterCol, roi.AngleRad,
                                       roi.Length1, roi.Length2, "orange");
 
-                // 文字錨點：弧形錨在弧心，其餘錨在 rect2 ROI 中心。
-                double txtR = isArc && arc != null ? arc.CenterRow : (roi != null ? roi.CenterRow : 20);
-                double txtC = isArc && arc != null ? arc.CenterCol : (roi != null ? roi.CenterCol : 20);
+                // 文字錨點：弧形/齒輪錨在弧心，其餘錨在 rect2 ROI 中心。
+                bool usesArcRoi = isArc || isGear;
+                double txtR = usesArcRoi && arc != null ? arc.CenterRow : (roi != null ? roi.CenterRow : 20);
+                double txtC = usesArcRoi && arc != null ? arc.CenterCol : (roi != null ? roi.CenterCol : 20);
                 if (result == null || !result.Measured)
                 {
                     an.DrawText("未偵測到邊緣 / No edge detected", (int)txtR, (int)txtC, "yellow");
                     return;
                 }
 
-                // 弧形結果：畫量測帶 + 抽樣邊點十字 + 數值，比照 MainWindow.DrawRecipeResults 的弧形分支。
-                if (result.ToolType == "arc" && result.PlacedArc != null)
+                // 弧形/齒輪結果：畫量測帶 + 抽樣邊點十字 + 數值，比照 MainWindow.DrawRecipeResults 的弧形分支。
+                // 齒輪重用弧卡尺量測環（PlacedArc/ArcEdge*）+ 以 ValueText 顯示齒數/齒距/齒寬判定訊息。
+                // 【刻意分工，勿當 parity bug 統一】此處（編輯器試測，調機視圖）對齒輪刻意畫「原始邊點」，
+                // 讓操作者在調 ROI/Sigma/Threshold 時確認每對進/出齒被乾淨抓到；主頁一鍵量測則畫「齒中心」結果
+                // （見 MainWindow.DrawRecipeResults 齒輪分支：每齒一十字＝齒數、缺齒洋紅）。兩處視圖不同是設計，不是缺陷。
+                if ((result.ToolType == "arc" || result.ToolType == "gear") && result.PlacedArc != null)
                 {
                     ArcMeasureRoi a = result.PlacedArc;
                     string c = result.IsOk == true ? "green" : (result.IsOk == false ? "red" : "yellow");
@@ -812,6 +870,21 @@ namespace FlashMeasurementSystem
                     AngleExtent = 2.0 * Math.PI,
                     AnnulusRadius = 5.0
                 };
+            }
+            // 齒輪工具：量測環沿用弧形 ArcRoi（整圈掃描），另帶一組齒輪判定參數（齒數/極性/齒距/齒寬公差）。
+            // ArcRoi 必須「已定義」，否則 RecipeValidator 會擋下一鍵流程（比照弧形工具）。
+            if (toolType == "gear")
+            {
+                tool.ArcRoi = new ArcMeasureRoi
+                {
+                    CenterRow = 200,
+                    CenterCol = 200,
+                    Radius = 100,
+                    AngleStart = 0.0,
+                    AngleExtent = 2.0 * Math.PI,
+                    AnnulusRadius = 5.0
+                };
+                tool.Gear = new GearAnalysisParameters();  // NominalToothCount=20, ToothIsDark=true, tols 1/2
             }
             // GD&T 工具：單邊形位公差，預設帶寬待使用者設定（0.05mm 佔位，非 0 以免一律 NG）。
             if (IsGdtType(toolType))
@@ -1077,6 +1150,14 @@ namespace FlashMeasurementSystem
                     Characteristic = src.Gdt.Characteristic,
                     ToleranceZoneMm = src.Gdt.ToleranceZoneMm
                 },
+                // 深複製齒輪參數——漏掉會在載入/存檔時遺失齒輪判定設定（比照 ArcRoi/Gdt 的處理）。
+                Gear = src.Gear == null ? null : new GearAnalysisParameters
+                {
+                    NominalToothCount = src.Gear.NominalToothCount,
+                    ToothIsDark = src.Gear.ToothIsDark,
+                    PitchToleranceDeg = src.Gear.PitchToleranceDeg,
+                    WidthToleranceDeg = src.Gear.WidthToleranceDeg
+                },
                 RefToolIds = new List<string>(src.RefToolIds ?? new List<string>())
             };
         }
@@ -1138,9 +1219,10 @@ namespace FlashMeasurementSystem
                 return;
             }
 
-            // 弧形工具：進入弧形互動編輯（BeginArcEdit 內部會自行關閉 rect2 編輯，故不重複呼叫
-            // EndRect2Edit 以免多一次 Redraw）。無 ArcRoi 或尚未載入影像時只收把手，不進編輯。
-            if (_selectedTool.ToolType == "arc")
+            // 弧形/齒輪工具：進入弧形互動編輯（BeginArcEdit 內部會自行關閉 rect2 編輯，故不重複呼叫
+            // EndRect2Edit 以免多一次 Redraw）。齒輪重用相同的量測環 ArcRoi。
+            // 無 ArcRoi 或尚未載入影像時只收把手，不進編輯。
+            if (_selectedTool.ToolType == "arc" || _selectedTool.ToolType == "gear")
             {
                 _imageHelper.ClearSelectionHighlight();
                 ArcMeasureRoi a = _selectedTool.ArcRoi;
@@ -1308,6 +1390,28 @@ namespace FlashMeasurementSystem
             }
         }
 
+        // GearAnalysisParameters → 控制項。比照 LoadArcFieldsFromSelectedTool：以「存後還原」而非硬設 false，
+        // 因為 PopulateFromTool 會在自己的 guard 內呼叫本方法；提前還原成 false 會使後續齒輪參數的
+        // ValueChanged 真的觸發 WriteGear → 只是選個工具就被標記 dirty。
+        private void LoadGearFieldsFromSelectedTool()
+        {
+            if (_selectedTool == null || _selectedTool.Gear == null) return;
+            GearAnalysisParameters g = _selectedTool.Gear;
+            bool prev = _updatingControls;
+            _updatingControls = true;
+            try
+            {
+                _gearCountNumeric.Value = ClampDecimal(g.NominalToothCount, _gearCountNumeric.Minimum, _gearCountNumeric.Maximum);
+                _gearDarkCheck.Checked = g.ToothIsDark;
+                _gearPitchTolNumeric.Value = ClampDecimal(g.PitchToleranceDeg, _gearPitchTolNumeric.Minimum, _gearPitchTolNumeric.Maximum);
+                _gearWidthTolNumeric.Value = ClampDecimal(g.WidthToleranceDeg, _gearWidthTolNumeric.Minimum, _gearWidthTolNumeric.Maximum);
+            }
+            finally
+            {
+                _updatingControls = prev;
+            }
+        }
+
         private void PopulateFromTool(MeasurementTool tool)
         {
             _updatingControls = true;
@@ -1319,6 +1423,7 @@ namespace FlashMeasurementSystem
 
                 bool isElement = tool.ToolType == "circle" || tool.ToolType == "line";
                 bool isArc = tool.ToolType == "arc";
+                bool isGear = tool.ToolType == "gear";
                 bool isConstruction = tool.ToolType == "intersection" || tool.ToolType == "midline" || tool.ToolType == "projection";
                 bool isComposite = tool.ToolType == "distance" || tool.ToolType == "angle";
                 bool isGdt = IsGdtType(tool.ToolType);
@@ -1329,11 +1434,14 @@ namespace FlashMeasurementSystem
                 // 弧形工具走 ArcRoi：顯示弧形群組、隱藏 rect2 ROI 群組（其 Roi 未被使用，
                 // RecipeValidator 的 RoiElementTypes 也不含 "arc"）；但邊緣參數仍有用——
                 // RecipeRunner Pass 1.2 會把 tool.EdgeParameters 傳給 DetectEdgesOnArc。
+                // 齒輪工具重用弧形 ROI 群組（量測環）+ 邊緣參數（弧卡尺量邊），並顯示齒輪參數群組；
+                // 齒輪判定走三條件（齒數/齒距/齒寬），不用雙邊 Tolerance 群組，故一併隱藏。
                 _roiGroup.Visible = isElement;
-                _arcGroup.Visible = isArc;
-                _edgeGroup.Visible = isElement || isArc;
+                _arcGroup.Visible = isArc || isGear;
+                _gearGroup.Visible = isGear;
+                _edgeGroup.Visible = isElement || isArc || isGear;
                 _refGroup.Visible = usesRefs;
-                _toleranceGroup.Visible = !isGdt;
+                _toleranceGroup.Visible = !isGdt && !isGear;
                 _gdtGroup.Visible = isGdt;
                 _angleHintLabel.Visible = tool.ToolType == "line";
 
@@ -1355,13 +1463,19 @@ namespace FlashMeasurementSystem
                 {
                     LoadArcFieldsFromSelectedTool();
                 }
+                else if (isGear)
+                {
+                    // 齒輪工具同時擁有量測環（ArcRoi）與齒輪判定參數，兩者都在 guard 內載入。
+                    LoadArcFieldsFromSelectedTool();
+                    LoadGearFieldsFromSelectedTool();
+                }
                 else if (usesRefs)
                 {
                     PopulateRefCombos(tool);
                 }
 
-                // 邊緣參數：circle/line（rect2 卡尺）與 arc（弧形卡尺）都會用到。
-                if (isElement || isArc)
+                // 邊緣參數：circle/line（rect2 卡尺）、arc（弧形卡尺）與 gear（齒輪弧卡尺量邊）都會用到。
+                if (isElement || isArc || isGear)
                 {
                     _sigmaNumeric.Value = ClampDecimal(tool.EdgeParameters.Sigma, _sigmaNumeric.Minimum, _sigmaNumeric.Maximum);
                     _thresholdNumeric.Value = ClampDecimal(tool.EdgeParameters.Threshold, _thresholdNumeric.Minimum, _thresholdNumeric.Maximum);
@@ -1671,6 +1785,7 @@ namespace FlashMeasurementSystem
             _toolTip.SetToolTip(_addCircleButton, "Add a circle measurement tool");
             _toolTip.SetToolTip(_addLineButton, "Add a line measurement tool");
             _toolTip.SetToolTip(_addArcButton, "弧形卡尺：量圓周等分特徵邊數（孔數/齒數/引腳數）");
+            _toolTip.SetToolTip(_addGearButton, "齒輪：量齒數/齒距/齒寬（背光剪影）");
             _toolTip.SetToolTip(_addDistanceButton, "Add a distance tool (between two line/circle tools)");
             _toolTip.SetToolTip(_addAngleButton, "Add an angle tool (between two line tools)");
             _toolTip.SetToolTip(_addRoundnessButton, "真圓度：Ref1=一個 circle，偏差=圓擬合 max-min 徑向");
@@ -1698,6 +1813,10 @@ namespace FlashMeasurementSystem
             _toolTip.SetToolTip(_arcAngleExtentNumeric, "角度範圍（度，360 為整圈；負值為順時針）");
             _toolTip.SetToolTip(_arcAnnulusNumeric, "環寬一半（像素）");
             _toolTip.SetToolTip(_captureArcButton, "在主影像上拖曳把手調整弧形 ROI");
+            _toolTip.SetToolTip(_gearCountNumeric, "標稱齒數（整數）：實測齒數需等於此值才判 OK");
+            _toolTip.SetToolTip(_gearDarkCheck, "背光剪影下齒為暗、齒隙為亮時勾選；決定齒邊配對極性");
+            _toolTip.SetToolTip(_gearPitchTolNumeric, "齒距最大偏差上限（度）：實測齒距最大偏差 ≤ 此值才判 OK");
+            _toolTip.SetToolTip(_gearWidthTolNumeric, "齒寬最大偏差上限（度）：實測齒寬最大偏差 ≤ 此值才判 OK");
             _toolTip.SetToolTip(_sigmaNumeric, "Gaussian smoothing sigma for edge detection");
             _toolTip.SetToolTip(_thresholdNumeric, "Minimum edge amplitude threshold");
             _toolTip.SetToolTip(_polarityCombo, "Edge polarity: all, positive (dark→bright), or negative (bright→dark)");

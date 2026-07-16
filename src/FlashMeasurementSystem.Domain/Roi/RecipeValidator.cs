@@ -20,7 +20,7 @@ namespace FlashMeasurementSystem.Domain.Roi
         // 已知型別；未列入者執行時會被略過，故視為 Warning。
         private static readonly HashSet<string> KnownTypes = new HashSet<string>
         {
-            "circle", "line", "edge", "arc",
+            "circle", "line", "edge", "arc", "gear",
             "intersection", "midline", "projection",
             "roundness", "straightness", "parallelism", "perpendicularity", "concentricity",
             "distance", "angle"
@@ -106,6 +106,17 @@ namespace FlashMeasurementSystem.Domain.Roi
                         issues.Add(new RecipeIssue(RecipeIssueSeverity.Error, tool.Id, tool.Name,
                             "弧形 ROI 無效：" + tool.ArcRoi.ValidationError));
                     }
+                }
+
+                if (tool.ToolType == "gear")
+                {
+                    if (tool.Gear == null)
+                        issues.Add(new RecipeIssue(RecipeIssueSeverity.Error, tool.Id, tool.Name, "齒輪工具缺少齒輪參數（Gear）"));
+                    else if (tool.Gear.NominalToothCount <= 0 || tool.Gear.PitchToleranceDeg <= 0 || tool.Gear.WidthToleranceDeg <= 0)
+                        issues.Add(new RecipeIssue(RecipeIssueSeverity.Error, tool.Id, tool.Name, "齒輪參數無效（標稱齒數與公差需 > 0）"));
+                    if (tool.ArcRoi == null || !tool.ArcRoi.IsDefined)
+                        issues.Add(new RecipeIssue(RecipeIssueSeverity.Error, tool.Id, tool.Name,
+                            "齒輪工具的量測環帶無效：" + (tool.ArcRoi == null ? "缺少 ArcRoi" : tool.ArcRoi.ValidationError)));
                 }
 
                 // 公差反向（任何可能帶尺寸/角度公差的工具）。
