@@ -155,6 +155,8 @@ namespace FlashMeasurementSystem.Tests
             Console.WriteLine("ArcRecipeToolDomainTests passed");
             GearAnalysisDomainTests.Run();
             Console.WriteLine("GearAnalysisDomainTests passed");
+            GearRecipeToolDomainTests.Run();
+            Console.WriteLine("GearRecipeToolDomainTests passed");
             Console.WriteLine("EdgeDetectionDomainTests passed");
             return 0;
         }

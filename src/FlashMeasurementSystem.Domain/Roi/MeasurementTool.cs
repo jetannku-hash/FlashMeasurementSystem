@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using FlashMeasurementSystem.Domain.EdgeDetection;
 using FlashMeasurementSystem.Domain.Gdt;
+using FlashMeasurementSystem.Domain.GearAnalysis;
 using FlashMeasurementSystem.Domain.Tolerance;
 
 namespace FlashMeasurementSystem.Domain.Roi
@@ -33,5 +34,9 @@ namespace FlashMeasurementSystem.Domain.Roi
         // v7：弧形量測 ROI（重用既有 ArcMeasureRoi DTO）。null＝非弧工具，走既有 rect2 Roi。
         // 弧工具（ToolType="arc"）必填；Roi(rect2) 對弧工具無用但保留（加性模式，不改造 RoiGeometry）。
         public ArcMeasureRoi ArcRoi { get; set; } = null;
+
+        // v8：齒輪分析參數（重用 GearAnalysisParameters DTO）。null＝非齒輪工具。
+        // 齒輪工具（ToolType="gear"）必填；量測環帶用 ArcRoi。
+        public GearAnalysisParameters Gear { get; set; } = null;
     }
 }
