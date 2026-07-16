@@ -1388,8 +1388,8 @@ namespace FlashMeasurementSystem
         }
 
         // GearAnalysisParameters → 控制項。比照 LoadArcFieldsFromSelectedTool：以「存後還原」而非硬設 false，
-        // 因為 PopulateFromTool 會在自己的 guard 內呼叫本方法；提前還原成 false 會使後續公差數值的
-        // ValueChanged 真的觸發 WriteTolerance → 只是選個工具就被標記 dirty。
+        // 因為 PopulateFromTool 會在自己的 guard 內呼叫本方法；提前還原成 false 會使後續齒輪參數的
+        // ValueChanged 真的觸發 WriteGear → 只是選個工具就被標記 dirty。
         private void LoadGearFieldsFromSelectedTool()
         {
             if (_selectedTool == null || _selectedTool.Gear == null) return;
