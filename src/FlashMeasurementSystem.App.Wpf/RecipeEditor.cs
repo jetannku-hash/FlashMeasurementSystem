@@ -296,7 +296,7 @@ namespace FlashMeasurementSystem
             _refGroup = CreateGroupBox("Reference Tools", parent, 95);
             _edgeGroup = CreateGroupBox("Edge Detection", parent, 210);
             // 7 列 × 28px（6 個數值 + 擷取按鈕）+ 標題與內距。roi 群組同構但少一列。
-            _arcGroup = CreateGroupBox("弧形 ROI (Arc)", parent, 240);
+            _arcGroup = CreateGroupBox("Arc ROI", parent, 240);
             _roiGroup = CreateGroupBox("ROI Geometry", parent, 210);
             _commonGroup = CreateGroupBox("Common", parent, 130);
 
@@ -382,18 +382,19 @@ namespace FlashMeasurementSystem
             gb.Controls.Add(t);
         }
 
-        // 弧形 ROI（gen_measure_arc 語意）：角度一律弧度，與 ROI 群組的 Angle (rad) 同單位。
+        // 弧形 ROI（gen_measure_arc 語意）：ArcRoi 內部存弧度；此處數值框以「度」顯示（與 MainWindow 一致），
+        // 在 WriteArc/LoadArcFieldsFromSelectedTool 的邊界做 deg↔rad 轉換。半徑/環寬 Minimum=1，避免退化成 !IsDefined。
         private void FillArcGroup(GroupBox gb)
         {
             var t = NewTable();
             int r = 0;
 
-            _arcCenterRowNumeric = AddNumericRow(t, "弧心 Row", ref r, 0M, 100000M, 2, 200M, 1M);
-            _arcCenterColNumeric = AddNumericRow(t, "弧心 Col", ref r, 0M, 100000M, 2, 200M, 1M);
-            _arcRadiusNumeric = AddNumericRow(t, "半徑 (px)", ref r, 0M, 100000M, 2, 100M, 1M);
-            _arcAngleStartNumeric = AddNumericRow(t, "起始角 (rad)", ref r, -7M, 7M, 4, 0M, 0.1M);
-            _arcAngleExtentNumeric = AddNumericRow(t, "角度範圍 (rad)", ref r, -7M, 7M, 4, 6.2832M, 0.1M);
-            _arcAnnulusNumeric = AddNumericRow(t, "環寬一半 (px)", ref r, 0M, 100000M, 2, 5M, 1M);
+            _arcCenterRowNumeric = AddNumericRow(t, "Center Row", ref r, 0M, 100000M, 2, 200M, 1M);
+            _arcCenterColNumeric = AddNumericRow(t, "Center Col", ref r, 0M, 100000M, 2, 200M, 1M);
+            _arcRadiusNumeric = AddNumericRow(t, "Radius (px)", ref r, 1M, 100000M, 2, 100M, 1M);
+            _arcAngleStartNumeric = AddNumericRow(t, "Angle Start (deg)", ref r, 0M, 360M, 1, 0M, 5M);
+            _arcAngleExtentNumeric = AddNumericRow(t, "Angle Extent (deg)", ref r, -360M, 360M, 1, 360M, 5M);
+            _arcAnnulusNumeric = AddNumericRow(t, "Annulus (half, px)", ref r, 1M, 100000M, 2, 5M, 1M);
 
             _captureArcButton = new Button
             {
@@ -622,13 +623,20 @@ namespace FlashMeasurementSystem
             a.CenterRow = (double)_arcCenterRowNumeric.Value;
             a.CenterCol = (double)_arcCenterColNumeric.Value;
             a.Radius = (double)_arcRadiusNumeric.Value;
-            a.AngleStart = (double)_arcAngleStartNumeric.Value;
-            a.AngleExtent = (double)_arcAngleExtentNumeric.Value;
+            // 數值框顯示度 → ArcRoi 存弧度（deg→rad 轉換點）。
+            a.AngleStart = (double)_arcAngleStartNumeric.Value * Math.PI / 180.0;
+            a.AngleExtent = (double)_arcAngleExtentNumeric.Value * Math.PI / 180.0;
             a.AnnulusRadius = (double)_arcAnnulusNumeric.Value;
             if (_imageHelper.IsEditingArc)
             {
+                // 重下把手座標（即時預覽）；BeginArcEdit 內部會 Redraw，弧帶 persistent overlay 一併重畫。
                 _imageHelper.BeginArcEdit(a.CenterRow, a.CenterCol, a.Radius,
                     a.AngleStart, a.AngleExtent, a.AnnulusRadius, OnToolArcChanged);
+            }
+            else
+            {
+                // 未進互動編輯時，仍要讓弧帶 persistent overlay 依更新後的 ArcRoi 重畫。
+                _imageHelper.Redraw();
             }
             MarkDirty();
         }
@@ -700,12 +708,13 @@ namespace FlashMeasurementSystem
                 _trialMeasure != null
                 && _imageHelper != null && _imageHelper.CurrentImage != null
                 && _selectedTool != null
-                && (_selectedTool.ToolType == "circle" || _selectedTool.ToolType == "line");
+                && (_selectedTool.ToolType == "circle" || _selectedTool.ToolType == "line"
+                    || _selectedTool.ToolType == "arc");
         }
 
-        // A1：在編輯器內就地試測選中的 circle/line 工具，把擬合結果畫在共用主視窗影像上。
+        // A1：在編輯器內就地試測選中的 circle/line/arc 工具，把擬合結果畫在共用主視窗影像上。
         // 只跑這一個工具（MainWindow 委派內以暫態單工具配方呼叫 RecipeRunner.Run），
-        // 不重跑整份配方、不做配方驗證。單一 overlay slot：重畫 ROI 框 + 擬合結果。
+        // 不重跑整份配方、不做配方驗證。單一 overlay slot：重畫 ROI 框/弧帶 + 擬合結果。
         private void OnTrialMeasure(object sender, EventArgs e)
         {
             var tool = _selectedTool;
@@ -720,27 +729,45 @@ namespace FlashMeasurementSystem
             }
 
             var roi = tool.Roi;
+            bool isArc = tool.ToolType == "arc";
+            ArcMeasureRoi arc = tool.ArcRoi;
             _imageHelper.SetPersistentOverlayAction(() =>
             {
                 OverlayAnnotator an = _imageHelper.Annotator;
                 if (an == null) return;
-                if (roi != null)
+                // 弧形工具的 Roi 是全零 rect2（未使用），畫出來會是 (0,0) 退化橘框——只有非弧形才畫 ROI 框。
+                if (roi != null && !isArc)
                     an.DrawRectangle2(roi.CenterRow, roi.CenterCol, roi.AngleRad,
                                       roi.Length1, roi.Length2, "orange");
+
+                // 文字錨點：弧形錨在弧心，其餘錨在 rect2 ROI 中心。
+                double txtR = isArc && arc != null ? arc.CenterRow : (roi != null ? roi.CenterRow : 20);
+                double txtC = isArc && arc != null ? arc.CenterCol : (roi != null ? roi.CenterCol : 20);
                 if (result == null || !result.Measured)
                 {
-                    an.DrawText("未偵測到邊緣 / No edge detected",
-                        roi != null ? (int)roi.CenterRow : 20,
-                        roi != null ? (int)roi.CenterCol : 20, "yellow");
+                    an.DrawText("未偵測到邊緣 / No edge detected", (int)txtR, (int)txtC, "yellow");
                     return;
                 }
+
+                // 弧形結果：畫量測帶 + 抽樣邊點十字 + 數值，比照 MainWindow.DrawRecipeResults 的弧形分支。
+                if (result.ToolType == "arc" && result.PlacedArc != null)
+                {
+                    ArcMeasureRoi a = result.PlacedArc;
+                    string c = result.IsOk == true ? "green" : (result.IsOk == false ? "red" : "yellow");
+                    an.DrawArcBand(a.CenterRow, a.CenterCol, a.Radius, a.AngleStart, a.AngleExtent, a.AnnulusRadius);
+                    int n = Math.Min(result.ArcEdgeRows.Count, result.ArcEdgeCols.Count);
+                    int step = n > 200 ? (int)Math.Ceiling(n / 200.0) : 1;
+                    for (int i = 0; i < n; i += step)
+                        an.DrawCross(result.ArcEdgeRows[i], result.ArcEdgeCols[i], 10, c);
+                    an.DrawText(result.ValueText ?? string.Empty, (int)a.CenterRow, (int)a.CenterCol, c);
+                    return;
+                }
+
                 if (result.ToolType == "circle")
                     an.DrawCircle(result.FitCenterRow, result.FitCenterCol, result.FitRadiusPx, "green");
                 else if (result.ToolType == "line")
                     an.DrawLine(result.LineRow1, result.LineCol1, result.LineRow2, result.LineCol2, "green");
-                an.DrawText(result.ValueText ?? string.Empty,
-                    roi != null ? (int)roi.CenterRow : 20,
-                    roi != null ? (int)roi.CenterCol + 18 : 20, "green");
+                an.DrawText(result.ValueText ?? string.Empty, (int)txtR, (int)txtC + 18, "green");
             });
             _editorInstalledOverlay = true;  // #3：記錄已佔用共用 overlay slot，關閉編輯器時清除
         }
@@ -1083,6 +1110,7 @@ namespace FlashMeasurementSystem
                 SetPropertyPanelEnabled(false);
                 _imageHelper.EndRect2Edit();
                 _imageHelper.EndArcEdit();
+                ClearEditorOverlayIfAny();
                 _imageHelper.ClearSelectionHighlight();
                 RefreshTrialButtonEnabled();
                 return;
@@ -1105,28 +1133,37 @@ namespace FlashMeasurementSystem
                 _imageHelper.EndRect2Edit();
                 _imageHelper.EndArcEdit();
                 _editorOwnsEdit = false;
+                ClearEditorOverlayIfAny();
                 _imageHelper.ClearSelectionHighlight();
                 return;
             }
 
             // 弧形工具：進入弧形互動編輯（BeginArcEdit 內部會自行關閉 rect2 編輯，故不重複呼叫
-            // EndRect2Edit 以免多一次 Redraw）。無 ArcRoi 時只收把手，不進編輯。
+            // EndRect2Edit 以免多一次 Redraw）。無 ArcRoi 或尚未載入影像時只收把手，不進編輯。
             if (_selectedTool.ToolType == "arc")
             {
                 _imageHelper.ClearSelectionHighlight();
                 ArcMeasureRoi a = _selectedTool.ArcRoi;
-                if (a == null)
+                // Fix 6：未載入影像時不進入弧形編輯（比照 OnCaptureArc 的守衛），
+                // 避免在沒有影像時悄悄進入 edit 狀態卻什麼都沒顯示。
+                if (a == null || _imageHelper.CurrentImage == null)
                 {
                     _imageHelper.EndRect2Edit();
                     _imageHelper.EndArcEdit();
                     _editorOwnsEdit = false;
+                    ClearEditorOverlayIfAny();
                     return;
                 }
                 _imageHelper.BeginArcEdit(a.CenterRow, a.CenterCol, a.Radius,
                     a.AngleStart, a.AngleExtent, a.AnnulusRadius, OnToolArcChanged);
                 _editorOwnsEdit = true;
+                InstallArcBandOverlay();  // Fix 1c：弧帶 persistent overlay（把手畫在其上），與 MainWindow 一致
                 return;
             }
+
+            // 離開弧形工具 → 清掉編輯器自己裝的弧帶/試測 overlay，避免殘留到 circle/line/參照工具。
+            // 只清編輯器裝的（_editorInstalledOverlay），不誤清 Run Recipe 結果 overlay。
+            ClearEditorOverlayIfAny();
 
             bool isElement = _selectedTool.ToolType == "circle" || _selectedTool.ToolType == "line";
             if (!isElement)
@@ -1150,6 +1187,27 @@ namespace FlashMeasurementSystem
             _imageHelper.BeginRect2Edit(roi.CenterRow, roi.CenterCol, roi.AngleRad,
                 roi.Length1, roi.Length2, OnToolRect2Changed);
             _editorOwnsEdit = true;
+        }
+
+        // Fix 1c：弧帶 persistent overlay。裝在共用主視窗 helper 上（單一 overlay slot），
+        // 讀選中工具的 ArcRoi 畫量測帶；BeginArcEdit 的綠色把手於 Redraw 時疊在其上。
+        // 數值變更（WriteArc）或把手拖曳（BeginArcEdit）觸發 Redraw 時，band 依最新 ArcRoi 重畫。
+        private void InstallArcBandOverlay()
+        {
+            _imageHelper.SetPersistentOverlayAction(() =>
+            {
+                var a = _selectedTool?.ArcRoi;
+                if (a != null && a.IsDefined)
+                    _imageHelper.Annotator.DrawArcBand(a.CenterRow, a.CenterCol, a.Radius,
+                        a.AngleStart, a.AngleExtent, a.AnnulusRadius);
+            });
+            _editorInstalledOverlay = true;  // 記錄已佔用共用 overlay slot，離開弧形工具/關閉時清除
+        }
+
+        // 只清除「編輯器自己裝過」的 persistent overlay（弧帶或試測），不誤清 Run Recipe 結果 overlay。
+        private void ClearEditorOverlayIfAny()
+        {
+            if (_editorInstalledOverlay) { _imageHelper.ClearOverlay(); _editorInstalledOverlay = false; }
         }
 
         // 取得某工具參照到的「元素」(circle/line，具 ROI)。構造工具等無 ROI 者不納入高亮。
@@ -1205,10 +1263,14 @@ namespace FlashMeasurementSystem
         }
 
         // 弧形把手拖曳回呼：回寫 ArcRoi（角度為弧度）與數值框，標記 dirty。
+        // BeginArcEdit 交來的角度為弧度；起角先正規化到 [0, 2π)（比照 MainWindow.OnArcRoiChanged 的
+        // [0,360) 正規化），避免環繞拖曳被數值框的 Minimum=0 夾掉。
         private void OnToolArcChanged(double cr, double cc, double radius,
             double angleStart, double angleExtent, double annulus)
         {
             if (_selectedTool == null || _selectedTool.ArcRoi == null) return;
+            double twoPi = 2.0 * Math.PI;
+            angleStart -= twoPi * Math.Floor(angleStart / twoPi); // 正規化到 [0, 2π)
             ArcMeasureRoi a = _selectedTool.ArcRoi;
             a.CenterRow = cr;
             a.CenterCol = cc;
@@ -1235,8 +1297,9 @@ namespace FlashMeasurementSystem
                 _arcCenterRowNumeric.Value = ClampDecimal(a.CenterRow, _arcCenterRowNumeric.Minimum, _arcCenterRowNumeric.Maximum);
                 _arcCenterColNumeric.Value = ClampDecimal(a.CenterCol, _arcCenterColNumeric.Minimum, _arcCenterColNumeric.Maximum);
                 _arcRadiusNumeric.Value = ClampDecimal(a.Radius, _arcRadiusNumeric.Minimum, _arcRadiusNumeric.Maximum);
-                _arcAngleStartNumeric.Value = ClampDecimal(a.AngleStart, _arcAngleStartNumeric.Minimum, _arcAngleStartNumeric.Maximum);
-                _arcAngleExtentNumeric.Value = ClampDecimal(a.AngleExtent, _arcAngleExtentNumeric.Minimum, _arcAngleExtentNumeric.Maximum);
+                // ArcRoi 存弧度 → 數值框顯示度（rad→deg 轉換點）。
+                _arcAngleStartNumeric.Value = ClampDecimal(a.AngleStart * 180.0 / Math.PI, _arcAngleStartNumeric.Minimum, _arcAngleStartNumeric.Maximum);
+                _arcAngleExtentNumeric.Value = ClampDecimal(a.AngleExtent * 180.0 / Math.PI, _arcAngleExtentNumeric.Minimum, _arcAngleExtentNumeric.Maximum);
                 _arcAnnulusNumeric.Value = ClampDecimal(a.AnnulusRadius, _arcAnnulusNumeric.Minimum, _arcAnnulusNumeric.Maximum);
             }
             finally
@@ -1490,6 +1553,7 @@ namespace FlashMeasurementSystem
             _imageHelper.BeginArcEdit(a.CenterRow, a.CenterCol, a.Radius,
                 a.AngleStart, a.AngleExtent, a.AnnulusRadius, OnToolArcChanged);
             _editorOwnsEdit = true;
+            InstallArcBandOverlay();  // Fix 1c：明確進入弧形編輯時（也）確保弧帶 overlay 已裝上
         }
 
         private void ApplyRoiCapture(double centerRow, double centerCol, double length1, double length2, double angleRad)
@@ -1630,8 +1694,8 @@ namespace FlashMeasurementSystem
             _toolTip.SetToolTip(_arcCenterRowNumeric, "弧心 row（像素）");
             _toolTip.SetToolTip(_arcCenterColNumeric, "弧心 column（像素）");
             _toolTip.SetToolTip(_arcRadiusNumeric, "掃描半徑（像素）");
-            _toolTip.SetToolTip(_arcAngleStartNumeric, "起始角（弧度）");
-            _toolTip.SetToolTip(_arcAngleExtentNumeric, "角度範圍（弧度，2π≈6.2832 為整圈；負值為順時針）");
+            _toolTip.SetToolTip(_arcAngleStartNumeric, "起始角（度，0..360）");
+            _toolTip.SetToolTip(_arcAngleExtentNumeric, "角度範圍（度，360 為整圈；負值為順時針）");
             _toolTip.SetToolTip(_arcAnnulusNumeric, "環寬一半（像素）");
             _toolTip.SetToolTip(_captureArcButton, "在主影像上拖曳把手調整弧形 ROI");
             _toolTip.SetToolTip(_sigmaNumeric, "Gaussian smoothing sigma for edge detection");

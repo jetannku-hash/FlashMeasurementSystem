@@ -1806,18 +1806,9 @@ namespace FlashMeasurementSystem
             {
                 // 弧形卡尺量測帶：畫內弧(R-Annulus)、中弧(R)、外弧(R+Annulus)，
                 // 讓使用者清楚看到實際掃描的環帶範圍是否壓在特徵邊緣上。
-                // 內外弧用橘色(邊界)、中弧用黃色，並在中心畫十字標出弧心。
-                double cr = arcRoi.CenterRow, cc = arcRoi.CenterCol;
-                double a0 = arcRoi.AngleStart;
-                double a1 = arcRoi.AngleStart + arcRoi.AngleExtent;
-                string order = arcRoi.AngleExtent > 0 ? "positive" : "negative";
-                double rIn = Math.Max(1.0, arcRoi.Radius - arcRoi.AnnulusRadius);
-                double rOut = arcRoi.Radius + arcRoi.AnnulusRadius;
-
-                an.DrawArc(cr, cc, rIn, a0, a1, order, "orange");
-                an.DrawArc(cr, cc, rOut, a0, a1, order, "orange");
-                an.DrawArc(cr, cc, arcRoi.Radius, a0, a1, order, "yellow");
-                an.DrawCross(cr, cc, 15, "orange");
+                // 內外弧用橘色(邊界)、中弧用黃色，並在中心畫十字標出弧心。共用 DrawArcBand（與編輯器一致）。
+                an.DrawArcBand(arcRoi.CenterRow, arcRoi.CenterCol, arcRoi.Radius,
+                    arcRoi.AngleStart, arcRoi.AngleExtent, arcRoi.AnnulusRadius);
             }
 
             if (roi != null && _latestEdgeResult != null)

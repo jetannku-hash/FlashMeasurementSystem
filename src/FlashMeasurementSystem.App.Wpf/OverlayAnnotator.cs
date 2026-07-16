@@ -133,6 +133,19 @@ namespace FlashMeasurementSystem
             }
         }
 
+        // 弧形量測帶：內弧(R-Annulus)、外弧(R+Annulus) 橘色，中弧(R) 黃色，弧心十字。與 MainWindow 一致。
+        public void DrawArcBand(double centerRow, double centerCol, double radius, double angleStart, double angleExtent, double annulus)
+        {
+            double a0 = angleStart, a1 = angleStart + angleExtent;
+            string order = angleExtent > 0 ? "positive" : "negative";
+            double rIn = System.Math.Max(1.0, radius - annulus);
+            double rOut = radius + annulus;
+            DrawArc(centerRow, centerCol, rIn, a0, a1, order, "orange");
+            DrawArc(centerRow, centerCol, rOut, a0, a1, order, "orange");
+            DrawArc(centerRow, centerCol, radius, a0, a1, order, "yellow");
+            DrawCross(centerRow, centerCol, 15, "orange");
+        }
+
         // disp_ellipse(Window, CenterRow, CenterCol, Phi, Radius1, Radius2)（reference L69967）。
         // Phi 為主軸方向（弧度），與 fit_ellipse_contour_xld 輸出的 Phi 慣例一致，直接帶入即可。
         public void DrawEllipse(double row, double col, double phi, double radius1, double radius2, string color = null)
