@@ -80,10 +80,16 @@ namespace FlashMeasurementSystem.Domain.GearAnalysis
             for (int t = 0; t < teeth; t++)
                 result.Teeth.Add(new GearTooth { CenterAngleDeg = centers[t] * d2, WidthDeg = widths[t] * d2 });
 
+            // 缺齒提示：齒距 > 1.5×中位數（≈2× 表漏一齒）。標記點放在「過大間隙的中點」
+            //（= 缺齒該在的位置），而非間隙前一顆齒的中心，否則洋紅十字會畫在缺口旁的齒上。
             double median = Median(pitches);
             for (int t = 0; t < teeth; t++)
                 if (pitches[t] > 1.5 * median)
-                    result.MissingToothHintsDeg.Add(centers[t] * d2);
+                {
+                    double mid = centers[t] + pitches[t] / 2.0;
+                    if (mid >= TwoPi) mid -= TwoPi;
+                    result.MissingToothHintsDeg.Add(mid * d2);
+                }
 
             result.CountOk = teeth == p.NominalToothCount;
             result.PitchOk = result.PitchMaxDevDeg <= p.PitchToleranceDeg;

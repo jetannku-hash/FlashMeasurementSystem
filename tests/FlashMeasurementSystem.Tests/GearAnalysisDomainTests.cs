@@ -56,6 +56,10 @@ namespace FlashMeasurementSystem.Tests
             AssertEqual(false, rm.CountOk, "missing CountOk false");
             AssertEqual(false, rm.IsPass, "missing FAIL");
             if (rm.MissingToothHintsDeg.Count == 0) throw new InvalidOperationException("missing tooth should hint");
+            // 缺第 5 齒（5×18°=90°）→ 提示點應落在缺口中點 ≈ 90°（缺齒該在的位置），不是旁邊的齒上。
+            bool hintAtGap = false;
+            foreach (double h in rm.MissingToothHintsDeg) if (Math.Abs(h - 90.0) < 1e-6) hintAtGap = true;
+            if (!hintAtGap) throw new InvalidOperationException("missing hint should sit at the gap centre ~90deg");
 
             var ew = new double[20]; ew[3] = -4.0;
             var rw = GearToothAnalyzer.Analyze(Gear(20, 8.0, extraWidthDeg: ew), Cr, Cc, R, g);
