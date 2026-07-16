@@ -20,7 +20,7 @@ namespace FlashMeasurementSystem.Domain.Roi
         // 已知型別；未列入者執行時會被略過，故視為 Warning。
         private static readonly HashSet<string> KnownTypes = new HashSet<string>
         {
-            "circle", "line", "edge",
+            "circle", "line", "edge", "arc",
             "intersection", "midline", "projection",
             "roundness", "straightness", "parallelism", "perpendicularity", "concentricity",
             "distance", "angle"
@@ -92,6 +92,20 @@ namespace FlashMeasurementSystem.Domain.Roi
                 if (RoiElementTypes.Contains(type))
                 {
                     ValidateRoi(issues, tool, imageWidth, imageHeight);
+                }
+
+                if (tool.ToolType == "arc")
+                {
+                    if (tool.ArcRoi == null)
+                    {
+                        issues.Add(new RecipeIssue(RecipeIssueSeverity.Error, tool.Id, tool.Name,
+                            "弧形工具缺少弧形 ROI（ArcRoi）"));
+                    }
+                    else if (!tool.ArcRoi.IsDefined)
+                    {
+                        issues.Add(new RecipeIssue(RecipeIssueSeverity.Error, tool.Id, tool.Name,
+                            "弧形 ROI 無效：" + tool.ArcRoi.ValidationError));
+                    }
                 }
 
                 // 公差反向（任何可能帶尺寸/角度公差的工具）。

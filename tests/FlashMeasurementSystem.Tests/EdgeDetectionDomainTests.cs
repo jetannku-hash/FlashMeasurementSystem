@@ -151,6 +151,8 @@ namespace FlashMeasurementSystem.Tests
             Console.WriteLine("MetrologyModelDomainTests passed");
             DxfComparisonDomainTests.Run();
             Console.WriteLine("DxfComparisonDomainTests passed");
+            ArcRecipeToolDomainTests.Run();
+            Console.WriteLine("ArcRecipeToolDomainTests passed");
             Console.WriteLine("EdgeDetectionDomainTests passed");
             return 0;
         }
@@ -174,6 +176,13 @@ namespace FlashMeasurementSystem.Tests
             public EdgeResult DetectEdgesSubPix(object image, EdgeDetectionRoi roi, EdgeDetectionParameters parameters)
             {
                 return new EdgeResult { Success = true };
+            }
+
+            public EdgeResult DetectEdgesOnArc(object image, ArcMeasureRoi arcRoi, EdgeDetectionParameters parameters)
+            {
+                var r = new EdgeResult();
+                r.EdgePoints.Add(new EdgePoint { Row = 1.0, Column = 2.0, Amplitude = 30.0, Distance = 0.0 });
+                return r;
             }
         }
     }

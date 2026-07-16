@@ -89,7 +89,12 @@ Pass 1（元素工具）加 arc 分支——弧工具自足、不參考其他工
 
 ### 4.7 Overlay / 報表
 - Overlay：用**既有** `OverlayAnnotator.DrawArc(row, col, radius, startPhi, endPhi, pointOrder, color)` 畫變換後的弧 + 邊點十字（十字數量比照既有 `MaxOverlayCrosses` 均勻抽樣上限，避免壅塞）。
-- 報表：沿用既有 `ToolRunResult` → CSV 管線，**零新程式碼**（邊數即 MeasuredValue）。
+- 報表：沿用既有 `ToolRunResult` → CSV 管線，但**需要一行新程式碼**（見下方修正）。
+
+> **⚠️ 2026-07-16 修正（原文寫「零新程式碼（邊數即 MeasuredValue）」是錯的）**
+> `MeasurementWorkflow.GetMeasuredValue` 是個 tool-type switch（circle/line/distance/angle），**其餘一律 `return 0`**，且 CSV 的 `ItemJudgment` 是用該值**重新判定**一次。因此弧工具若不加 case，CSV 會以 MeasuredValue=0 重判 → **CSV 那一列與畫面/OK-NG 統計互相矛盾**（統計讀 `r.IsOk` 繞過此 switch，所以 GUI 驗收看不出來）。
+> 修法：`GetMeasuredValue` 加 `if (r.ToolType == "arc") return r.ArcEdgeRows.Count;`；並在 `AddTool` 讓 arc 的 `Tolerance.Unit = "count"`（否則 CSV 對「邊數」顯示單位 mm）。
+> **前車之鑑**：GD&T 踩過同一個坑，`MeasurementWorkflow.cs:198-200` 的註解即為此而寫（「避免落入下方雙邊分支用 MeasuredValue=0 誤判為 OK」）。**任何新工具型別加進配方時，都必須同時檢查 `GetMeasuredValue`**——下游的 gear 方案務必注意。
 
 ## 5. 已知限制
 

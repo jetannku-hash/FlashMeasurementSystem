@@ -1,5 +1,7 @@
 using System;
+using FlashMeasurementSystem.Application.CoordinateSystem;
 using FlashMeasurementSystem.Domain.CoordinateSystem;
+using FlashMeasurementSystem.Domain.EdgeDetection;
 using FlashMeasurementSystem.Halcon.CoordinateSystem;
 
 namespace FlashMeasurementSystem.Tests.Halcon
@@ -67,6 +69,25 @@ namespace FlashMeasurementSystem.Tests.Halcon
                 throw new InvalidOperationException("invalid transform should throw");
             }
             catch (ArgumentException) { /* expected */ }
+
+            // ─── 弧 ROI 帶旋轉姿態對齊（spec §7.2；防 Phase 2 驗證洞重演）───
+            // ref 姿態 (128,128,0°) → cur 姿態 (300,200,30°)。vector_angle_to_rigid 保證 ref 點精確映到 cur 點，
+            // 故把弧心放在 ref 點上時，變換後弧心必落在 cur 點；起始角必增加 30°；半徑/範圍/環寬不得變動。
+            var mapper2 = new FlashMeasurementSystem.Halcon.CoordinateSystem.HalconCoordinateMapper();
+            double rot = 30.0 * Math.PI / 180.0;
+            RigidTransform tArc = mapper2.CreateFromMatch(128, 128, 0.0, 300, 200, rot);
+            var srcArc = new ArcMeasureRoi
+            {
+                CenterRow = 128, CenterCol = 128, Radius = 90,
+                AngleStart = 0.2, AngleExtent = 2.0 * Math.PI, AnnulusRadius = 6
+            };
+            ArcMeasureRoi movedArc = ArcRoiTransform.TransformArc(mapper2, srcArc, tArc);
+            Assert(Math.Abs(movedArc.CenterRow - 300.0) < Tol, "arc align: CenterRow ~300, got=" + movedArc.CenterRow.ToString("F2"));
+            Assert(Math.Abs(movedArc.CenterCol - 200.0) < Tol, "arc align: CenterCol ~200, got=" + movedArc.CenterCol.ToString("F2"));
+            Assert(Math.Abs(movedArc.AngleStart - (0.2 + rot)) < 1e-6, "arc align: AngleStart += 30°, got=" + movedArc.AngleStart.ToString("F4"));
+            Assert(Math.Abs(movedArc.Radius - 90.0) < 1e-9, "arc align: Radius unchanged");
+            Assert(Math.Abs(movedArc.AngleExtent - 2.0 * Math.PI) < 1e-9, "arc align: AngleExtent unchanged");
+            Assert(Math.Abs(movedArc.AnnulusRadius - 6.0) < 1e-9, "arc align: AnnulusRadius unchanged");
 
             Console.WriteLine("CoordinateMapperTests passed");
         }

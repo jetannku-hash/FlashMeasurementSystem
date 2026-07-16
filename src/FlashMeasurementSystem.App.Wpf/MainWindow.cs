@@ -1501,6 +1501,30 @@ namespace FlashMeasurementSystem
 
                     rows.Add(new OverlayResultRow { Name = r.Name, ValueText = r.ValueText, IsOk = r.IsOk });
                 }
+
+                // Arc 卡尺結果：Roi 刻意留 null（見上方 Pass 1.2 註解），畫框那段不會經過，
+                // 故弧本體/邊點十字/名稱標籤需在此自行補畫。
+                foreach (ToolRunResult r in results)
+                {
+                    if (r == null || r.ToolType != "arc" || r.PlacedArc == null) continue;
+                    string arcColor = r.IsOk == true ? "green" : (r.IsOk == false ? "red" : "yellow");
+                    ArcMeasureRoi a = r.PlacedArc;
+                    string pointOrder = a.AngleExtent > 0 ? "positive" : "negative";
+                    an.DrawArc(a.CenterRow, a.CenterCol, a.Radius,
+                        a.AngleStart, a.AngleStart + a.AngleExtent, pointOrder, arcColor);
+
+                    // 邊點十字：等間距抽樣至多 MaxOverlayCrosses 個（同 metrology/1D 慣例）。
+                    int aTotal = Math.Min(r.ArcEdgeRows.Count, r.ArcEdgeCols.Count);
+                    if (aTotal > 0)
+                    {
+                        int aStep = aTotal <= MaxOverlayCrosses ? 1 : (int)Math.Ceiling((double)aTotal / MaxOverlayCrosses);
+                        for (int ai = 0; ai < aTotal; ai += aStep)
+                            an.DrawCross(r.ArcEdgeRows[ai], r.ArcEdgeCols[ai], 10, arcColor);
+                    }
+
+                    // 名稱標籤：錨在弧心（比照 Roi 分支把名稱標在 Roi.Row/Col 的慣例）。
+                    an.DrawText(r.Name ?? string.Empty, (int)a.CenterRow, (int)a.CenterCol, arcColor);
+                }
                 an.DrawResultTable(rows);
             });
 
@@ -1782,18 +1806,9 @@ namespace FlashMeasurementSystem
             {
                 // 弧形卡尺量測帶：畫內弧(R-Annulus)、中弧(R)、外弧(R+Annulus)，
                 // 讓使用者清楚看到實際掃描的環帶範圍是否壓在特徵邊緣上。
-                // 內外弧用橘色(邊界)、中弧用黃色，並在中心畫十字標出弧心。
-                double cr = arcRoi.CenterRow, cc = arcRoi.CenterCol;
-                double a0 = arcRoi.AngleStart;
-                double a1 = arcRoi.AngleStart + arcRoi.AngleExtent;
-                string order = arcRoi.AngleExtent > 0 ? "positive" : "negative";
-                double rIn = Math.Max(1.0, arcRoi.Radius - arcRoi.AnnulusRadius);
-                double rOut = arcRoi.Radius + arcRoi.AnnulusRadius;
-
-                an.DrawArc(cr, cc, rIn, a0, a1, order, "orange");
-                an.DrawArc(cr, cc, rOut, a0, a1, order, "orange");
-                an.DrawArc(cr, cc, arcRoi.Radius, a0, a1, order, "yellow");
-                an.DrawCross(cr, cc, 15, "orange");
+                // 內外弧用橘色(邊界)、中弧用黃色，並在中心畫十字標出弧心。共用 DrawArcBand（與編輯器一致）。
+                an.DrawArcBand(arcRoi.CenterRow, arcRoi.CenterCol, arcRoi.Radius,
+                    arcRoi.AngleStart, arcRoi.AngleExtent, arcRoi.AnnulusRadius);
             }
 
             if (roi != null && _latestEdgeResult != null)

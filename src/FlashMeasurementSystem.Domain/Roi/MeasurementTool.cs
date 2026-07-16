@@ -29,5 +29,9 @@ namespace FlashMeasurementSystem.Domain.Roi
         // 複合工具（distance/angle）參考的元素工具 Id（line/circle）。
         // 自足工具（circle/line 元素）此清單為空。順序有意義（例：distance 取 [0]→[1]）。
         public List<string> RefToolIds { get; set; } = new List<string>();
+
+        // v7：弧形量測 ROI（重用既有 ArcMeasureRoi DTO）。null＝非弧工具，走既有 rect2 Roi。
+        // 弧工具（ToolType="arc"）必填；Roi(rect2) 對弧工具無用但保留（加性模式，不改造 RoiGeometry）。
+        public ArcMeasureRoi ArcRoi { get; set; } = null;
     }
 }
