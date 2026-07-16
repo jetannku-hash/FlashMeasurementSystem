@@ -70,10 +70,16 @@ namespace FlashMeasurementSystem.Tests
             AssertEqual(20, rc.ToothCount, "wrap count 20");
             AssertClose(0.0, rc.PitchMaxDevDeg, 1e-6, "wrap pitch dev 0");
 
+            // 齒寬公差邊界：以「剛好內側 / 剛好外側」夾住 inclusive ≤ 判定（避開 atan2 round-trip 的精確 == 脆弱性）
+            // 剛好內側：一齒 +0.5° → mean=(19*8+8.5)/20=8.025，maxDev=|8.5-8.025|=0.475 < 0.5 → WidthOk true
             var ewb = new double[20]; ewb[2] = 0.5;
             var gb = new GearAnalysisParameters { NominalToothCount = 20, PitchToleranceDeg = 5.0, WidthToleranceDeg = 0.5 };
             var rb = GearToothAnalyzer.Analyze(Gear(20, 8.0, extraWidthDeg: ewb), Cr, Cc, R, gb);
-            AssertEqual(true, rb.WidthOk || rb.WidthMaxDevDeg <= 0.5 + 1e-9, "boundary width inclusive");
+            AssertEqual(true, rb.WidthOk, "just-inside WidthOk true");
+            // 剛好外側：一齒 +0.6° → mean=(19*8+8.6)/20=8.03，maxDev=|8.6-8.03|=0.57 > 0.5 → WidthOk false
+            var ewb2 = new double[20]; ewb2[2] = 0.6;
+            var rw2 = GearToothAnalyzer.Analyze(Gear(20, 8.0, extraWidthDeg: ewb2), Cr, Cc, R, gb);
+            AssertEqual(false, rw2.WidthOk, "just-outside WidthOk false");
 
             var gf = new GearAnalysisParameters { NominalToothCount = 20, ToothIsDark = false, PitchToleranceDeg = 0.5, WidthToleranceDeg = 100 };
             var rf = GearToothAnalyzer.Analyze(Gear(20, 8.0), Cr, Cc, R, gf);
@@ -85,6 +91,11 @@ namespace FlashMeasurementSystem.Tests
             AssertEqual(false, GearToothAnalyzer.Analyze(null, Cr, Cc, R, g).Success, "null fail");
             var odd = Gear(20, 8.0); odd.RemoveAt(0);
             AssertEqual(false, GearToothAnalyzer.Analyze(odd, Cr, Cc, R, g).Success, "odd count fail");
+            // 未交替（E,E,L,L）：偶數且成對數相等，但序列非交替 → Failed（spec §9）
+            var nonAlt = new List<EdgePoint>();
+            AddEdge(nonAlt, 10, -30); AddEdge(nonAlt, 20, -30);   // 兩個進齒
+            AddEdge(nonAlt, 30, +30); AddEdge(nonAlt, 40, +30);   // 兩個出齒
+            AssertEqual(false, GearToothAnalyzer.Analyze(nonAlt, Cr, Cc, R, g).Success, "non-alternating fail");
             AssertEqual(false, GearToothAnalyzer.Analyze(Gear(20, 8.0), Cr, Cc, R,
                 new GearAnalysisParameters { NominalToothCount = 0 }).Success, "nominal<=0 fail");
         }
