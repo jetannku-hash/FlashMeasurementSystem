@@ -23,11 +23,17 @@ namespace FlashMeasurementSystem.Domain.GearAnalysis
 
             const double TwoPi = 2.0 * Math.PI;
             var arr = new List<KeyValuePair<double, bool>>();
+            // amplitude 正負號慣例（關鍵接縫，2026-07-16 GUI 驗收修正）：
+            // HALCON measure_pos 的 amplitude 號沿弧「主軸方向」定義（正=dark→light、負=light→dark）；
+            // gen_measure_arc 於 AngleExtent>0 時弧為 CCW。本分析器改用 θ=atan2(row−cr,col−cc) 排序，代入
+            // HALCON 標準點參數式 (Row=Cr−R·sinφ, Col=Cc+R·cosφ) 得 θ=−φ ——與掃描方向【相反】。
+            // 故沿 +θ 遇「暗齒起始邊 (light→dark)」時，其 HALCON amplitude 為【正】。
+            // ⇒ 暗齒的進齒邊 = 正 amplitude。（曾誤寫成 <0：配對偏移半週期→齒中心落在齒隙、齒寬量到齒隙寬。）
             foreach (var e in edgePoints)
             {
                 double th = Math.Atan2(e.Row - centerRow, e.Column - centerCol);
                 if (th < 0) th += TwoPi;
-                bool entering = p.ToothIsDark ? (e.Amplitude < 0) : (e.Amplitude > 0);
+                bool entering = p.ToothIsDark ? (e.Amplitude > 0) : (e.Amplitude < 0);
                 arr.Add(new KeyValuePair<double, bool>(th, entering));
             }
             arr.Sort((a, b) => a.Key.CompareTo(b.Key));

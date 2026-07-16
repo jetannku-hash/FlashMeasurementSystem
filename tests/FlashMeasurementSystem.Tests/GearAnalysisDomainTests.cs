@@ -18,8 +18,10 @@ namespace FlashMeasurementSystem.Tests
                 if (i == dropTooth) continue;
                 double centerDeg = i * 360.0 / n + (shiftDeg != null ? shiftDeg[i] : 0.0);
                 double w = widthDeg + (extraWidthDeg != null ? extraWidthDeg[i] : 0.0);
-                AddEdge(pts, centerDeg - w / 2.0, -30.0);
-                AddEdge(pts, centerDeg + w / 2.0, +30.0);
+                // HALCON 弧掃描慣例（見 GearToothAnalyzer 的 amplitude 註解）：暗齒沿 +θ 的
+                // 進齒邊(light→dark) amplitude 為【正】、出齒邊(dark→light)為【負】。
+                AddEdge(pts, centerDeg - w / 2.0, +30.0);  // 進齒（暗齒起始）
+                AddEdge(pts, centerDeg + w / 2.0, -30.0);  // 出齒（暗齒結束）
             }
             return pts;
         }
@@ -93,8 +95,8 @@ namespace FlashMeasurementSystem.Tests
             AssertEqual(false, GearToothAnalyzer.Analyze(odd, Cr, Cc, R, g).Success, "odd count fail");
             // 未交替（E,E,L,L）：偶數且成對數相等，但序列非交替 → Failed（spec §9）
             var nonAlt = new List<EdgePoint>();
-            AddEdge(nonAlt, 10, -30); AddEdge(nonAlt, 20, -30);   // 兩個進齒
-            AddEdge(nonAlt, 30, +30); AddEdge(nonAlt, 40, +30);   // 兩個出齒
+            AddEdge(nonAlt, 10, +30); AddEdge(nonAlt, 20, +30);   // 兩個進齒（新慣例：正）
+            AddEdge(nonAlt, 30, -30); AddEdge(nonAlt, 40, -30);   // 兩個出齒（負）
             AssertEqual(false, GearToothAnalyzer.Analyze(nonAlt, Cr, Cc, R, g).Success, "non-alternating fail");
             AssertEqual(false, GearToothAnalyzer.Analyze(Gear(20, 8.0), Cr, Cc, R,
                 new GearAnalysisParameters { NominalToothCount = 0 }).Success, "nominal<=0 fail");
