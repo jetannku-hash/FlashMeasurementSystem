@@ -146,6 +146,35 @@ namespace FlashMeasurementSystem
             DrawCross(centerRow, centerCol, 15, "orange");
         }
 
+        // 封閉扇形外框：沿用 DrawArcBand 畫內/中/外弧，再補畫起始角、終止角兩條徑向邊，
+        // 讓局部扇形（非全周）看起來是一塊「封閉區域」而非三條浮空弧線，與 Task1
+        // DetectEdgesInAnnularSector 用 gen_circle_sector 產生的量測區域外形一致。
+        // 全周（|AngleExtent| >= 2π，容差同 HalconEdgeDetector.isFullRing）沒有起訖邊界，
+        // 省略徑向邊，維持與 DrawArcBand 原本一樣只畫內外弧的外觀。
+        // 徑向邊端點角度→座標公式與 DrawEditArc 一致（ArcEditMath.PointOnArc：
+        // row = cr - R*sin(phi)，col = cc + R*cos(phi)），確保端點精準落在
+        // DrawArcBand 已畫出的弧線端點上，不會有另一種換算方式造成的錯位。
+        public void DrawSectorRoi(double centerRow, double centerCol, double radius, double annulusRadius,
+            double angleStart, double angleExtent, string color = null)
+        {
+            DrawArcBand(centerRow, centerCol, radius, angleStart, angleExtent, annulusRadius);
+
+            const double fullRingEps = 1e-6;
+            if (Math.Abs(angleExtent) >= 2.0 * Math.PI - fullRingEps) return;
+
+            double rIn = Math.Max(1.0, radius - annulusRadius);
+            double rOut = radius + annulusRadius;
+            double a0 = angleStart, a1 = angleStart + angleExtent;
+
+            ArcEditMath.PointOnArc(centerRow, centerCol, rIn, a0, out double inR0, out double inC0);
+            ArcEditMath.PointOnArc(centerRow, centerCol, rOut, a0, out double outR0, out double outC0);
+            ArcEditMath.PointOnArc(centerRow, centerCol, rIn, a1, out double inR1, out double inC1);
+            ArcEditMath.PointOnArc(centerRow, centerCol, rOut, a1, out double outR1, out double outC1);
+
+            DrawLine(inR0, inC0, outR0, outC0, color ?? "orange");
+            DrawLine(inR1, inC1, outR1, outC1, color ?? "orange");
+        }
+
         // disp_ellipse(Window, CenterRow, CenterCol, Phi, Radius1, Radius2)（reference L69967）。
         // Phi 為主軸方向（弧度），與 fit_ellipse_contour_xld 輸出的 Phi 慣例一致，直接帶入即可。
         public void DrawEllipse(double row, double col, double phi, double radius1, double radius2, string color = null)
