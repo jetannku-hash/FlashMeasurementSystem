@@ -69,6 +69,7 @@
     <Compile Include="CoordinateSystem\HalconCoordinateMapper.cs" />
     <Compile Include="MetrologyModel\HalconMetrologyModelRunner.cs" />
     <Compile Include="DxfComparison\HalconDxfContourComparer.cs" />
+    <Compile Include="HoleDetection\HalconHoleDetector.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\FlashMeasurementSystem.Application\FlashMeasurementSystem.Application.csproj">

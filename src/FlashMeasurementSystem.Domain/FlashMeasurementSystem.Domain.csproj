@@ -113,6 +113,7 @@
     <Compile Include="PcdAnalysis\PcdAnalysisParameters.cs" />
     <Compile Include="PcdAnalysis\PcdAnalysisResult.cs" />
     <Compile Include="PcdAnalysis\PcdAnalyzer.cs" />
+    <Compile Include="HoleDetection\HoleDetectionResult.cs" />
     <Compile Include="Workflow\MeasurementState.cs" />
     <Compile Include="Workflow\WorkflowResult.cs" />
   </ItemGroup>
