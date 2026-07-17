@@ -14,12 +14,17 @@ namespace FlashMeasurementSystem.Halcon.HoleDetection
     /// </summary>
     public sealed class HalconHoleDetector : IHoleDetector<HImage>
     {
-        public HoleDetectionResult DetectHolesInAnnulus(HImage image, ArcMeasureRoi a, PcdAnalysisParameters p)
+        public HoleDetectionResult DetectHolesInAnnulus(HImage image, ArcMeasureRoi placedArc, PcdAnalysisParameters parameters)
         {
             var result = new HoleDetectionResult();
             if (image == null) { result.ErrorMessage = "影像為空"; return result; }
-            if (a == null || !a.IsDefined) { result.ErrorMessage = "量測環帶無效"; return result; }
-            if (p == null) p = PcdAnalysisParameters.Default();
+            if (placedArc == null || !placedArc.IsDefined) { result.ErrorMessage = "量測環帶無效"; return result; }
+            if (placedArc.AnnulusRadius >= placedArc.Radius)
+            {
+                result.ErrorMessage = "環寬(AnnulusRadius)必須小於半徑(Radius)，否則內圈半徑會變成 0 或負值";
+                return result;
+            }
+            if (parameters == null) parameters = PcdAnalysisParameters.Default();
 
             HObject outer = null, inner = null, ring = null, reduced = null,
                     region = null, connected = null, selected = null;
@@ -29,18 +34,18 @@ namespace FlashMeasurementSystem.Halcon.HoleDetection
                 convertedImage = EnsureSingleChannel(image);
                 HImage workingImage = convertedImage ?? image;
 
-                double rOut = a.Radius + a.AnnulusRadius, rIn = a.Radius - a.AnnulusRadius;
+                double rOut = placedArc.Radius + placedArc.AnnulusRadius, rIn = placedArc.Radius - placedArc.AnnulusRadius;
                 if (rIn < 0) rIn = 0;
-                HOperatorSet.GenCircle(out outer, a.CenterRow, a.CenterCol, rOut);
-                HOperatorSet.GenCircle(out inner, a.CenterRow, a.CenterCol, rIn);
+                HOperatorSet.GenCircle(out outer, placedArc.CenterRow, placedArc.CenterCol, rOut);
+                HOperatorSet.GenCircle(out inner, placedArc.CenterRow, placedArc.CenterCol, rIn);
                 HOperatorSet.Difference(outer, inner, out ring);
                 HOperatorSet.ReduceDomain(workingImage, ring, out reduced);
                 HOperatorSet.BinaryThreshold(reduced, out region, "max_separability",
-                    p.HoleIsDark ? "dark" : "light", out HTuple _used);
+                    parameters.HoleIsDark ? "dark" : "light", out HTuple _used);
                 HOperatorSet.Connection(region, out connected);
                 HOperatorSet.SelectShape(connected, out selected, "area", "and",
-                    new HTuple(p.MinHoleAreaPx), new HTuple(1e12));
-                HOperatorSet.AreaCenter(selected, out HTuple area, out HTuple rows, out HTuple cols);
+                    new HTuple(parameters.MinHoleAreaPx), new HTuple(1e12));
+                HOperatorSet.AreaCenter(selected, out HTuple _, out HTuple rows, out HTuple cols);
 
                 int cnt = rows?.Length ?? 0;
                 for (int i = 0; i < cnt; i++)
@@ -49,7 +54,7 @@ namespace FlashMeasurementSystem.Halcon.HoleDetection
                 if (!result.Success)
                     result.ErrorMessage = string.Format(CultureInfo.InvariantCulture,
                         "環帶內未偵測到孔（半徑 {0:F0}±{1:F0}、HoleIsDark={2}、MinArea={3:F0}；請調環帶/極性/面積）",
-                        a.Radius, a.AnnulusRadius, p.HoleIsDark, p.MinHoleAreaPx);
+                        placedArc.Radius, placedArc.AnnulusRadius, parameters.HoleIsDark, parameters.MinHoleAreaPx);
             }
             catch (HalconException ex)
             {
