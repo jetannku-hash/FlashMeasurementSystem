@@ -622,6 +622,12 @@ namespace FlashMeasurementSystem
             {
                 MessageBox.Show($"Halcon error: {ex.Message}", "Error");
             }
+            catch (Exception ex)
+            {
+                // backstop：.shm 寫入/讀取的 IO/權限例外（唯讀樣板夾、檔案鎖定等）非上述型別，
+                // 否則會冒出未處理例外崩潰對話框而非可讀訊息。
+                MessageBox.Show(ex.Message, "Error");
+            }
             finally
             {
                 Cursor = Cursors.Default;
@@ -689,12 +695,17 @@ namespace FlashMeasurementSystem
                 }
                 else
                 {
+                    // 匹配失敗必須清掉殘留的成功姿態，否則 Run Recipe 守門（HasReferencePose && !_hasMatch）
+                    // 會放行，並用前一次成功的 _lastMatch* 對現影像做 ROI 變換，畫出錯誤的 OK/NG。
+                    ResetMatchPose();
                     _imageHelper.ClearOverlay();
                     matchResultTextBox.Text = result.Message;
                 }
             }
-            catch (HalconException ex)
+            catch (Exception ex)
             {
+                // 涵蓋 HalconException 及 IO/權限等非 Halcon 例外（否則會冒出未處理例外崩潰對話框）。
+                ResetMatchPose();
                 _imageHelper.ClearOverlay();
                 matchResultTextBox.Text = $"Matching failed: {ex.Message}";
             }
@@ -703,6 +714,17 @@ namespace FlashMeasurementSystem
                 Cursor = Cursors.Default;
                 ClearProgress();
             }
+        }
+
+        // 清掉已保存的匹配姿態（匹配失敗/例外時呼叫），避免 Run Recipe 守門用舊姿態變換 ROI。
+        // 換圖路徑（DisplayImage）另有等價重置。
+        private void ResetMatchPose()
+        {
+            _hasMatch = false;
+            _lastMatchRow = 0;
+            _lastMatchCol = 0;
+            _lastMatchAngleDeg = 0;
+            RefreshMatchContour();
         }
 
         private void RunIqcButton_Click(object sender, EventArgs e)

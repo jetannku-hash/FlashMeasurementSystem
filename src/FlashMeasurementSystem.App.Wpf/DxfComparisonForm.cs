@@ -27,6 +27,10 @@ namespace FlashMeasurementSystem
         private HObject _alignedNominal;
         private HObject _actualEdges;
 
+        // 本表單是否曾佔用共用 overlay slot。非模態、與主視窗共用同一 slot，故關閉時
+        // 只有「自己裝過 overlay」才清，否則會洗掉主視窗的量測結果 overlay（比照 RecipeEditor._editorInstalledOverlay）。
+        private bool _installedOverlay;
+
         public DxfComparisonForm(HWindowControlHelper imageHelper, FlashMeasurementSystem.Halcon.DxfComparison.HalconDxfContourComparer comparer)
         {
             _imageHelper = imageHelper ?? throw new ArgumentNullException(nameof(imageHelper));
@@ -98,6 +102,7 @@ namespace FlashMeasurementSystem
                 HOperatorSet.GetImageSize(_imageHelper.CurrentImage, out HTuple iw, out HTuple ih);
                 var prev = _previewContour; double w = iw.D, h = ih.D;
                 _imageHelper.SetPersistentOverlayAction(() => _imageHelper.Annotator.DrawContourFitted(prev, w, h, "gray"));
+                _installedOverlay = true;
             }
         }
 
@@ -136,6 +141,7 @@ namespace FlashMeasurementSystem
                         for (int i = 0; i < overRows.Length; i += step)
                             an.DrawCross(overRows[i], overCols[i], 12, "red");
                     });
+                    _installedOverlay = true;
                 }
             }
             catch (Exception ex)
@@ -148,7 +154,8 @@ namespace FlashMeasurementSystem
 
         protected override void OnFormClosed(FormClosedEventArgs e)
         {
-            _imageHelper.ClearOverlay();
+            // 只清自己裝過的 overlay，否則會洗掉主視窗當前的量測結果 overlay。
+            if (_installedOverlay) _imageHelper.ClearOverlay();
             DisposeIconics();
             base.OnFormClosed(e);
         }

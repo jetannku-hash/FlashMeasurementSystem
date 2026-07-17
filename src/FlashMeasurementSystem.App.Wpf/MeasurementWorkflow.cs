@@ -191,6 +191,10 @@ namespace FlashMeasurementSystem
                 if (r == null) continue;
                 if (r.IsOk == true) result.OkCount++;
                 else if (r.IsOk == false) result.NgCount++;
+                // 硬量測失敗（支援該型別但未量測成功，IsOk 停在 null）也算 NG，否則 AllOk=NgCount==0
+                // 會顯示整體 PASS，卻與下方失敗分支寫出的 IsOk=false 報表列（CSV NG）矛盾＝假 PASS 放行壞件。
+                // 「成功但不判定」的元素/構建工具 Measured=true，不會落入此分支。
+                else if (r.Supported && !r.Measured) result.NgCount++;
 
                 // Build ItemJudgment for reporting: look up the recipe tool by name
                 // to get tolerance spec, then re-judge to produce full judgment data.
