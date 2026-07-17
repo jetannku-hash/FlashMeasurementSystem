@@ -283,6 +283,81 @@ namespace FlashMeasurementSystem
                         });
                     }
                 }
+                else if (tool != null && tool.Pcd != null)
+                {
+                    // PCD 為四判定（孔數/PCD/角均勻/徑向真圓度），不走單值雙邊判定器（會用 MeasuredValue=0 誤判）。
+                    // 比照齒輪：PCD 工具的「所有」報表列都由本分支發出，成功發四列、失敗發一列，
+                    // 兩種情況都不落入下方雙邊 Tolerance 分支。
+                    string pcdBaseName = tool.Name ?? r.Name;
+                    if (r.Pcd != null && r.Pcd.Success)
+                    {
+                        var g = r.Pcd;
+                        judgments.Add(new ItemJudgment
+                        {
+                            ToolId = tool.Id ?? "",
+                            ToolName = pcdBaseName + "-孔數",
+                            MeasuredValue = g.HoleCount,
+                            Nominal = tool.Pcd.NominalHoleCount,
+                            LowerLimit = tool.Pcd.NominalHoleCount,
+                            UpperLimit = tool.Pcd.NominalHoleCount,
+                            Unit = "count",
+                            Deviation = g.HoleCount - tool.Pcd.NominalHoleCount,
+                            IsOk = g.CountOk,
+                            Message = "孔數"
+                        });
+                        judgments.Add(new ItemJudgment
+                        {
+                            ToolId = tool.Id ?? "",
+                            ToolName = pcdBaseName + "-PCD",
+                            MeasuredValue = g.PcdMm,
+                            Nominal = tool.Pcd.NominalPcdMm,
+                            LowerLimit = tool.Pcd.NominalPcdMm - tool.Pcd.PcdToleranceMm,
+                            UpperLimit = tool.Pcd.NominalPcdMm + tool.Pcd.PcdToleranceMm,
+                            Unit = "mm",
+                            Deviation = g.PcdMm - tool.Pcd.NominalPcdMm,
+                            IsOk = g.PcdOk,
+                            Message = "節圓直徑"
+                        });
+                        judgments.Add(new ItemJudgment
+                        {
+                            ToolId = tool.Id ?? "",
+                            ToolName = pcdBaseName + "-角均勻",
+                            MeasuredValue = g.AngularMaxDevDeg,
+                            Nominal = 0,
+                            LowerLimit = 0,
+                            UpperLimit = tool.Pcd.AngularToleranceDeg,
+                            Unit = "deg",
+                            Deviation = g.AngularMaxDevDeg,
+                            IsOk = g.AngularOk,
+                            Message = "角度最大偏差"
+                        });
+                        judgments.Add(new ItemJudgment
+                        {
+                            ToolId = tool.Id ?? "",
+                            ToolName = pcdBaseName + "-徑向真圓度",
+                            MeasuredValue = g.RadialMaxDevMm,
+                            Nominal = 0,
+                            LowerLimit = 0,
+                            UpperLimit = tool.Pcd.RadialToleranceMm,
+                            Unit = "mm",
+                            Deviation = g.RadialMaxDevMm,
+                            IsOk = g.RadialOk,
+                            Message = "徑向最大偏差"
+                        });
+                    }
+                    else
+                    {
+                        // 量測失敗：發一列失敗訊息（比照齒輪分支的失敗 else 列），不做雙邊重判。
+                        judgments.Add(new ItemJudgment
+                        {
+                            ToolId = tool.Id ?? "",
+                            ToolName = pcdBaseName,
+                            MeasuredValue = 0,
+                            IsOk = r.IsOk ?? false,
+                            Message = r.Message ?? ""
+                        });
+                    }
+                }
                 else if (tool != null && tool.Tolerance != null)
                 {
                     double measuredValue = GetMeasuredValue(r, tool);
