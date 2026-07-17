@@ -11,6 +11,11 @@
     <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <Deterministic>true</Deterministic>
+    <!-- 本專案以 vendored DLL(HintPath) 引用 Newtonsoft，無 PackageReference/packages.config；
+         但 dotnet build 仍會在 obj 產生 SDK 式 restore 產物(project.assets.json)。VS 的舊版
+         Microsoft.NuGet.targets 讀到後會在 RID 驗證誤報「missing 'win' RuntimeIdentifier」而建置失敗。
+         關閉 legacy NuGet 資產解析(本專案不用 NuGet)以讓 VS 與 dotnet build 皆乾淨。 -->
+    <ResolveNuGetPackages>false</ResolveNuGetPackages>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
