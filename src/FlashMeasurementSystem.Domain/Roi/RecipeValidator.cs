@@ -26,6 +26,14 @@ namespace FlashMeasurementSystem.Domain.Roi
             "distance", "angle"
         };
 
+        // 執行時真正以雙邊 Tolerance [Nominal+Lower, Nominal+Upper] 判定 OK/NG 的型別。
+        // 其餘型別的 Tolerance 欄未被消費（GD&T→Gdt、gear→三判定、construction→不判定），
+        // 故反向公差檢查只套用此集合（audit #10）。
+        private static readonly HashSet<string> DoubleSidedToleranceTypes = new HashSet<string>
+        {
+            "circle", "line", "edge", "distance", "angle", "arc"
+        };
+
         public static List<RecipeIssue> Validate(Recipe recipe, int imageWidth, int imageHeight)
         {
             var issues = new List<RecipeIssue>();
@@ -119,9 +127,11 @@ namespace FlashMeasurementSystem.Domain.Roi
                             "齒輪工具的量測環帶無效：" + (tool.ArcRoi == null ? "缺少 ArcRoi" : tool.ArcRoi.ValidationError)));
                 }
 
-                // 公差反向（任何可能帶尺寸/角度公差的工具）。
+                // 公差反向：只檢查真正消費雙邊 Tolerance 的型別。GD&T（用 Gdt）、gear（三判定）、
+                // construction（不判定）的 Tolerance 欄未使用，其反向值不該擋下有效配方（audit #10）。
                 ToleranceSpec tol = tool.Tolerance;
-                if (tol != null && tol.UpperTolerance < tol.LowerTolerance)
+                if (tol != null && DoubleSidedToleranceTypes.Contains(tool.ToolType)
+                    && tol.UpperTolerance < tol.LowerTolerance)
                 {
                     issues.Add(new RecipeIssue(RecipeIssueSeverity.Error, tool.Id, tool.Name,
                         "公差上限小於下限（Upper < Lower），請修正"));

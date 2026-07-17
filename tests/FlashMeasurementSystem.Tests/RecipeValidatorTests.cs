@@ -123,6 +123,16 @@ namespace FlashMeasurementSystem.Tests
             gdtOk.Tools.Add(rndOk);
             AssertCount(RecipeValidator.Validate(gdtOk, W, H), 0, 0, "valid roundness → no issues");
 
+            // audit #10：GD&T 工具改用 Gdt 判定，雙邊 Tolerance 未被消費；其反向值不該擋下有效配方。
+            var gdtRevTol = new Recipe();
+            gdtRevTol.Tools.Add(Circle("c1", 300, 320, 60, 50));
+            var rndRev = Compound("g1", "roundness", "c1");
+            rndRev.Gdt = new GdtToleranceSpec { Characteristic = GdtCharacteristic.Roundness, ToleranceZoneMm = 0.05 };
+            rndRev.Tolerance.LowerTolerance = 0.02;
+            rndRev.Tolerance.UpperTolerance = -0.02;   // 反向，但 roundness 不消費雙邊公差
+            gdtRevTol.Tools.Add(rndRev);
+            AssertCount(RecipeValidator.Validate(gdtRevTol, W, H), 0, 0, "GD&T reversed unused tolerance → no error");
+
             // 重複 Id → Error
             var dup = new Recipe();
             dup.Tools.Add(Circle("c1", 100, 100, 30, 30));
