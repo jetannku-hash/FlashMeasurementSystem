@@ -28,11 +28,45 @@ namespace FlashMeasurementSystem.Tests
             AssertEqual(0, defaultTool.RefToolIds.Count, "Default tool no RefToolIds");
 
             Recipe recipe = Recipe.Default();
-            AssertEqual(9, recipe.SchemaVersion, "Default Recipe SchemaVersion");
+            AssertEqual(10, recipe.SchemaVersion, "Default Recipe SchemaVersion");
             AssertEqual(0, recipe.Tools.Count, "Default Recipe empty tools");
             AssertEqual("", recipe.CalibrationProfileId, "Default no calibration ref");
             AssertEqual(false, recipe.HasReferencePose, "Default no reference pose");
             AssertEqual(0.0, recipe.RefAngleRad, "Default RefAngleRad");
+
+            // ─── v10：circle 工具 RoiShape（矩形/扇形）──────────────
+            AssertEqual("rect", new MeasurementTool().RoiShape, "Default RoiShape is rect");
+
+            var sectorCircle = new MeasurementTool
+            {
+                Id = "SC1", Name = "扇形圓", ToolType = "circle", RoiShape = "sector",
+                ArcRoi = new ArcMeasureRoi { CenterRow = 300, CenterCol = 300, Radius = 200,
+                    AngleStart = 0, AngleExtent = Math.PI / 2, AnnulusRadius = 30 }
+            };
+            var scRecipe = Recipe.Default();
+            scRecipe.Tools.Add(sectorCircle);
+            int scErr = SchemaErrorCount(scRecipe);
+            if (scErr != 0)
+            {
+                foreach (RecipeIssue iss in RecipeValidator.Validate(scRecipe, 1600, 1600))
+                    Console.WriteLine("  [sector-circle] " + iss.Severity + ": " + iss.Message);
+                throw new InvalidOperationException("sector-circle valid ArcRoi expected 0 error, got " + scErr);
+            }
+
+            var scNoArc = Recipe.Default();
+            scNoArc.Tools.Add(new MeasurementTool { Id = "SC2", ToolType = "circle", RoiShape = "sector", ArcRoi = null });
+            if (SchemaErrorCount(scNoArc) == 0) throw new InvalidOperationException("sector-circle without ArcRoi should error");
+
+            string scPath = Path.Combine(Path.GetTempPath(), "fms_sc_" + Guid.NewGuid().ToString("N").Substring(0, 8) + ".zcp");
+            try
+            {
+                new RecipeStore().Save(scRecipe, scPath);
+                MeasurementTool scrt = new RecipeStore().Load(scPath).Tools[0];
+                AssertEqual("sector", scrt.RoiShape, "round-trip RoiShape sector");
+                if (scrt.ArcRoi == null) throw new InvalidOperationException("round-trip sector-circle ArcRoi null");
+                AssertClose(200.0, scrt.ArcRoi.Radius, 1e-9, "round-trip sector-circle ArcRoi radius");
+            }
+            finally { if (File.Exists(scPath)) File.Delete(scPath); }
 
             // ─── RecipeManager CRUD ─────────────────────────────────
             RecipeManager mgr = new RecipeManager(recipe);
@@ -93,7 +127,7 @@ namespace FlashMeasurementSystem.Tests
                     throw new InvalidOperationException("Recipe file not written");
                 Recipe rt = store.Load(path);
 
-                AssertEqual(9, rt.SchemaVersion, "Round-trip SchemaVersion");
+                AssertEqual(10, rt.SchemaVersion, "Round-trip SchemaVersion");
                 AssertEqual("R-1", rt.RecipeId, "Round-trip RecipeId");
                 AssertEqual("CAL-1", rt.CalibrationProfileId, "Round-trip calibration ref by id");
                 AssertEqual(true, rt.HasReferencePose, "Round-trip HasReferencePose");
@@ -143,6 +177,14 @@ namespace FlashMeasurementSystem.Tests
                     throw new InvalidOperationException("Save should not leave a .tmp file behind");
             }
             finally { if (File.Exists(ovr)) File.Delete(ovr); }
+        }
+
+        private static int SchemaErrorCount(Recipe r)
+        {
+            int n = 0;
+            foreach (RecipeIssue i in RecipeValidator.Validate(r, 1600, 1600))
+                if (i.Severity == RecipeIssueSeverity.Error) n++;
+            return n;
         }
 
         private static void AssertThrows(Action action, string name)
