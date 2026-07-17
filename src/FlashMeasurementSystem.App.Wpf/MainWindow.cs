@@ -1581,7 +1581,8 @@ namespace FlashMeasurementSystem
                 }
 
                 // PCD 工具結果：Roi 刻意留 null（同 arc/gear），畫框那段不會經過。畫量測環帶 + 擬合節圓
-                // + 各孔中心十字 + 缺孔提示（洋紅）+ 名稱/數值。角度→(row,col) 沿用 gear 迴圈同一慣例。
+                // + 各孔中心十字 + 缺孔提示（洋紅）+ 名稱/數值。偵測到的孔用原始質心（hole.Row/Col）畫十字；
+                // 僅缺孔提示需由角度→(row,col)（row=cr+R·sinθ、col=cc+R·cosθ）換算落到節圓上。
                 foreach (ToolRunResult r in results)
                 {
                     if (r == null || r.ToolType != "pcd" || r.PlacedArc == null) continue;
@@ -1590,15 +1591,16 @@ namespace FlashMeasurementSystem
                     an.DrawArcBand(a.CenterRow, a.CenterCol, a.Radius, a.AngleStart, a.AngleExtent, a.AnnulusRadius);
                     if (r.Pcd != null && r.Pcd.Success)
                     {
-                        var g = r.Pcd;
-                        an.DrawCircle(g.CenterRow, g.CenterCol, g.PcdPx / 2.0, pcdColor);   // 擬合節圓
-                        foreach (var hole in g.Holes)
+                        var pcd = r.Pcd;
+                        double pcdRadiusPx = pcd.PcdPx / 2.0;
+                        an.DrawCircle(pcd.CenterRow, pcd.CenterCol, pcdRadiusPx, pcdColor);   // 擬合節圓
+                        foreach (var hole in pcd.Holes)
                             an.DrawCross(hole.Row, hole.Col, 12, pcdColor);
-                        foreach (double hintDeg in g.MissingHoleHintsDeg)
+                        foreach (double hintDeg in pcd.MissingHoleHintsDeg)
                         {
                             double th = hintDeg * Math.PI / 180.0;
-                            an.DrawCross(g.CenterRow + (g.PcdPx / 2.0) * Math.Sin(th),
-                                         g.CenterCol + (g.PcdPx / 2.0) * Math.Cos(th), 18, "magenta");
+                            an.DrawCross(pcd.CenterRow + pcdRadiusPx * Math.Sin(th),
+                                         pcd.CenterCol + pcdRadiusPx * Math.Cos(th), 18, "magenta");
                         }
                     }
                     an.DrawText(r.ValueText ?? (r.Name ?? string.Empty), (int)a.CenterRow, (int)a.CenterCol, pcdColor);
