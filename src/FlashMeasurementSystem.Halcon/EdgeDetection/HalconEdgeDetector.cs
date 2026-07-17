@@ -654,9 +654,11 @@ namespace FlashMeasurementSystem.Halcon.EdgeDetection
         /// <summary>
         /// 扇形環帶 ROI（gen_circle_sector 差集）內的亞像素邊緣：region 換成扇環，其餘（單通道轉換、
         /// edges_sub_pix、contour→EdgePoint 萃取、amplitude 屬性探查、dispose 慣例）與 DetectEdgesSubPix 相同。
-        /// AngleStart/AngleExtent 角度慣例與 ArcMeasureRoi 其他使用處（gen_measure_arc、ArcEditMath）一致，
-        /// 直接傳給 gen_circle_sector（皆為 HALCON 原生「mathematically positive」CCW 弧度慣例，已用合成影像驗證，
-        /// 見 2026-07-17 annular-sector-roi 實作記錄）。
+        /// AngleStart/AngleExtent 的角度「慣例」與 ArcMeasureRoi 其他使用處（gen_measure_arc、ArcEditMath）一致，
+        /// 沿用 HALCON 原生「mathematically positive」CCW 弧度慣例、不做座標軸翻轉或正負號反轉（已用合成影像驗證，
+        /// 見 2026-07-17 annular-sector-roi 實作記錄）。但角度「數值」會被 NormalizeSectorAngles 正規化
+        /// （負 extent 交換端點、起始角取模進 [0,2π)），且當扇形跨越 0/2π 接縫時（endAngle>2π）拆成兩段
+        /// gen_circle_sector 再 union2（因 gen_circle_sector 限制 EndAngle<=2π，直接傳會拋 #1305，已用合成影像驗證）。
         /// </summary>
         public EdgeResult DetectEdgesInAnnularSector(HImage image, ArcMeasureRoi roi, EdgeDetectionParameters parameters)
         {
@@ -710,17 +712,20 @@ namespace FlashMeasurementSystem.Halcon.EdgeDetection
                 const double fullRingEps = 1e-6;
                 bool isFullRing = Math.Abs(roi.AngleExtent) >= 2.0 * Math.PI - fullRingEps;
 
-                double startAngle = 0.0, endAngle = 0.0;
+                string angleDesc;
                 if (isFullRing)
                 {
                     HOperatorSet.GenCircle(out outer, roi.CenterRow, roi.CenterCol, rOut);
                     HOperatorSet.GenCircle(out inner, roi.CenterRow, roi.CenterCol, rIn);
+                    angleDesc = "full-ring";
                 }
                 else
                 {
-                    NormalizeSectorAngles(roi.AngleStart, roi.AngleExtent, out startAngle, out endAngle);
-                    HOperatorSet.GenCircleSector(out outer, roi.CenterRow, roi.CenterCol, rOut, startAngle, endAngle);
-                    HOperatorSet.GenCircleSector(out inner, roi.CenterRow, roi.CenterCol, rIn, startAngle, endAngle);
+                    NormalizeSectorAngles(roi.AngleStart, roi.AngleExtent, out double loNorm, out double sweep);
+                    outer = BuildSectorRegion(roi.CenterRow, roi.CenterCol, rOut, loNorm, sweep);
+                    inner = BuildSectorRegion(roi.CenterRow, roi.CenterCol, rIn, loNorm, sweep);
+                    angleDesc = string.Format(CultureInfo.InvariantCulture,
+                        "lo={0:F4} sweep={1:F4} end={2:F4}", loNorm, sweep, loNorm + sweep);
                 }
                 HOperatorSet.Difference(outer, inner, out ring);
                 HOperatorSet.ReduceDomain(workingImage, ring, out reduced);
@@ -739,8 +744,8 @@ namespace FlashMeasurementSystem.Halcon.EdgeDetection
                 string amplitudeAttr = ProbeAmplitudeAttribute(contours, totalContours);
 
                 Log(string.Format(CultureInfo.InvariantCulture,
-                    "DetectEdgesInAnnularSector EDGES_SUB_PIX startAngle={0:F4} endAngle={1:F4} rOut={2:F1} rIn={3:F1} contours={4} amplitudeAttr={5}",
-                    startAngle, endAngle, rOut, rIn, totalContours, amplitudeAttr ?? "(none)"));
+                    "DetectEdgesInAnnularSector EDGES_SUB_PIX {0} rOut={1:F1} rIn={2:F1} contours={3} amplitudeAttr={4}",
+                    angleDesc, rOut, rIn, totalContours, amplitudeAttr ?? "(none)"));
 
                 for (int c = 1; c <= totalContours; c++)
                 {
@@ -832,8 +837,9 @@ namespace FlashMeasurementSystem.Halcon.EdgeDetection
 
         // gen_circle_sector 要求 0<=StartAngle<=2π、0<=EndAngle<=2π（reference L133655）。
         // ArcMeasureRoi.AngleExtent 可正可負（負 = 順時針），故先攤平成 [lo,hi]（lo<hi，跨距=|AngleExtent|），
-        // 再把 lo 正規化進 [0,2π)、hi = lo + 跨距。不處理「跨 0/2π 邊界」的扇形（v1 已知限制，見實作記錄）。
-        private static void NormalizeSectorAngles(double angleStart, double angleExtent, out double startAngle, out double endAngle)
+        // 再把 lo 取模進 [0,2π) 得 loNorm、sweep=跨距（(0,2π]）。跨越 0/2π 接縫（loNorm+sweep>2π）
+        // 由 BuildSectorRegion 拆兩段處理，不在此正規化。
+        private static void NormalizeSectorAngles(double angleStart, double angleExtent, out double loNorm, out double sweep)
         {
             const double twoPi = 2.0 * Math.PI;
             double lo = angleStart;
@@ -842,13 +848,42 @@ namespace FlashMeasurementSystem.Halcon.EdgeDetection
             {
                 double tmp = lo; lo = hi; hi = tmp;
             }
-            double sweep = Math.Min(hi - lo, twoPi);
+            sweep = Math.Min(hi - lo, twoPi);
 
-            double loNorm = lo % twoPi;
+            loNorm = lo % twoPi;
             if (loNorm < 0) loNorm += twoPi;
+        }
 
-            startAngle = loNorm;
-            endAngle = loNorm + sweep;
+        // 建構單一半徑的扇形 region（呼叫端 dispose）。
+        // 若 [loNorm, loNorm+sweep] 未跨 0/2π 接縫 → 單一 gen_circle_sector。
+        // 若跨接縫（end>2π）→ 拆成 [loNorm,2π] ∪ [0,end-2π] 兩段再 union2，
+        // 因 gen_circle_sector 限制 EndAngle<=2π，直接傳 end>2π 會拋 #1305（已用合成影像驗證）。
+        private static HObject BuildSectorRegion(double cr, double cc, double radius, double loNorm, double sweep)
+        {
+            const double twoPi = 2.0 * Math.PI;
+            const double eps = 1e-9;
+            double end = loNorm + sweep;
+
+            if (end <= twoPi + eps)
+            {
+                double clampedEnd = Math.Min(end, twoPi);
+                HOperatorSet.GenCircleSector(out HObject single, cr, cc, radius, loNorm, clampedEnd);
+                return single;
+            }
+
+            HObject piece1 = null, piece2 = null;
+            try
+            {
+                HOperatorSet.GenCircleSector(out piece1, cr, cc, radius, loNorm, twoPi);
+                HOperatorSet.GenCircleSector(out piece2, cr, cc, radius, 0.0, end - twoPi);
+                HOperatorSet.Union2(piece1, piece2, out HObject union);
+                return union;
+            }
+            finally
+            {
+                piece1?.Dispose();
+                piece2?.Dispose();
+            }
         }
 
         private static string ProbeAmplitudeAttribute(HObject contours, int totalContours)
