@@ -17,8 +17,22 @@ namespace FlashMeasurementSystem
 
         public HImage CurrentImage { get; private set; }
         public bool IsRoiMode { get; set; }
-        /// <summary>true 期間下一次左鍵按下會開始「從圓心拖曳」建立扇形 ROI（見 RequestSector）。</summary>
-        public bool IsSectorMode { get; set; }
+        /// <summary>
+        /// true 期間下一次左鍵按下會開始「從圓心拖曳」建立扇形 ROI（見 RequestSector）。
+        /// 設為 false 時一併清掉 pending callback——扇形手勢唯有 IsSectorMode 為真時才會在
+        /// OnMouseDown 啟動，所以關掉此旗標即可讓殘留的 request 完全失效，不會誤觸後續拖曳
+        /// 或洩漏進共用此 helper 的 RecipeEditor。
+        /// </summary>
+        public bool IsSectorMode
+        {
+            get => _isSectorMode;
+            set
+            {
+                _isSectorMode = value;
+                if (!value) _sectorCallback = null;
+            }
+        }
+        private bool _isSectorMode;
         public bool HasRoi => Math.Abs(_roiEndRow - _roiStartRow) > 0.1 && Math.Abs(_roiEndCol - _roiStartCol) > 0.1;
         public double MouseRow { get; private set; }
         public double MouseCol { get; private set; }
@@ -230,11 +244,30 @@ namespace FlashMeasurementSystem
         }
 
         /// <summary>
+        /// 解除所有互動輸入模式與其 pending callback（矩形繪製/扇形繪製/rect2 編輯/弧形編輯）。
+        /// 切換分頁、開編輯器、切換/啟動任一繪製模式前統一呼叫，避免殘留 mode 誤觸
+        /// （含洩漏進共用 helper 的 RecipeEditor）。同一時間至多一個互動模式為 active。
+        /// </summary>
+        public void DisarmInteractiveModes()
+        {
+            IsRoiMode = false;
+            IsSectorMode = false;          // setter 會一併清 _sectorCallback
+            _isDrawingRoi = false;
+            _isDrawingSector = false;
+            _roiCallback = null;
+            _sectorCallback = null;
+            EndRect2Edit();
+            EndArcEdit();
+            ClearRoiCoordinates();         // 消除 fallback 藍框殘留（見既有 tab-switch 註解）
+        }
+
+        /// <summary>
         /// 請求一次性 ROI 繪製。畫完後以 callback 傳回 (startRow,startCol,endRow,endCol)，
-        /// 不觸發現有的 RoiSelected 事件。若已有 pending request，舊 request 會被取代。
+        /// 不觸發現有的 RoiSelected 事件。先解除其他互動模式，確保模式互斥。
         /// </summary>
         public void RequestRoi(Action<double, double, double, double> callback)
         {
+            DisarmInteractiveModes();
             _roiCallback = callback;
             _roiStartRow = _roiEndRow = 0;
             _roiStartCol = _roiEndCol = 0;
@@ -248,12 +281,12 @@ namespace FlashMeasurementSystem
         /// 請求一次性「從圓心往外拖曳」建立扇形 ROI。MouseDown 記錄圓心，拖曳中即時預覽
         /// 90° 扇形（方向對齊拖曳方向），MouseUp 若拖曳距離 > 5px 則以 callback 傳回建立好
         /// 的 <see cref="ArcMeasureRoi"/>；否則視為取消，保留 pending 狀態讓使用者可重新拖曳。
-        /// 與 rect2/arc 編輯互斥；呼叫端應先結束既有編輯模式並關閉矩形 Draw ROI 再呼叫本方法。
+        /// 先解除其他互動模式（矩形繪製/rect2/弧形編輯），確保模式互斥。
         /// </summary>
         public void RequestSector(Action<ArcMeasureRoi> callback)
         {
+            DisarmInteractiveModes();
             _sectorCallback = callback;
-            _isDrawingSector = false;
             _persistentOverlayAction = null;
             _selectionHighlightAction = null;
             IsSectorMode = true;
@@ -261,7 +294,7 @@ namespace FlashMeasurementSystem
         }
 
         // 角度慣例與 ArcEditMath.AngleOf 一致：phi = atan2(-(row-cr), col-cc)，
-        // 90° 扇形置中於拖曳方向（AngleStart = phi - 45°）。annulus 為 0.2*半徑，下限 8px。
+        // 90° 扇形置中於拖曳方向（AngleStart = phi - π/4 (45°)）。annulus 為 0.2*半徑，下限 8px。
         private static void ComputeSectorFromDrag(double centerRow, double centerCol,
             double cursorRow, double cursorCol,
             out double radius, out double annulus, out double angleStart, out double angleExtent)
@@ -301,6 +334,7 @@ namespace FlashMeasurementSystem
             _editMode = Rect2Handle.None;
             _editActive = true;
             _arcEditActive = false;
+            IsSectorMode = false;   // 進入編輯即解除 pending 扇形繪製（模式互斥）；setter 清 callback
             Redraw();
         }
 
@@ -324,6 +358,7 @@ namespace FlashMeasurementSystem
             _arcEditCallback = onChanged;
             _arcEditMode = ArcHandle.None;
             _arcEditActive = true;
+            IsSectorMode = false;   // 進入編輯即解除 pending 扇形繪製（模式互斥）；setter 清 callback
             Redraw();
         }
 
@@ -540,6 +575,8 @@ namespace FlashMeasurementSystem
                     };
                     cb?.Invoke(roi);
                 }
+                // 成功時 callback 鏈（OnSectorRoiCreated → 勾選互動編輯 → BeginArcEdit）已重繪；
+                // 這裡的 Redraw 主要服務「取消」路徑（radius<=5，未觸發 callback），清掉最後一幀預覽。
                 Redraw();
             }
         }

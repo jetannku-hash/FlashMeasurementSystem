@@ -543,6 +543,8 @@ namespace FlashMeasurementSystem
             // _imageHelper 於 OnLoad 才建立；比照 EdgeDrawRoiCheck_CheckedChanged 防呆，
             // 避免 Designer 若在 InitializeComponent 期間觸發此事件時 NRE。
             if (_imageHelper == null) return;
+            // 開啟矩形繪製即解除 pending 扇形繪製（模式互斥；IsSectorMode setter 會清 callback）。
+            if (roiModeCheck.Checked) _imageHelper.IsSectorMode = false;
             _imageHelper.IsRoiMode = roiModeCheck.Checked;
         }
 
@@ -1060,6 +1062,8 @@ namespace FlashMeasurementSystem
                 if (_edgeDrawRoiCheck.Checked)
                 {
                     roiModeCheck.Checked = false;
+                    // 開啟矩形繪製即解除 pending 扇形繪製（模式互斥；setter 會清 callback）。
+                    _imageHelper.IsSectorMode = false;
                 }
 
                 _imageHelper.IsRoiMode = _edgeDrawRoiCheck.Checked;
@@ -1071,10 +1075,9 @@ namespace FlashMeasurementSystem
         private void FeatureTabControl_SelectedIndexChanged(object sender, EventArgs e)
         {
             if (_imageHelper == null) return;
-            _imageHelper.EndRect2Edit();
-            _imageHelper.EndArcEdit();
-            _imageHelper.ClearRoiCoordinates();  // 消除 fallback 藍框殘留
-            _imageHelper.IsRoiMode = false;
+            // 一次解除所有互動模式（含扇形繪製的 pending callback），關閉先前已知的
+            // tab-switch stale-callback 缺口。
+            _imageHelper.DisarmInteractiveModes();
             if (_edgeDrawRoiCheck != null && _edgeDrawRoiCheck.Checked) _edgeDrawRoiCheck.Checked = false;
             if (roiModeCheck != null && roiModeCheck.Checked) roiModeCheck.Checked = false;
         }
@@ -1795,10 +1798,10 @@ namespace FlashMeasurementSystem
                     UpdateEmptyState();
                 },
                 trialMeasure);
-            // 編輯器接管共用影像視窗做 ROI 編輯：先清掉主視窗殘留的偵測/擬合 overlay
+            // 編輯器接管共用影像視窗做 ROI 編輯：先解除所有互動模式（含扇形繪製 pending callback，
+            // 避免洩漏進編輯器共用的 helper），再清掉主視窗殘留的偵測/擬合 overlay
             // （Edge Detection 藍框、邊緣十字、Run Recipe 結果等），讓編輯器從乾淨影像開始。
-            _imageHelper.EndRect2Edit();
-            _imageHelper.EndArcEdit();
+            _imageHelper.DisarmInteractiveModes();
             _imageHelper.ClearOverlay();
             editor.Show(this);
         }
@@ -2397,9 +2400,9 @@ namespace FlashMeasurementSystem
             }
         }
 
-        // 「扇形 ROI（拖曳繪製）」按鈕：武裝 RequestSector 手勢。先結束既有 rect2/arc 編輯、
-        // 關閉矩形 Draw ROI 與（若已勾選的）互動編輯，確保下一次滑鼠按下只會被扇形手勢接收，
-        // 不會被殘留的把手 hit-test 或矩形拖曳搶走。
+        // 「扇形 ROI（拖曳繪製）」按鈕：武裝 RequestSector 手勢。RequestSector 內部會呼叫
+        // DisarmInteractiveModes() 統一解除 rect2/arc 編輯與矩形繪製，因此這裡只需把三個可見
+        // checkbox 的視覺狀態同步取消（否則 checkbox 仍顯示勾選、但其模式已被 disarm 關閉）。
         private void SectorDrawRoiButton_Click(object sender, EventArgs e)
         {
             if (_imageHelper == null || _imageHelper.CurrentImage == null)
@@ -2409,45 +2412,25 @@ namespace FlashMeasurementSystem
                 return;
             }
 
-            _imageHelper.EndRect2Edit();
-            _imageHelper.EndArcEdit();
             if (_edgeDrawRoiCheck.Checked) _edgeDrawRoiCheck.Checked = false;
             if (roiModeCheck.Checked) roiModeCheck.Checked = false;
-            if (_arcEditCheck.Checked)
-            {
-                // 直接歸零，不透過 CheckedChanged（其 false 分支只呼叫 EndArcEdit，已在上方做過）。
-                _updatingArcControls = true;
-                try { _arcEditCheck.Checked = false; } finally { _updatingArcControls = false; }
-            }
+            // 取消互動編輯的視覺勾選；其 CheckedChanged false 分支呼叫 EndArcEdit（無害，
+            // RequestSector 隨後也會 disarm）。必須先歸零，OnSectorRoiCreated 尾端再設為 true
+            // 才會觸發 true 分支進入五把手編輯。
+            if (_arcEditCheck.Checked) _arcEditCheck.Checked = false;
 
             _edgeStatusLabel.Text = "扇形 ROI：從圓心往外拖曳繪製";
             _edgeStatusLabel.ForeColor = Color.Black;
             _imageHelper.RequestSector(OnSectorRoiCreated);
         }
 
-        // RequestSector 手勢完成（放開滑鼠、拖曳距離 > 5px）的回呼：把建立好的 ArcMeasureRoi
-        // 回寫六個弧形數值框，再勾選「互動編輯」——沿用 ArcEditCheck_CheckedChanged 既有的
-        // BuildArcRoiFromControls + BeginArcEdit(...,OnArcRoiChanged) 路徑，不重複實作同步邏輯。
+        // RequestSector 手勢完成（放開滑鼠、拖曳距離 > 5px）的回呼：沿用 OnArcRoiChanged
+        // 把建立好的 ArcMeasureRoi 回寫六個弧形數值框（含角度轉度與 [0,360) 正規化）並設定
+        // _latestArcRoi，再勾選「互動編輯」進入既有五把手編輯路徑，不重複實作同步邏輯。
         private void OnSectorRoiCreated(ArcMeasureRoi roi)
         {
-            double a0Deg = roi.AngleStart * 180.0 / Math.PI;
-            a0Deg -= 360.0 * Math.Floor(a0Deg / 360.0); // 正規化到 [0, 360)，配合數值框 Minimum=0
-            double extentDeg = roi.AngleExtent * 180.0 / Math.PI;
-
-            _updatingArcControls = true;
-            try
-            {
-                _arcCenterRowNumeric.Value = ClampNumericValue(_arcCenterRowNumeric, (decimal)roi.CenterRow);
-                _arcCenterColNumeric.Value = ClampNumericValue(_arcCenterColNumeric, (decimal)roi.CenterCol);
-                _arcRadiusNumeric.Value = ClampNumericValue(_arcRadiusNumeric, (decimal)roi.Radius);
-                _arcAnnulusNumeric.Value = ClampNumericValue(_arcAnnulusNumeric, (decimal)roi.AnnulusRadius);
-                _arcAngleStartNumeric.Value = ClampNumericValue(_arcAngleStartNumeric, (decimal)a0Deg);
-                _arcAngleExtentNumeric.Value = ClampNumericValue(_arcAngleExtentNumeric, (decimal)extentDeg);
-            }
-            finally
-            {
-                _updatingArcControls = false;
-            }
+            OnArcRoiChanged(roi.CenterRow, roi.CenterCol, roi.Radius,
+                roi.AngleStart, roi.AngleExtent, roi.AnnulusRadius);
 
             // SectorDrawRoiButton_Click 已確保按下當下 _arcEditCheck 為 false，這裡勾選必觸發
             // CheckedChanged → 進入 ArcEditCheck_CheckedChanged 的 true 分支，以剛寫入的數值框
