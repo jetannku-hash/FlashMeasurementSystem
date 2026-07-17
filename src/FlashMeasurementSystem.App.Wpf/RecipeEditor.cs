@@ -886,7 +886,9 @@ namespace FlashMeasurementSystem
                     int step = n > 200 ? (int)Math.Ceiling(n / 200.0) : 1;
                     for (int i = 0; i < n; i += step)
                         an.DrawCross(result.ArcEdgeRows[i], result.ArcEdgeCols[i], 10, c);
-                    an.DrawText(result.ValueText ?? string.Empty, (int)a.CenterRow, (int)a.CenterCol, c);
+                    // 試測值標在環帶外緣上方，避免長字串（gear/pcd 三～四項）疊在環帶/邊點上；調機時仍看得到數值。
+                    double labelRow = a.CenterRow - (a.Radius + a.AnnulusRadius) - 20;
+                    an.DrawText(result.ValueText ?? string.Empty, (int)labelRow, (int)a.CenterCol, c);
                     return;
                 }
 

@@ -1524,6 +1524,7 @@ namespace FlashMeasurementSystem
                         an.DrawText(r.ValueText ?? string.Empty, (int)mTextRow, (int)mTextCol, mColor);
                     }
 
+                    // 結果表值欄由 DrawResultTable 統一裁到欄寬（過長截斷加「…」），任何工具皆不溢到判定欄。
                     rows.Add(new OverlayResultRow { Name = r.Name, ValueText = r.ValueText, IsOk = r.IsOk });
                 }
 
@@ -1577,7 +1578,8 @@ namespace FlashMeasurementSystem
                             an.DrawCross(a.CenterRow + a.Radius * Math.Sin(th), a.CenterCol + a.Radius * Math.Cos(th), 18, "magenta");
                         }
                     }
-                    an.DrawText(r.ValueText ?? (r.Name ?? string.Empty), (int)a.CenterRow, (int)a.CenterCol, gearColor);
+                    // 影像上只標工具名（比照 arc/pcd），避免三項長字串疊在環帶/齒中心上；數值看左上結果表 HUD。
+                    an.DrawText(r.Name ?? string.Empty, (int)a.CenterRow, (int)a.CenterCol, gearColor);
                 }
 
                 // PCD 工具結果：Roi 刻意留 null（同 arc/gear），畫框那段不會經過。畫量測環帶 + 擬合節圓
@@ -1603,7 +1605,9 @@ namespace FlashMeasurementSystem
                                          pcd.CenterCol + pcdRadiusPx * Math.Cos(th), 18, "magenta");
                         }
                     }
-                    an.DrawText(r.ValueText ?? (r.Name ?? string.Empty), (int)a.CenterRow, (int)a.CenterCol, pcdColor);
+                    // 影像上只標工具名（比照 arc 分支），避免四項長字串疊在環帶/節圓上；
+                    // 數值看左上結果表 HUD。名稱錨在弧心（節圓中心為空，不會蓋到孔/缺孔標記）。
+                    an.DrawText(r.Name ?? string.Empty, (int)a.CenterRow, (int)a.CenterCol, pcdColor);
                 }
                 an.DrawResultTable(rows);
             });
