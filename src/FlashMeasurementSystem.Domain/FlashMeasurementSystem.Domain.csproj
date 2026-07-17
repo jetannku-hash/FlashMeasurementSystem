@@ -109,6 +109,10 @@
     <Compile Include="GearAnalysis\GearAnalysisParameters.cs" />
     <Compile Include="GearAnalysis\GearAnalysisResult.cs" />
     <Compile Include="GearAnalysis\GearToothAnalyzer.cs" />
+    <Compile Include="PcdAnalysis\HolePoint.cs" />
+    <Compile Include="PcdAnalysis\PcdAnalysisParameters.cs" />
+    <Compile Include="PcdAnalysis\PcdAnalysisResult.cs" />
+    <Compile Include="PcdAnalysis\PcdAnalyzer.cs" />
     <Compile Include="Workflow\MeasurementState.cs" />
     <Compile Include="Workflow\WorkflowResult.cs" />
   </ItemGroup>

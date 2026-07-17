@@ -157,6 +157,8 @@ namespace FlashMeasurementSystem.Tests
             Console.WriteLine("GearAnalysisDomainTests passed");
             GearRecipeToolDomainTests.Run();
             Console.WriteLine("GearRecipeToolDomainTests passed");
+            PcdAnalysisDomainTests.Run();
+            Console.WriteLine("PcdAnalysisDomainTests passed");
             Console.WriteLine("EdgeDetectionDomainTests passed");
             return 0;
         }
