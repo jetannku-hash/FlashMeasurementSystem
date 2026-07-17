@@ -1994,9 +1994,11 @@ namespace FlashMeasurementSystem
             {
                 // 等間距抽樣，最多畫 MaxOverlayCrosses 個十字。subpix 模式輪廓密集 → 用較小的
                 // 十字（size=3）避免重疊糊掉；measure_pos 通常只有少數邊 → 維持 size=8 醒目。
+                // 扇形 ROI（DetectEdgesInAnnularSector）內部一律用 edges_sub_pix（與演算法 radio 無關），
+                // 故 _sectorRoiActive 時也視為 subpix 用 size=3，避免密集弧邊被畫成粗帶。
                 int total = edges.EdgePoints.Count;
                 int step = total <= MaxOverlayCrosses ? 1 : (int)Math.Ceiling((double)total / MaxOverlayCrosses);
-                int crossSize = _edgeSubPixRadio.Checked ? 3 : 8;
+                int crossSize = (_edgeSubPixRadio.Checked || _sectorRoiActive) ? 3 : 8;
                 for (int i = 0; i < total; i += step)
                 {
                     EdgePoint edge = edges.EdgePoints[i];
@@ -2522,6 +2524,11 @@ namespace FlashMeasurementSystem
         // _latestArcRoi，再勾選「互動編輯」進入既有五把手編輯路徑，不重複實作同步邏輯。
         private void OnSectorRoiCreated(ArcMeasureRoi roi)
         {
+            // 建立新扇形前先清掉上一次偵測/擬合結果（邊點、擬合、結果表），比照畫新矩形的
+            // OnImageRoiSelected 呼叫 InvalidateEdgeState，避免舊結果殘留在新扇形上（按 Detect 前）。
+            // InvalidateEdgeState 會清 _latestArcRoi/_sectorRoiActive，下面立即由 OnArcRoiChanged
+            // 與 _sectorRoiActive=true 重新設定，故無副作用。
+            InvalidateEdgeState();
             OnArcRoiChanged(roi.CenterRow, roi.CenterCol, roi.Radius,
                 roi.AngleStart, roi.AngleExtent, roi.AnnulusRadius);
             // 標記目前有效 ROI 是扇形，主 Detect 按鈕改走 DetectEdgesInAnnularSector。
