@@ -2287,6 +2287,7 @@ namespace FlashMeasurementSystem
         {
             _latestEdgeResult = null;
             _latestArcRoi = null;
+            _sectorRoiActive = false;
             _latestLineFittingResult = null;
             _latestCircleFittingResult = null;
             _latestEllipseFittingResult = null;
