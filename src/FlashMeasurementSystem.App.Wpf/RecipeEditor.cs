@@ -7,6 +7,7 @@ using System.Windows.Forms;
 using FlashMeasurementSystem.Domain.EdgeDetection;
 using FlashMeasurementSystem.Domain.GearAnalysis;
 using FlashMeasurementSystem.Domain.Gdt;
+using FlashMeasurementSystem.Domain.PcdAnalysis;
 using FlashMeasurementSystem.Domain.Roi;
 using FlashMeasurementSystem.Domain.Tolerance;
 using FlashMeasurementSystem.Infrastructure.Roi;
@@ -54,6 +55,7 @@ namespace FlashMeasurementSystem
         private Button _addLineButton;
         private Button _addArcButton;
         private Button _addGearButton;
+        private Button _addPcdButton;
         private Button _addDistanceButton;
         private Button _addAngleButton;
         private Button _addIntersectionButton;
@@ -102,6 +104,17 @@ namespace FlashMeasurementSystem
         private CheckBox _gearDarkCheck;
         private NumericUpDown _gearPitchTolNumeric;
         private NumericUpDown _gearWidthTolNumeric;
+
+        // PCD 螺栓孔圈工具（ToolType == "pcd"）專屬參數群組：量測環（ArcRoi）沿用弧形群組，
+        // 此處只放孔圈判定參數（比照 _gearGroup）。
+        private GroupBox _pcdGroup;
+        private NumericUpDown _pcdCountNumeric;
+        private NumericUpDown _pcdNominalNumeric;
+        private NumericUpDown _pcdTolNumeric;
+        private NumericUpDown _pcdAngTolNumeric;
+        private NumericUpDown _pcdRadTolNumeric;
+        private CheckBox _pcdDarkCheck;
+        private NumericUpDown _pcdMinAreaNumeric;
 
         private GroupBox _edgeGroup;
         private NumericUpDown _sigmaNumeric;
@@ -242,6 +255,8 @@ namespace FlashMeasurementSystem
             _addArcButton.Click += (s, e) => AddTool("arc");
             _addGearButton = new Button { Text = "+ 齒輪", Width = 70 };
             _addGearButton.Click += (s, e) => AddTool("gear");
+            _addPcdButton = new Button { Text = "+ 螺栓孔圈", Width = 80 };
+            _addPcdButton.Click += (s, e) => AddTool("pcd");
             _addDistanceButton = new Button { Text = "+ Distance", Width = 80 };
             _addDistanceButton.Click += (s, e) => AddTool("distance");
             _addAngleButton = new Button { Text = "+ Angle", Width = 70 };
@@ -277,6 +292,7 @@ namespace FlashMeasurementSystem
             bar.Controls.Add(_addLineButton);
             bar.Controls.Add(_addArcButton);
             bar.Controls.Add(_addGearButton);
+            bar.Controls.Add(_addPcdButton);
             bar.Controls.Add(_addDistanceButton);
             bar.Controls.Add(_addAngleButton);
             bar.Controls.Add(_addIntersectionButton);
@@ -309,6 +325,8 @@ namespace FlashMeasurementSystem
             _edgeGroup = CreateGroupBox("Edge Detection", parent, 210);
             // 齒輪參數群組：4 列（齒數 / 極性核取 / 齒距公差 / 齒寬公差）× 28px + 標題與內距。
             _gearGroup = CreateGroupBox("齒輪參數", parent, 150);
+            // PCD 孔圈參數群組：7 列（孔數/標稱PCD/PCD公差/角度公差/徑向公差/暗孔核取/最小孔面積）× 28px + 標題與內距。
+            _pcdGroup = CreateGroupBox("PCD 螺栓孔圈參數", parent, 240);
             // 7 列 × 28px（6 個數值 + 擷取按鈕）+ 標題與內距。roi 群組同構但少一列。
             _arcGroup = CreateGroupBox("Arc ROI", parent, 240);
             _roiGroup = CreateGroupBox("ROI Geometry", parent, 210);
@@ -318,6 +336,7 @@ namespace FlashMeasurementSystem
             FillRoiGroup(_roiGroup);
             FillArcGroup(_arcGroup);
             FillGearGroup(_gearGroup);
+            FillPcdGroup(_pcdGroup);
             FillEdgeGroup(_edgeGroup);
             FillRefGroup(_refGroup);
             FillToleranceGroup(_toleranceGroup);
@@ -439,6 +458,30 @@ namespace FlashMeasurementSystem
             });
             _gearPitchTolNumeric = AddNumericRow(t, "齒距公差(度)", ref r, 0.01M, 360M, 2, 1M, 0.1M);
             _gearWidthTolNumeric = AddNumericRow(t, "齒寬公差(度)", ref r, 0.01M, 360M, 2, 2M, 0.1M);
+
+            gb.Controls.Add(t);
+        }
+
+        // PCD 螺栓孔圈判定參數（背光穿孔）：孔數為整數計數；標稱 PCD/公差/徑向公差以 mm；角度公差以度；
+        // 孔暗核取決定偵測層極性；最小孔面積濾雜訊（偵測層用，分析器忽略）。
+        // 量測環（弧心/半徑/起訖角/環寬）沿用弧形 ROI 群組，故此處不含幾何欄位（比照 FillGearGroup）。
+        private void FillPcdGroup(GroupBox gb)
+        {
+            var t = NewTable();
+            int r = 0;
+
+            _pcdCountNumeric = AddNumericRow(t, "標稱孔數", ref r, 1M, 10000M, 0, 6M, 1M);
+            _pcdNominalNumeric = AddNumericRow(t, "標稱 PCD (mm)", ref r, 0M, 100000M, 3, 0M, 0.1M);
+            _pcdTolNumeric = AddNumericRow(t, "PCD 公差(mm)", ref r, 0.001M, 1000000M, 3, 0.1M, 0.01M);
+            _pcdAngTolNumeric = AddNumericRow(t, "角度公差(度)", ref r, 0.01M, 360M, 2, 1M, 0.1M);
+            _pcdRadTolNumeric = AddNumericRow(t, "徑向公差(mm)", ref r, 0.001M, 1000000M, 3, 0.05M, 0.01M);
+            _pcdDarkCheck = AddRow(t, "", ref r, new CheckBox
+            {
+                Text = "孔為暗（背光）",
+                Checked = true,
+                Dock = DockStyle.Fill
+            });
+            _pcdMinAreaNumeric = AddNumericRow(t, "最小孔面積(px)", ref r, 1M, 10000000M, 0, 20M, 1M);
 
             gb.Controls.Add(t);
         }
@@ -621,6 +664,14 @@ namespace FlashMeasurementSystem
             _gearPitchTolNumeric.ValueChanged += (s, e) => WriteGear();
             _gearWidthTolNumeric.ValueChanged += (s, e) => WriteGear();
 
+            _pcdCountNumeric.ValueChanged += (s, e) => WritePcd();
+            _pcdNominalNumeric.ValueChanged += (s, e) => WritePcd();
+            _pcdTolNumeric.ValueChanged += (s, e) => WritePcd();
+            _pcdAngTolNumeric.ValueChanged += (s, e) => WritePcd();
+            _pcdRadTolNumeric.ValueChanged += (s, e) => WritePcd();
+            _pcdDarkCheck.CheckedChanged += (s, e) => WritePcd();
+            _pcdMinAreaNumeric.ValueChanged += (s, e) => WritePcd();
+
             _sigmaNumeric.ValueChanged += (s, e) => WriteEdgeParams();
             _thresholdNumeric.ValueChanged += (s, e) => WriteEdgeParams();
             _polarityCombo.SelectedIndexChanged += (s, e) => WriteEdgeParams();
@@ -693,6 +744,21 @@ namespace FlashMeasurementSystem
             MarkDirty();
         }
 
+        // 數值框/核取 → PcdAnalysisParameters。比照 WriteGear：以 _updatingControls 守衛避免載入時誤標 dirty。
+        private void WritePcd()
+        {
+            if (_updatingControls || _selectedTool == null || _selectedTool.Pcd == null) return;
+            PcdAnalysisParameters p = _selectedTool.Pcd;
+            p.NominalHoleCount = (int)_pcdCountNumeric.Value;
+            p.NominalPcdMm = (double)_pcdNominalNumeric.Value;
+            p.PcdToleranceMm = (double)_pcdTolNumeric.Value;
+            p.AngularToleranceDeg = (double)_pcdAngTolNumeric.Value;
+            p.RadialToleranceMm = (double)_pcdRadTolNumeric.Value;
+            p.HoleIsDark = _pcdDarkCheck.Checked;
+            p.MinHoleAreaPx = (double)_pcdMinAreaNumeric.Value;
+            MarkDirty();
+        }
+
         private void WriteEdgeParams()
         {
             if (_updatingControls || _selectedTool == null) return;
@@ -761,7 +827,8 @@ namespace FlashMeasurementSystem
                 && _imageHelper != null && _imageHelper.CurrentImage != null
                 && _selectedTool != null
                 && (_selectedTool.ToolType == "circle" || _selectedTool.ToolType == "line"
-                    || _selectedTool.ToolType == "arc" || _selectedTool.ToolType == "gear");
+                    || _selectedTool.ToolType == "arc" || _selectedTool.ToolType == "gear"
+                    || _selectedTool.ToolType == "pcd");
         }
 
         // A1：在編輯器內就地試測選中的 circle/line/arc 工具，把擬合結果畫在共用主視窗影像上。
@@ -783,18 +850,19 @@ namespace FlashMeasurementSystem
             var roi = tool.Roi;
             bool isArc = tool.ToolType == "arc";
             bool isGear = tool.ToolType == "gear";
+            bool isPcd = tool.ToolType == "pcd";
             ArcMeasureRoi arc = tool.ArcRoi;
             _imageHelper.SetPersistentOverlayAction(() =>
             {
                 OverlayAnnotator an = _imageHelper.Annotator;
                 if (an == null) return;
-                // 弧形/齒輪工具的 Roi 是全零 rect2（未使用），畫出來會是 (0,0) 退化橘框——只有非弧形/非齒輪才畫 ROI 框。
-                if (roi != null && !isArc && !isGear)
+                // 弧形/齒輪/PCD 工具的 Roi 是全零 rect2（未使用），畫出來會是 (0,0) 退化橘框——只有這三者以外才畫 ROI 框。
+                if (roi != null && !isArc && !isGear && !isPcd)
                     an.DrawRectangle2(roi.CenterRow, roi.CenterCol, roi.AngleRad,
                                       roi.Length1, roi.Length2, "orange");
 
-                // 文字錨點：弧形/齒輪錨在弧心，其餘錨在 rect2 ROI 中心。
-                bool usesArcRoi = isArc || isGear;
+                // 文字錨點：弧形/齒輪/PCD 錨在弧心，其餘錨在 rect2 ROI 中心。
+                bool usesArcRoi = isArc || isGear || isPcd;
                 double txtR = usesArcRoi && arc != null ? arc.CenterRow : (roi != null ? roi.CenterRow : 20);
                 double txtC = usesArcRoi && arc != null ? arc.CenterCol : (roi != null ? roi.CenterCol : 20);
                 if (result == null || !result.Measured)
@@ -803,12 +871,13 @@ namespace FlashMeasurementSystem
                     return;
                 }
 
-                // 弧形/齒輪結果：畫量測帶 + 抽樣邊點十字 + 數值，比照 MainWindow.DrawRecipeResults 的弧形分支。
-                // 齒輪重用弧卡尺量測環（PlacedArc/ArcEdge*）+ 以 ValueText 顯示齒數/齒距/齒寬判定訊息。
+                // 弧形/齒輪/PCD 結果：畫量測帶 + 抽樣邊點十字 + 數值，比照 MainWindow.DrawRecipeResults 的弧形分支。
+                // 齒輪重用弧卡尺量測環（PlacedArc/ArcEdge*）+ 以 ValueText 顯示齒數/齒距/齒寬判定訊息；
+                // PCD 同樣重用量測環（PlacedArc），但不填 ArcEdgeRows/Cols（孔偵測非邊緣掃描），故十字迴圈自然空跑。
                 // 【刻意分工，勿當 parity bug 統一】此處（編輯器試測，調機視圖）對齒輪刻意畫「原始邊點」，
                 // 讓操作者在調 ROI/Sigma/Threshold 時確認每對進/出齒被乾淨抓到；主頁一鍵量測則畫「齒中心」結果
                 // （見 MainWindow.DrawRecipeResults 齒輪分支：每齒一十字＝齒數、缺齒洋紅）。兩處視圖不同是設計，不是缺陷。
-                if ((result.ToolType == "arc" || result.ToolType == "gear") && result.PlacedArc != null)
+                if ((result.ToolType == "arc" || result.ToolType == "gear" || result.ToolType == "pcd") && result.PlacedArc != null)
                 {
                     ArcMeasureRoi a = result.PlacedArc;
                     string c = result.IsOk == true ? "green" : (result.IsOk == false ? "red" : "yellow");
@@ -885,6 +954,23 @@ namespace FlashMeasurementSystem
                     AnnulusRadius = 5.0
                 };
                 tool.Gear = new GearAnalysisParameters();  // NominalToothCount=20, ToothIsDark=true, tols 1/2
+            }
+            // PCD 螺栓孔圈工具：量測環沿用弧形 ArcRoi（整圈掃描環帶偵測孔），另帶一組孔圈判定參數
+            // （孔數/標稱PCD/PCD公差/角度公差/徑向公差/暗孔/最小孔面積）。ArcRoi 必須「已定義」，
+            // 否則 RecipeValidator 會擋下一鍵流程（比照弧形/齒輪工具）。不設定 tool.Tolerance——
+            // PCD 走四條件判定（PcdAnalysisParameters），不用雙邊 Tolerance 群組。
+            if (toolType == "pcd")
+            {
+                tool.ArcRoi = new ArcMeasureRoi
+                {
+                    CenterRow = 200,
+                    CenterCol = 200,
+                    Radius = 100,
+                    AngleStart = 0.0,
+                    AngleExtent = 2.0 * Math.PI,
+                    AnnulusRadius = 15.0
+                };
+                tool.Pcd = new PcdAnalysisParameters();
             }
             // GD&T 工具：單邊形位公差，預設帶寬待使用者設定（0.05mm 佔位，非 0 以免一律 NG）。
             if (IsGdtType(toolType))
@@ -1158,6 +1244,17 @@ namespace FlashMeasurementSystem
                     PitchToleranceDeg = src.Gear.PitchToleranceDeg,
                     WidthToleranceDeg = src.Gear.WidthToleranceDeg
                 },
+                // 深複製 PCD 參數——漏掉會在載入/存檔時遺失孔圈判定設定（比照 ArcRoi/Gdt/Gear 的處理）。
+                Pcd = src.Pcd == null ? null : new PcdAnalysisParameters
+                {
+                    NominalHoleCount = src.Pcd.NominalHoleCount,
+                    NominalPcdMm = src.Pcd.NominalPcdMm,
+                    PcdToleranceMm = src.Pcd.PcdToleranceMm,
+                    AngularToleranceDeg = src.Pcd.AngularToleranceDeg,
+                    RadialToleranceMm = src.Pcd.RadialToleranceMm,
+                    HoleIsDark = src.Pcd.HoleIsDark,
+                    MinHoleAreaPx = src.Pcd.MinHoleAreaPx
+                },
                 RefToolIds = new List<string>(src.RefToolIds ?? new List<string>())
             };
         }
@@ -1219,10 +1316,10 @@ namespace FlashMeasurementSystem
                 return;
             }
 
-            // 弧形/齒輪工具：進入弧形互動編輯（BeginArcEdit 內部會自行關閉 rect2 編輯，故不重複呼叫
-            // EndRect2Edit 以免多一次 Redraw）。齒輪重用相同的量測環 ArcRoi。
+            // 弧形/齒輪/PCD 工具：進入弧形互動編輯（BeginArcEdit 內部會自行關閉 rect2 編輯，故不重複呼叫
+            // EndRect2Edit 以免多一次 Redraw）。齒輪/PCD 重用相同的量測環 ArcRoi。
             // 無 ArcRoi 或尚未載入影像時只收把手，不進編輯。
-            if (_selectedTool.ToolType == "arc" || _selectedTool.ToolType == "gear")
+            if (_selectedTool.ToolType == "arc" || _selectedTool.ToolType == "gear" || _selectedTool.ToolType == "pcd")
             {
                 _imageHelper.ClearSelectionHighlight();
                 ArcMeasureRoi a = _selectedTool.ArcRoi;
@@ -1412,6 +1509,31 @@ namespace FlashMeasurementSystem
             }
         }
 
+        // PcdAnalysisParameters → 控制項。比照 LoadGearFieldsFromSelectedTool：以「存後還原」而非硬設 false，
+        // 因為 PopulateFromTool 會在自己的 guard 內呼叫本方法；提前還原成 false 會使後續 PCD 參數的
+        // ValueChanged 真的觸發 WritePcd → 只是選個工具就被標記 dirty。
+        private void LoadPcdFieldsFromSelectedTool()
+        {
+            if (_selectedTool == null || _selectedTool.Pcd == null) return;
+            PcdAnalysisParameters p = _selectedTool.Pcd;
+            bool prev = _updatingControls;
+            _updatingControls = true;
+            try
+            {
+                _pcdCountNumeric.Value = ClampDecimal(p.NominalHoleCount, _pcdCountNumeric.Minimum, _pcdCountNumeric.Maximum);
+                _pcdNominalNumeric.Value = ClampDecimal(p.NominalPcdMm, _pcdNominalNumeric.Minimum, _pcdNominalNumeric.Maximum);
+                _pcdTolNumeric.Value = ClampDecimal(p.PcdToleranceMm, _pcdTolNumeric.Minimum, _pcdTolNumeric.Maximum);
+                _pcdAngTolNumeric.Value = ClampDecimal(p.AngularToleranceDeg, _pcdAngTolNumeric.Minimum, _pcdAngTolNumeric.Maximum);
+                _pcdRadTolNumeric.Value = ClampDecimal(p.RadialToleranceMm, _pcdRadTolNumeric.Minimum, _pcdRadTolNumeric.Maximum);
+                _pcdDarkCheck.Checked = p.HoleIsDark;
+                _pcdMinAreaNumeric.Value = ClampDecimal(p.MinHoleAreaPx, _pcdMinAreaNumeric.Minimum, _pcdMinAreaNumeric.Maximum);
+            }
+            finally
+            {
+                _updatingControls = prev;
+            }
+        }
+
         private void PopulateFromTool(MeasurementTool tool)
         {
             _updatingControls = true;
@@ -1424,6 +1546,7 @@ namespace FlashMeasurementSystem
                 bool isElement = tool.ToolType == "circle" || tool.ToolType == "line";
                 bool isArc = tool.ToolType == "arc";
                 bool isGear = tool.ToolType == "gear";
+                bool isPcd = tool.ToolType == "pcd";
                 bool isConstruction = tool.ToolType == "intersection" || tool.ToolType == "midline" || tool.ToolType == "projection";
                 bool isComposite = tool.ToolType == "distance" || tool.ToolType == "angle";
                 bool isGdt = IsGdtType(tool.ToolType);
@@ -1436,12 +1559,15 @@ namespace FlashMeasurementSystem
                 // RecipeRunner Pass 1.2 會把 tool.EdgeParameters 傳給 DetectEdgesOnArc。
                 // 齒輪工具重用弧形 ROI 群組（量測環）+ 邊緣參數（弧卡尺量邊），並顯示齒輪參數群組；
                 // 齒輪判定走三條件（齒數/齒距/齒寬），不用雙邊 Tolerance 群組，故一併隱藏。
+                // PCD 工具同樣重用弧形 ROI 群組（環帶偵測孔），但不用邊緣參數（孔偵測非邊緣掃描，故
+                // 不加進 _edgeGroup 的可見條件），並顯示 PCD 參數群組；PCD 判定走四條件，同樣隱藏雙邊 Tolerance。
                 _roiGroup.Visible = isElement;
-                _arcGroup.Visible = isArc || isGear;
+                _arcGroup.Visible = isArc || isGear || isPcd;
                 _gearGroup.Visible = isGear;
+                _pcdGroup.Visible = isPcd;
                 _edgeGroup.Visible = isElement || isArc || isGear;
                 _refGroup.Visible = usesRefs;
-                _toleranceGroup.Visible = !isGdt && !isGear;
+                _toleranceGroup.Visible = !isGdt && !isGear && !isPcd;
                 _gdtGroup.Visible = isGdt;
                 _angleHintLabel.Visible = tool.ToolType == "line";
 
@@ -1468,6 +1594,12 @@ namespace FlashMeasurementSystem
                     // 齒輪工具同時擁有量測環（ArcRoi）與齒輪判定參數，兩者都在 guard 內載入。
                     LoadArcFieldsFromSelectedTool();
                     LoadGearFieldsFromSelectedTool();
+                }
+                else if (isPcd)
+                {
+                    // PCD 工具同時擁有量測環（ArcRoi）與孔圈判定參數，兩者都在 guard 內載入（比照齒輪）。
+                    LoadArcFieldsFromSelectedTool();
+                    LoadPcdFieldsFromSelectedTool();
                 }
                 else if (usesRefs)
                 {
@@ -1786,6 +1918,7 @@ namespace FlashMeasurementSystem
             _toolTip.SetToolTip(_addLineButton, "Add a line measurement tool");
             _toolTip.SetToolTip(_addArcButton, "弧形卡尺：量圓周等分特徵邊數（孔數/齒數/引腳數）");
             _toolTip.SetToolTip(_addGearButton, "齒輪：量齒數/齒距/齒寬（背光剪影）");
+            _toolTip.SetToolTip(_addPcdButton, "PCD 螺栓孔圈：量孔數/節圓直徑/角均勻/真圓度（背光）");
             _toolTip.SetToolTip(_addDistanceButton, "Add a distance tool (between two line/circle tools)");
             _toolTip.SetToolTip(_addAngleButton, "Add an angle tool (between two line tools)");
             _toolTip.SetToolTip(_addRoundnessButton, "真圓度：Ref1=一個 circle，偏差=圓擬合 max-min 徑向");
@@ -1817,6 +1950,13 @@ namespace FlashMeasurementSystem
             _toolTip.SetToolTip(_gearDarkCheck, "背光剪影下齒為暗、齒隙為亮時勾選；決定齒邊配對極性");
             _toolTip.SetToolTip(_gearPitchTolNumeric, "齒距最大偏差上限（度）：實測齒距最大偏差 ≤ 此值才判 OK");
             _toolTip.SetToolTip(_gearWidthTolNumeric, "齒寬最大偏差上限（度）：實測齒寬最大偏差 ≤ 此值才判 OK");
+            _toolTip.SetToolTip(_pcdCountNumeric, "標稱孔數（整數）：實測孔數需等於此值才判 OK");
+            _toolTip.SetToolTip(_pcdNominalNumeric, "標稱節圓直徑 PCD（mm）");
+            _toolTip.SetToolTip(_pcdTolNumeric, "PCD 公差（mm）：|實測PCD − 標稱PCD| ≤ 此值才判 OK");
+            _toolTip.SetToolTip(_pcdAngTolNumeric, "角度公差（度）：相鄰孔角距對均值的最大偏差 ≤ 此值才判 OK");
+            _toolTip.SetToolTip(_pcdRadTolNumeric, "徑向公差（mm）：孔心徑向偏差上限，判定真圓度");
+            _toolTip.SetToolTip(_pcdDarkCheck, "背光下孔為暗、板材為亮時勾選；決定孔偵測極性");
+            _toolTip.SetToolTip(_pcdMinAreaNumeric, "孔 blob 最小面積（像素）：濾除雜訊，小於此值不視為孔");
             _toolTip.SetToolTip(_sigmaNumeric, "Gaussian smoothing sigma for edge detection");
             _toolTip.SetToolTip(_thresholdNumeric, "Minimum edge amplitude threshold");
             _toolTip.SetToolTip(_polarityCombo, "Edge polarity: all, positive (dark→bright), or negative (bright→dark)");
