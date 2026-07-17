@@ -95,6 +95,7 @@ namespace FlashMeasurementSystem
             this._arcAnnulusNumeric = new System.Windows.Forms.NumericUpDown();
             this.detectArcButton = new System.Windows.Forms.Button();
             this._arcEditCheck = new System.Windows.Forms.CheckBox();
+            this._sectorDrawRoiButton = new System.Windows.Forms.Button();
             this._edgeStatusLabel = new System.Windows.Forms.Label();
             this.lineFittingResultLabel = new System.Windows.Forms.Label();
             this.circleFittingResultLabel = new System.Windows.Forms.Label();
@@ -652,7 +653,7 @@ namespace FlashMeasurementSystem
             this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 26F));
             this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 26F));
             this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 26F));
-            this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 118F));
+            this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 144F));
             this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 84F));
             this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 22F));
             this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 48F));
@@ -1028,16 +1029,19 @@ namespace FlashMeasurementSystem
             this.arcMeasurePanel.Controls.Add(this.detectArcButton, 3, 4);
             this.arcMeasurePanel.Controls.Add(this._arcEditCheck, 0, 4);
             this.arcMeasurePanel.SetColumnSpan(this._arcEditCheck, 2);
+            this.arcMeasurePanel.Controls.Add(this._sectorDrawRoiButton, 0, 5);
+            this.arcMeasurePanel.SetColumnSpan(this._sectorDrawRoiButton, 4);
             this.arcMeasurePanel.Dock = System.Windows.Forms.DockStyle.Fill;
             this.arcMeasurePanel.Location = new System.Drawing.Point(3, 339);
             this.arcMeasurePanel.Name = "arcMeasurePanel";
-            this.arcMeasurePanel.RowCount = 5;
-            this.arcMeasurePanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 20F));
-            this.arcMeasurePanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 20F));
-            this.arcMeasurePanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 20F));
-            this.arcMeasurePanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 20F));
-            this.arcMeasurePanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 20F));
-            this.arcMeasurePanel.Size = new System.Drawing.Size(225, 118);
+            this.arcMeasurePanel.RowCount = 6;
+            this.arcMeasurePanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 16.66F));
+            this.arcMeasurePanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 16.66F));
+            this.arcMeasurePanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 16.66F));
+            this.arcMeasurePanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 16.66F));
+            this.arcMeasurePanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 16.66F));
+            this.arcMeasurePanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 16.7F));
+            this.arcMeasurePanel.Size = new System.Drawing.Size(225, 144);
             this.arcMeasurePanel.TabIndex = 23;
             //
             // arcMeasureHeader
@@ -1170,6 +1174,15 @@ namespace FlashMeasurementSystem
             this._arcEditCheck.Text = "互動編輯";
             this._arcEditCheck.UseVisualStyleBackColor = true;
             this._arcEditCheck.CheckedChanged += new System.EventHandler(this.ArcEditCheck_CheckedChanged);
+            //
+            // _sectorDrawRoiButton
+            //
+            this._sectorDrawRoiButton.Dock = System.Windows.Forms.DockStyle.Fill;
+            this._sectorDrawRoiButton.Name = "_sectorDrawRoiButton";
+            this._sectorDrawRoiButton.TabIndex = 9;
+            this._sectorDrawRoiButton.Text = "扇形 ROI（拖曳繪製）";
+            this._sectorDrawRoiButton.UseVisualStyleBackColor = true;
+            this._sectorDrawRoiButton.Click += new System.EventHandler(this.SectorDrawRoiButton_Click);
             //
             // edgeButtonPanel
             //
@@ -1885,6 +1898,7 @@ namespace FlashMeasurementSystem
         private System.Windows.Forms.NumericUpDown _arcAnnulusNumeric;
         private System.Windows.Forms.Button detectArcButton;
         private System.Windows.Forms.CheckBox _arcEditCheck;
+        private System.Windows.Forms.Button _sectorDrawRoiButton;
         private System.Windows.Forms.Label _edgeStatusLabel;
         private System.Windows.Forms.Label lineFittingResultLabel;
         private System.Windows.Forms.Label circleFittingResultLabel;

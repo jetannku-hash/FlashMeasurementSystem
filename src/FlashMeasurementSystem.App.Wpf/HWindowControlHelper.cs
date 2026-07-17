@@ -1,5 +1,6 @@
 using System;
 using System.Windows.Forms;
+using FlashMeasurementSystem.Domain.EdgeDetection;
 using FlashMeasurementSystem.Domain.Roi;
 using HalconDotNet;
 
@@ -16,6 +17,8 @@ namespace FlashMeasurementSystem
 
         public HImage CurrentImage { get; private set; }
         public bool IsRoiMode { get; set; }
+        /// <summary>true 期間下一次左鍵按下會開始「從圓心拖曳」建立扇形 ROI（見 RequestSector）。</summary>
+        public bool IsSectorMode { get; set; }
         public bool HasRoi => Math.Abs(_roiEndRow - _roiStartRow) > 0.1 && Math.Abs(_roiEndCol - _roiStartCol) > 0.1;
         public double MouseRow { get; private set; }
         public double MouseCol { get; private set; }
@@ -49,6 +52,10 @@ namespace FlashMeasurementSystem
         private double _arcCr, _arcCc, _arcRadius, _arcA0, _arcExtent, _arcAnnulus;
         private double _arcLastRow, _arcLastCol;
         private Action<double, double, double, double, double, double> _arcEditCallback;
+        // 扇形 ROI「從圓心拖曳」建立手勢狀態（與 rect2/arc 編輯互斥；由 RequestSector 一次性請求）。
+        private bool _isDrawingSector;
+        private double _sectorCenterRow, _sectorCenterCol, _sectorCursorRow, _sectorCursorCol;
+        private Action<ArcMeasureRoi> _sectorCallback;
 
         public HWindowControlHelper(HWindowControl control)
         {
@@ -76,6 +83,10 @@ namespace FlashMeasurementSystem
             _arcEditActive = false;
             _arcEditMode = ArcHandle.None;
             _arcEditCallback = null;
+            // 對稱清除扇形拖曳建立狀態——否則換新圖後 pending RequestSector 仍以舊圖座標觸發。
+            IsSectorMode = false;
+            _isDrawingSector = false;
+            _sectorCallback = null;
             CurrentImage?.Dispose();
             CurrentImage = image;
             HOperatorSet.GetImageSize(image, out HTuple w, out HTuple h);
@@ -126,6 +137,18 @@ namespace FlashMeasurementSystem
                 if (HasRoi)
                 {
                     Annotator.DrawRoiRectangle(_roiStartRow, _roiStartCol, _roiEndRow, _roiEndCol);
+                }
+                return;
+            }
+
+            // 正在拖曳新扇形 ROI 時：比照 _isDrawingRoi，只畫即時預覽扇形、跳過 persistent overlay。
+            if (_isDrawingSector)
+            {
+                ComputeSectorFromDrag(_sectorCenterRow, _sectorCenterCol, _sectorCursorRow, _sectorCursorCol,
+                    out double pRadius, out double pAnnulus, out double pA0, out double pExtent);
+                if (pRadius > 0.5)
+                {
+                    Annotator.DrawSectorRoi(_sectorCenterRow, _sectorCenterCol, pRadius, pAnnulus, pA0, pExtent);
                 }
                 return;
             }
@@ -200,6 +223,9 @@ namespace FlashMeasurementSystem
             _arcEditActive = false;
             _arcEditMode = ArcHandle.None;
             _arcEditCallback = null;
+            IsSectorMode = false;
+            _isDrawingSector = false;
+            _sectorCallback = null;
             ClearOverlay();
         }
 
@@ -216,6 +242,37 @@ namespace FlashMeasurementSystem
             _selectionHighlightAction = null;
             IsRoiMode = true;
             Redraw();
+        }
+
+        /// <summary>
+        /// 請求一次性「從圓心往外拖曳」建立扇形 ROI。MouseDown 記錄圓心，拖曳中即時預覽
+        /// 90° 扇形（方向對齊拖曳方向），MouseUp 若拖曳距離 > 5px 則以 callback 傳回建立好
+        /// 的 <see cref="ArcMeasureRoi"/>；否則視為取消，保留 pending 狀態讓使用者可重新拖曳。
+        /// 與 rect2/arc 編輯互斥；呼叫端應先結束既有編輯模式並關閉矩形 Draw ROI 再呼叫本方法。
+        /// </summary>
+        public void RequestSector(Action<ArcMeasureRoi> callback)
+        {
+            _sectorCallback = callback;
+            _isDrawingSector = false;
+            _persistentOverlayAction = null;
+            _selectionHighlightAction = null;
+            IsSectorMode = true;
+            Redraw();
+        }
+
+        // 角度慣例與 ArcEditMath.AngleOf 一致：phi = atan2(-(row-cr), col-cc)，
+        // 90° 扇形置中於拖曳方向（AngleStart = phi - 45°）。annulus 為 0.2*半徑，下限 8px。
+        private static void ComputeSectorFromDrag(double centerRow, double centerCol,
+            double cursorRow, double cursorCol,
+            out double radius, out double annulus, out double angleStart, out double angleExtent)
+        {
+            double dr = cursorRow - centerRow;
+            double dc = cursorCol - centerCol;
+            radius = Math.Sqrt(dr * dr + dc * dc);
+            annulus = Math.Max(8.0, 0.2 * radius);
+            double phi = Math.Atan2(-dr, dc);
+            angleExtent = Math.PI / 2.0;
+            angleStart = phi - Math.PI / 4.0;
         }
 
         public void SetPersistentOverlayAction(Action action)
@@ -349,6 +406,14 @@ namespace FlashMeasurementSystem
                 PixelToImage(e.X, e.Y, out _roiStartRow, out _roiStartCol);
                 _roiEndRow = _roiStartRow; _roiEndCol = _roiStartCol;
             }
+
+            if (e.Button == MouseButtons.Left && IsSectorMode)
+            {
+                _isDrawingSector = true;
+                PixelToImage(e.X, e.Y, out _sectorCenterRow, out _sectorCenterCol);
+                _sectorCursorRow = _sectorCenterRow;
+                _sectorCursorCol = _sectorCenterCol;
+            }
         }
 
         private void OnMouseMove(object sender, MouseEventArgs e)
@@ -371,6 +436,12 @@ namespace FlashMeasurementSystem
             {
                 // 拖曳中的 ROI 框由 Redraw() 統一繪製（_roiEnd 已先更新、HasRoi 成立）。
                 PixelToImage(e.X, e.Y, out _roiEndRow, out _roiEndCol);
+                Redraw();
+            }
+            else if (_isDrawingSector)
+            {
+                // 拖曳中的扇形預覽由 Redraw() 統一繪製（_sectorCursor 已先更新）。
+                PixelToImage(e.X, e.Y, out _sectorCursorRow, out _sectorCursorCol);
                 Redraw();
             }
             else if (_editMode != Rect2Handle.None)
@@ -444,6 +515,32 @@ namespace FlashMeasurementSystem
                         RoiSelected?.Invoke(_roiStartRow, _roiStartCol, _roiEndRow, _roiEndCol);
                     }
                 }
+            }
+
+            if (_isDrawingSector)
+            {
+                _isDrawingSector = false;
+                PixelToImage(e.X, e.Y, out _sectorCursorRow, out _sectorCursorCol);
+                ComputeSectorFromDrag(_sectorCenterRow, _sectorCenterCol, _sectorCursorRow, _sectorCursorCol,
+                    out double radius, out double annulus, out double a0, out double extent);
+                // 拖曳距離 > 5px 才視為成立，否則保留 pending 狀態讓使用者可重新拖曳（比照 RequestRoi）。
+                if (radius > 5.0)
+                {
+                    IsSectorMode = false;
+                    var cb = _sectorCallback;
+                    _sectorCallback = null;
+                    var roi = new ArcMeasureRoi
+                    {
+                        CenterRow = _sectorCenterRow,
+                        CenterCol = _sectorCenterCol,
+                        Radius = radius,
+                        AnnulusRadius = annulus,
+                        AngleStart = a0,
+                        AngleExtent = extent
+                    };
+                    cb?.Invoke(roi);
+                }
+                Redraw();
             }
         }
 

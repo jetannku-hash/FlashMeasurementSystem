@@ -331,6 +331,7 @@ namespace FlashMeasurementSystem
             _toolTip.SetToolTip(fitCircleButton, "Fit a circle to the detected edge points");
             _toolTip.SetToolTip(fitEllipseButton, "Fit an ellipse to the detected edge points");
             _toolTip.SetToolTip(fitRectangleButton, "Fit a rectangle to the detected edge points");
+            _toolTip.SetToolTip(_sectorDrawRoiButton, "從圓心往外拖拉出扇形量測區，放開後可用把手微調");
             _toolTip.SetToolTip(_edgeResultsGrid, "Detected edge points (Row, Col, Amplitude, Distance)");
             _toolTip.SetToolTip(_edgeStatusLabel, "Edge detection status — PASS (green) or FAIL (red)");
             _toolTip.SetToolTip(lineFittingResultLabel, "Line fitting result");
@@ -2394,6 +2395,64 @@ namespace FlashMeasurementSystem
             {
                 _imageHelper.EndArcEdit();
             }
+        }
+
+        // 「扇形 ROI（拖曳繪製）」按鈕：武裝 RequestSector 手勢。先結束既有 rect2/arc 編輯、
+        // 關閉矩形 Draw ROI 與（若已勾選的）互動編輯，確保下一次滑鼠按下只會被扇形手勢接收，
+        // 不會被殘留的把手 hit-test 或矩形拖曳搶走。
+        private void SectorDrawRoiButton_Click(object sender, EventArgs e)
+        {
+            if (_imageHelper == null || _imageHelper.CurrentImage == null)
+            {
+                _edgeStatusLabel.Text = "扇形 ROI: 請先載入影像";
+                _edgeStatusLabel.ForeColor = Color.Red;
+                return;
+            }
+
+            _imageHelper.EndRect2Edit();
+            _imageHelper.EndArcEdit();
+            if (_edgeDrawRoiCheck.Checked) _edgeDrawRoiCheck.Checked = false;
+            if (roiModeCheck.Checked) roiModeCheck.Checked = false;
+            if (_arcEditCheck.Checked)
+            {
+                // 直接歸零，不透過 CheckedChanged（其 false 分支只呼叫 EndArcEdit，已在上方做過）。
+                _updatingArcControls = true;
+                try { _arcEditCheck.Checked = false; } finally { _updatingArcControls = false; }
+            }
+
+            _edgeStatusLabel.Text = "扇形 ROI：從圓心往外拖曳繪製";
+            _edgeStatusLabel.ForeColor = Color.Black;
+            _imageHelper.RequestSector(OnSectorRoiCreated);
+        }
+
+        // RequestSector 手勢完成（放開滑鼠、拖曳距離 > 5px）的回呼：把建立好的 ArcMeasureRoi
+        // 回寫六個弧形數值框，再勾選「互動編輯」——沿用 ArcEditCheck_CheckedChanged 既有的
+        // BuildArcRoiFromControls + BeginArcEdit(...,OnArcRoiChanged) 路徑，不重複實作同步邏輯。
+        private void OnSectorRoiCreated(ArcMeasureRoi roi)
+        {
+            double a0Deg = roi.AngleStart * 180.0 / Math.PI;
+            a0Deg -= 360.0 * Math.Floor(a0Deg / 360.0); // 正規化到 [0, 360)，配合數值框 Minimum=0
+            double extentDeg = roi.AngleExtent * 180.0 / Math.PI;
+
+            _updatingArcControls = true;
+            try
+            {
+                _arcCenterRowNumeric.Value = ClampNumericValue(_arcCenterRowNumeric, (decimal)roi.CenterRow);
+                _arcCenterColNumeric.Value = ClampNumericValue(_arcCenterColNumeric, (decimal)roi.CenterCol);
+                _arcRadiusNumeric.Value = ClampNumericValue(_arcRadiusNumeric, (decimal)roi.Radius);
+                _arcAnnulusNumeric.Value = ClampNumericValue(_arcAnnulusNumeric, (decimal)roi.AnnulusRadius);
+                _arcAngleStartNumeric.Value = ClampNumericValue(_arcAngleStartNumeric, (decimal)a0Deg);
+                _arcAngleExtentNumeric.Value = ClampNumericValue(_arcAngleExtentNumeric, (decimal)extentDeg);
+            }
+            finally
+            {
+                _updatingArcControls = false;
+            }
+
+            // SectorDrawRoiButton_Click 已確保按下當下 _arcEditCheck 為 false，這裡勾選必觸發
+            // CheckedChanged → 進入 ArcEditCheck_CheckedChanged 的 true 分支，以剛寫入的數值框
+            // 呼叫 BeginArcEdit(...,OnArcRoiChanged)，交給既有五把手編輯微調。
+            _arcEditCheck.Checked = true;
         }
 
         private static decimal ClampNumericValue(NumericUpDown numeric, decimal value)
