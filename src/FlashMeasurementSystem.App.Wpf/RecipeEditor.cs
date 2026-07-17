@@ -890,18 +890,20 @@ namespace FlashMeasurementSystem
             bool isArc = tool.ToolType == "arc";
             bool isGear = tool.ToolType == "gear";
             bool isPcd = tool.ToolType == "pcd";
+            // v10：circle 選扇形 ROI 時比照弧形工具（借 ArcRoi/PlacedArc、不畫 rect 框）。
+            bool isSectorCircle = tool.ToolType == "circle" && tool.RoiShape == "sector";
             ArcMeasureRoi arc = tool.ArcRoi;
             _imageHelper.SetPersistentOverlayAction(() =>
             {
                 OverlayAnnotator an = _imageHelper.Annotator;
                 if (an == null) return;
-                // 弧形/齒輪/PCD 工具的 Roi 是全零 rect2（未使用），畫出來會是 (0,0) 退化橘框——只有這三者以外才畫 ROI 框。
-                if (roi != null && !isArc && !isGear && !isPcd)
+                // 弧形/齒輪/PCD/扇形 circle 的 Roi 未使用（畫出來會是退化橘框）——只有這些以外才畫矩形 ROI 框。
+                if (roi != null && !isArc && !isGear && !isPcd && !isSectorCircle)
                     an.DrawRectangle2(roi.CenterRow, roi.CenterCol, roi.AngleRad,
                                       roi.Length1, roi.Length2, "orange");
 
-                // 文字錨點：弧形/齒輪/PCD 錨在弧心，其餘錨在 rect2 ROI 中心。
-                bool usesArcRoi = isArc || isGear || isPcd;
+                // 文字錨點：弧形/齒輪/PCD/扇形 circle 錨在弧心，其餘錨在 rect2 ROI 中心。
+                bool usesArcRoi = isArc || isGear || isPcd || isSectorCircle;
                 double txtR = usesArcRoi && arc != null ? arc.CenterRow : (roi != null ? roi.CenterRow : 20);
                 double txtC = usesArcRoi && arc != null ? arc.CenterCol : (roi != null ? roi.CenterCol : 20);
                 if (result == null || !result.Measured)
@@ -929,6 +931,13 @@ namespace FlashMeasurementSystem
                     double labelRow = a.CenterRow - (a.Radius + a.AnnulusRadius) - 20;
                     an.DrawText(result.ValueText ?? string.Empty, (int)labelRow, (int)a.CenterCol, c);
                     return;
+                }
+
+                // v10：扇形 ROI 的 circle：先畫量測扇形帶（PlacedArc），再由下方 circle 分支畫擬合圓（不 return）。
+                if (isSectorCircle && result.PlacedArc != null)
+                {
+                    ArcMeasureRoi sa = result.PlacedArc;
+                    an.DrawSectorRoi(sa.CenterRow, sa.CenterCol, sa.Radius, sa.AnnulusRadius, sa.AngleStart, sa.AngleExtent);
                 }
 
                 if (result.ToolType == "circle")

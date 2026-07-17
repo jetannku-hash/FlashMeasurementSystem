@@ -1517,6 +1517,15 @@ namespace FlashMeasurementSystem
                         an.DrawText(r.Name ?? string.Empty, (int)r.Roi.Row, (int)r.Roi.Col, "orange");
                     }
 
+                    // v10：扇形 ROI 的 circle 工具畫量測扇形帶（PlacedArc；成功/失敗都畫，顯示環帶位置）。
+                    // 矩形 circle 的 r.Roi 非 null 走上面橘框；扇形 circle 的 r.Roi 為 null，改在此畫扇形帶。
+                    if (r.ToolType == "circle" && r.PlacedArc != null)
+                    {
+                        an.DrawSectorRoi(r.PlacedArc.CenterRow, r.PlacedArc.CenterCol, r.PlacedArc.Radius,
+                            r.PlacedArc.AnnulusRadius, r.PlacedArc.AngleStart, r.PlacedArc.AngleExtent);
+                        an.DrawText(r.Name ?? string.Empty, (int)r.PlacedArc.CenterRow, (int)r.PlacedArc.CenterCol, "orange");
+                    }
+
                     if (r.Measured && r.ToolType == "circle")
                     {
                         string circleColor = r.IsOk == true ? "green" : (r.IsOk == false ? "red" : "yellow");
