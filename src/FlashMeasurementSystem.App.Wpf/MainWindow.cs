@@ -63,6 +63,10 @@ namespace FlashMeasurementSystem
         private ArcMeasureRoi _latestArcRoi;
         private bool _updatingEdgeRoiControls;
         private bool _updatingArcControls;
+        // 主 Detect 按鈕分流用：true=目前有效 ROI 是扇形(_latestArcRoi)，Detect 走
+        // DetectEdgesInAnnularSector；false（預設）=矩形路徑，維持既有行為不變。
+        // 由 OnSectorRoiCreated 設 true；畫新矩形 ROI（OnImageRoiSelected）設回 false。
+        private bool _sectorRoiActive;
 
         // M3c-1：配方執行（Stage A：載入 + 設參考姿態 + 轉換並繪製跟隨工件的 ROI）
         private readonly HalconCoordinateMapper _coordinateMapper = new HalconCoordinateMapper();
@@ -761,6 +765,58 @@ namespace FlashMeasurementSystem
             if (_imageHelper.CurrentImage == null)
             {
                 SetEdgeStatus(false, "Please load an image first.");
+                return;
+            }
+
+            // 扇形 ROI 分流：目前有效 ROI 是扇形（Task 3 拖曳建立/編輯）時，主 Detect 按鈕改走
+            // 扇形環帶量測（DetectEdgesInAnnularSector），結果一樣寫回 _latestEdgeResult，
+            // 讓既有 Fit Line/Circle/Ellipse/Rectangle 按鈕不需任何修改即可使用。
+            if (_sectorRoiActive && _latestArcRoi != null && _latestArcRoi.IsDefined)
+            {
+                Cursor = Cursors.WaitCursor;
+                SetProgress("扇形邊緣檢測中…");
+                try
+                {
+                    EdgeDetectionParameters sectorParameters = CreateEdgeDetectionParameters();
+                    EdgeResult sectorResult = _edgeDetector.DetectEdgesInAnnularSector(
+                        _imageHelper.CurrentImage, _latestArcRoi, sectorParameters);
+
+                    // 比照 DetectArcButton_Click：確保沒有殘留的矩形 ROI 藍框跟扇形帶同時畫出。
+                    _latestEdgeRoi = null;
+                    _latestEdgeResult = sectorResult;
+                    _latestLineFittingResult = null;
+                    _latestCircleFittingResult = null;
+                    _latestEllipseFittingResult = null;
+                    _latestRectangleFittingResult = null;
+                    UpdateLineFittingResult(null);
+                    UpdateCircleFittingResult(null);
+                    UpdateEllipseFittingResult(null);
+                    UpdateRectangleFittingResult(null);
+
+                    RestoreDefaultEdgeGridColumns();
+                    BindEdgeResult(sectorResult);
+                    SetEdgeStatus(sectorResult.Success, sectorResult.Success
+                        ? string.Format("Sector edges: {0} found", sectorResult.EdgePoints.Count)
+                        : sectorResult.ErrorMessage);
+                    ShowFittingOverlay();
+                }
+                catch (HalconException ex)
+                {
+                    InvalidateEdgeState();
+                    ShowFittingOverlay();
+                    SetEdgeStatus(false, "Edge detection failed [Halcon " + ex.GetErrorCode() + "]: " + ex.Message);
+                }
+                catch (Exception ex)
+                {
+                    InvalidateEdgeState();
+                    ShowFittingOverlay();
+                    SetEdgeStatus(false, "Edge detection failed (unexpected " + ex.GetType().Name + "): " + ex.Message);
+                }
+                finally
+                {
+                    Cursor = Cursors.Default;
+                    ClearProgress();
+                }
                 return;
             }
 
@@ -1895,8 +1951,18 @@ namespace FlashMeasurementSystem
                 // 弧形卡尺量測帶：畫內弧(R-Annulus)、中弧(R)、外弧(R+Annulus)，
                 // 讓使用者清楚看到實際掃描的環帶範圍是否壓在特徵邊緣上。
                 // 內外弧用橘色(邊界)、中弧用黃色，並在中心畫十字標出弧心。共用 DrawArcBand（與編輯器一致）。
-                an.DrawArcBand(arcRoi.CenterRow, arcRoi.CenterCol, arcRoi.Radius,
-                    arcRoi.AngleStart, arcRoi.AngleExtent, arcRoi.AnnulusRadius);
+                // 扇形 ROI（_sectorRoiActive）改用 DrawSectorRoi：在 DrawArcBand 基礎上多補起訖角
+                // 兩條徑向邊，使畫面呈現封閉扇形（與 DetectEdgesInAnnularSector 的量測區域外形一致）。
+                if (_sectorRoiActive)
+                {
+                    an.DrawSectorRoi(arcRoi.CenterRow, arcRoi.CenterCol, arcRoi.Radius,
+                        arcRoi.AnnulusRadius, arcRoi.AngleStart, arcRoi.AngleExtent);
+                }
+                else
+                {
+                    an.DrawArcBand(arcRoi.CenterRow, arcRoi.CenterCol, arcRoi.Radius,
+                        arcRoi.AngleStart, arcRoi.AngleExtent, arcRoi.AnnulusRadius);
+                }
             }
 
             if (roi != null && _latestEdgeResult != null)
@@ -2270,6 +2336,7 @@ namespace FlashMeasurementSystem
             // 畫新的邊緣 rect ROI = 改用邊緣 ROI，對稱於 ArcEditCheck：清掉殘留的圓弧帶並
             // 同步取消「互動編輯」勾選（BeginRect2Edit 已關掉 arc 編輯把手，這裡只補狀態/UI）。
             _latestArcRoi = null;
+            _sectorRoiActive = false;
             if (_arcEditCheck.Checked) _arcEditCheck.Checked = false;
             _imageHelper.IsRoiMode = false;
             _edgeDrawRoiCheck.Checked = false;
@@ -2431,6 +2498,8 @@ namespace FlashMeasurementSystem
         {
             OnArcRoiChanged(roi.CenterRow, roi.CenterCol, roi.Radius,
                 roi.AngleStart, roi.AngleExtent, roi.AnnulusRadius);
+            // 標記目前有效 ROI 是扇形，主 Detect 按鈕改走 DetectEdgesInAnnularSector。
+            _sectorRoiActive = true;
 
             // SectorDrawRoiButton_Click 已確保按下當下 _arcEditCheck 為 false，這裡勾選必觸發
             // CheckedChanged → 進入 ArcEditCheck_CheckedChanged 的 true 分支，以剛寫入的數值框
