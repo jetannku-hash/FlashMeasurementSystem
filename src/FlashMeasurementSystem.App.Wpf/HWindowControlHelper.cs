@@ -561,9 +561,12 @@ namespace FlashMeasurementSystem
                 // 拖曳距離 > 5px 才視為成立，否則保留 pending 狀態讓使用者可重新拖曳（比照 RequestRoi）。
                 if (radius > 5.0)
                 {
-                    IsSectorMode = false;
+                    // 先取出 callback 再清模式：IsSectorMode 的 setter 會 null 掉 _sectorCallback，
+                    // 若先設 IsSectorMode=false 再讀 _sectorCallback 會拿到 null → 手勢無回呼 →
+                    // 放開後不會建立扇形（比照矩形流程 line 543 先 capture 再清狀態）。
                     var cb = _sectorCallback;
                     _sectorCallback = null;
+                    IsSectorMode = false;
                     var roi = new ArcMeasureRoi
                     {
                         CenterRow = _sectorCenterRow,

@@ -335,7 +335,7 @@ namespace FlashMeasurementSystem
             _toolTip.SetToolTip(fitCircleButton, "Fit a circle to the detected edge points");
             _toolTip.SetToolTip(fitEllipseButton, "Fit an ellipse to the detected edge points");
             _toolTip.SetToolTip(fitRectangleButton, "Fit a rectangle to the detected edge points");
-            _toolTip.SetToolTip(_sectorDrawRoiButton, "從圓心往外拖拉出扇形量測區，放開後可用把手微調");
+            _toolTip.SetToolTip(_sectorDrawCheck, "勾選後從圓心往外拖拉出扇形量測區，放開後自動進入把手微調");
             _toolTip.SetToolTip(_edgeResultsGrid, "Detected edge points (Row, Col, Amplitude, Distance)");
             _toolTip.SetToolTip(_edgeStatusLabel, "Edge detection status — PASS (green) or FAIL (red)");
             _toolTip.SetToolTip(lineFittingResultLabel, "Line fitting result");
@@ -547,8 +547,9 @@ namespace FlashMeasurementSystem
             // _imageHelper 於 OnLoad 才建立；比照 EdgeDrawRoiCheck_CheckedChanged 防呆，
             // 避免 Designer 若在 InitializeComponent 期間觸發此事件時 NRE。
             if (_imageHelper == null) return;
-            // 開啟矩形繪製即解除 pending 扇形繪製（模式互斥；IsSectorMode setter 會清 callback）。
-            if (roiModeCheck.Checked) _imageHelper.IsSectorMode = false;
+            // 開啟矩形繪製即取消扇形繪製 checkbox（模式互斥）；其 CheckedChanged 會 disarm
+            // IsSectorMode 並清 pending callback，同時讓 checkbox 視覺與模式一致。
+            if (roiModeCheck.Checked && _sectorDrawCheck.Checked) _sectorDrawCheck.Checked = false;
             _imageHelper.IsRoiMode = roiModeCheck.Checked;
         }
 
@@ -972,10 +973,11 @@ namespace FlashMeasurementSystem
             RestoreDefaultEdgeGridColumns();
             _edgeResultsGrid.Rows.Clear();
             _imageHelper.ClearRoi();
-            // ClearRoi() 內部把 IsRoiMode 設為 false，兩個 ROI checkbox 都要同步，
-            // 否則 Inspection 分頁的 roiModeCheck 仍顯示勾選、實際卻已不能畫 ROI。
+            // ClearRoi() 內部把 IsRoiMode/IsSectorMode 設為 false，三個繪製 checkbox 都要同步，
+            // 否則 checkbox 仍顯示勾選、實際卻已不能畫 ROI。
             _edgeDrawRoiCheck.Checked = false;
             roiModeCheck.Checked = false;
+            if (_sectorDrawCheck.Checked) _sectorDrawCheck.Checked = false;
             _edgeStatusLabel.Text = "Draw ROI, then Detect";
             _edgeStatusLabel.ForeColor = Color.Black;
             ClearFittingState();
@@ -1122,8 +1124,9 @@ namespace FlashMeasurementSystem
                 if (_edgeDrawRoiCheck.Checked)
                 {
                     roiModeCheck.Checked = false;
-                    // 開啟矩形繪製即解除 pending 扇形繪製（模式互斥；setter 會清 callback）。
-                    _imageHelper.IsSectorMode = false;
+                    // 開啟矩形繪製即取消扇形繪製 checkbox（模式互斥）；其 CheckedChanged 會
+                    // disarm IsSectorMode 並清 callback，同時讓 checkbox 視覺與模式一致。
+                    if (_sectorDrawCheck.Checked) _sectorDrawCheck.Checked = false;
                 }
 
                 _imageHelper.IsRoiMode = _edgeDrawRoiCheck.Checked;
@@ -1140,6 +1143,7 @@ namespace FlashMeasurementSystem
             _imageHelper.DisarmInteractiveModes();
             if (_edgeDrawRoiCheck != null && _edgeDrawRoiCheck.Checked) _edgeDrawRoiCheck.Checked = false;
             if (roiModeCheck != null && roiModeCheck.Checked) roiModeCheck.Checked = false;
+            if (_sectorDrawCheck != null && _sectorDrawCheck.Checked) _sectorDrawCheck.Checked = false;
         }
 
         // 切換 subpix/measure_pos 演算法後，前一次偵測的格線/十字/狀態已不適用 → 清除並刷新，
@@ -1862,6 +1866,7 @@ namespace FlashMeasurementSystem
             // 避免洩漏進編輯器共用的 helper），再清掉主視窗殘留的偵測/擬合 overlay
             // （Edge Detection 藍框、邊緣十字、Run Recipe 結果等），讓編輯器從乾淨影像開始。
             _imageHelper.DisarmInteractiveModes();
+            if (_sectorDrawCheck != null && _sectorDrawCheck.Checked) _sectorDrawCheck.Checked = false;
             _imageHelper.ClearOverlay();
             editor.Show(this);
         }
@@ -2460,6 +2465,9 @@ namespace FlashMeasurementSystem
                 // 而非拖把手（M4）。取消勾選會經各自 handler 把 IsRoiMode 設為 false。
                 if (_edgeDrawRoiCheck.Checked) _edgeDrawRoiCheck.Checked = false;
                 if (roiModeCheck.Checked) roiModeCheck.Checked = false;
+                // 進入互動編輯亦取消扇形繪製 checkbox（BeginArcEdit 會 disarm IsSectorMode，
+                // 這裡讓 checkbox 視覺同步；手勢 handoff 時 OnSectorRoiCreated 已先取消，冪等無害）。
+                if (_sectorDrawCheck.Checked) _sectorDrawCheck.Checked = false;
                 _imageHelper.IsRoiMode = false;
 
                 ShowFittingOverlay();
@@ -2473,28 +2481,40 @@ namespace FlashMeasurementSystem
             }
         }
 
-        // 「扇形 ROI（拖曳繪製）」按鈕：武裝 RequestSector 手勢。RequestSector 內部會呼叫
-        // DisarmInteractiveModes() 統一解除 rect2/arc 編輯與矩形繪製，因此這裡只需把三個可見
-        // checkbox 的視覺狀態同步取消（否則 checkbox 仍顯示勾選、但其模式已被 disarm 關閉）。
-        private void SectorDrawRoiButton_Click(object sender, EventArgs e)
+        // 「扇形 ROI（拖曳繪製）」checkbox：鏡射矩形「Draw ROI」(_edgeDrawRoiCheck) 的生命週期。
+        // 勾選 = 進入扇形繪製模式（可見勾選代表已武裝）；取消 = 離開繪製模式。
+        // 勾選時先關掉其他繪製/編輯的可見勾選（互斥），再 RequestSector 武裝手勢+回呼；
+        // 取消時把 IsSectorMode 設 false（setter 清 pending callback）。畫完一個扇形後
+        // OnSectorRoiCreated 會自動取消勾選（比照 OnImageRoiSelected 畫完矩形取消 _edgeDrawRoiCheck）。
+        private void SectorDrawCheck_CheckedChanged(object sender, EventArgs e)
         {
-            if (_imageHelper == null || _imageHelper.CurrentImage == null)
+            if (_imageHelper == null) return;
+
+            if (_sectorDrawCheck.Checked)
             {
-                _edgeStatusLabel.Text = "扇形 ROI: 請先載入影像";
-                _edgeStatusLabel.ForeColor = Color.Red;
-                return;
+                if (_imageHelper.CurrentImage == null)
+                {
+                    // 無影像不能繪製：還原勾選並提示（比照 ArcEditCheck 防呆）。再入本 handler
+                    // 走 else 分支只是 disarm，無副作用。
+                    _sectorDrawCheck.Checked = false;
+                    _edgeStatusLabel.Text = "扇形 ROI: 請先載入影像";
+                    _edgeStatusLabel.ForeColor = Color.Red;
+                    return;
+                }
+
+                // 互斥：關掉其他繪製/編輯的可見勾選（各自 handler 會清 IsRoiMode / 結束 arc 編輯）。
+                if (_edgeDrawRoiCheck.Checked) _edgeDrawRoiCheck.Checked = false;
+                if (roiModeCheck.Checked) roiModeCheck.Checked = false;
+                if (_arcEditCheck.Checked) _arcEditCheck.Checked = false;
+
+                _edgeStatusLabel.Text = "扇形 ROI：從圓心往外拖曳繪製";
+                _edgeStatusLabel.ForeColor = Color.Black;
+                _imageHelper.RequestSector(OnSectorRoiCreated);   // 武裝 IsSectorMode + 回呼
             }
-
-            if (_edgeDrawRoiCheck.Checked) _edgeDrawRoiCheck.Checked = false;
-            if (roiModeCheck.Checked) roiModeCheck.Checked = false;
-            // 取消互動編輯的視覺勾選；其 CheckedChanged false 分支呼叫 EndArcEdit（無害，
-            // RequestSector 隨後也會 disarm）。必須先歸零，OnSectorRoiCreated 尾端再設為 true
-            // 才會觸發 true 分支進入五把手編輯。
-            if (_arcEditCheck.Checked) _arcEditCheck.Checked = false;
-
-            _edgeStatusLabel.Text = "扇形 ROI：從圓心往外拖曳繪製";
-            _edgeStatusLabel.ForeColor = Color.Black;
-            _imageHelper.RequestSector(OnSectorRoiCreated);
+            else
+            {
+                _imageHelper.IsSectorMode = false;   // 離開繪製模式；setter 清 pending callback
+            }
         }
 
         // RequestSector 手勢完成（放開滑鼠、拖曳距離 > 5px）的回呼：沿用 OnArcRoiChanged
@@ -2507,8 +2527,13 @@ namespace FlashMeasurementSystem
             // 標記目前有效 ROI 是扇形，主 Detect 按鈕改走 DetectEdgesInAnnularSector。
             _sectorRoiActive = true;
 
-            // SectorDrawRoiButton_Click 已確保按下當下 _arcEditCheck 為 false，這裡勾選必觸發
-            // CheckedChanged → 進入 ArcEditCheck_CheckedChanged 的 true 分支，以剛寫入的數值框
+            // 畫完一個扇形即離開繪製模式：取消繪製 checkbox 的勾選（比照 OnImageRoiSelected
+            // 畫完矩形後取消 _edgeDrawRoiCheck）。此 uncheck 觸發 else 分支 disarm（IsSectorMode
+            // 早在 mouseup 已為 false，冪等無害）。
+            _sectorDrawCheck.Checked = false;
+
+            // 勾選互動編輯進入五把手編輯：_arcEditCheck 目前為 false（進入繪製時已取消），
+            // 設 true 必觸發 ArcEditCheck_CheckedChanged 的 true 分支 → 以剛寫入的數值框
             // 呼叫 BeginArcEdit(...,OnArcRoiChanged)，交給既有五把手編輯微調。
             _arcEditCheck.Checked = true;
         }

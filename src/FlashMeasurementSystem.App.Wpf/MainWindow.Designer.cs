@@ -95,7 +95,7 @@ namespace FlashMeasurementSystem
             this._arcAnnulusNumeric = new System.Windows.Forms.NumericUpDown();
             this.detectArcButton = new System.Windows.Forms.Button();
             this._arcEditCheck = new System.Windows.Forms.CheckBox();
-            this._sectorDrawRoiButton = new System.Windows.Forms.Button();
+            this._sectorDrawCheck = new System.Windows.Forms.CheckBox();
             this._edgeStatusLabel = new System.Windows.Forms.Label();
             this.lineFittingResultLabel = new System.Windows.Forms.Label();
             this.circleFittingResultLabel = new System.Windows.Forms.Label();
@@ -1029,8 +1029,8 @@ namespace FlashMeasurementSystem
             this.arcMeasurePanel.Controls.Add(this.detectArcButton, 3, 4);
             this.arcMeasurePanel.Controls.Add(this._arcEditCheck, 0, 4);
             this.arcMeasurePanel.SetColumnSpan(this._arcEditCheck, 2);
-            this.arcMeasurePanel.Controls.Add(this._sectorDrawRoiButton, 0, 5);
-            this.arcMeasurePanel.SetColumnSpan(this._sectorDrawRoiButton, 4);
+            this.arcMeasurePanel.Controls.Add(this._sectorDrawCheck, 0, 5);
+            this.arcMeasurePanel.SetColumnSpan(this._sectorDrawCheck, 4);
             this.arcMeasurePanel.Dock = System.Windows.Forms.DockStyle.Fill;
             this.arcMeasurePanel.Location = new System.Drawing.Point(3, 339);
             this.arcMeasurePanel.Name = "arcMeasurePanel";
@@ -1175,14 +1175,14 @@ namespace FlashMeasurementSystem
             this._arcEditCheck.UseVisualStyleBackColor = true;
             this._arcEditCheck.CheckedChanged += new System.EventHandler(this.ArcEditCheck_CheckedChanged);
             //
-            // _sectorDrawRoiButton
+            // _sectorDrawCheck
             //
-            this._sectorDrawRoiButton.Dock = System.Windows.Forms.DockStyle.Fill;
-            this._sectorDrawRoiButton.Name = "_sectorDrawRoiButton";
-            this._sectorDrawRoiButton.TabIndex = 9;
-            this._sectorDrawRoiButton.Text = "扇形 ROI（拖曳繪製）";
-            this._sectorDrawRoiButton.UseVisualStyleBackColor = true;
-            this._sectorDrawRoiButton.Click += new System.EventHandler(this.SectorDrawRoiButton_Click);
+            this._sectorDrawCheck.Dock = System.Windows.Forms.DockStyle.Fill;
+            this._sectorDrawCheck.Name = "_sectorDrawCheck";
+            this._sectorDrawCheck.TabIndex = 9;
+            this._sectorDrawCheck.Text = "扇形 ROI（拖曳繪製）";
+            this._sectorDrawCheck.UseVisualStyleBackColor = true;
+            this._sectorDrawCheck.CheckedChanged += new System.EventHandler(this.SectorDrawCheck_CheckedChanged);
             //
             // edgeButtonPanel
             //
@@ -1898,7 +1898,7 @@ namespace FlashMeasurementSystem
         private System.Windows.Forms.NumericUpDown _arcAnnulusNumeric;
         private System.Windows.Forms.Button detectArcButton;
         private System.Windows.Forms.CheckBox _arcEditCheck;
-        private System.Windows.Forms.Button _sectorDrawRoiButton;
+        private System.Windows.Forms.CheckBox _sectorDrawCheck;
         private System.Windows.Forms.Label _edgeStatusLabel;
         private System.Windows.Forms.Label lineFittingResultLabel;
         private System.Windows.Forms.Label circleFittingResultLabel;
