@@ -1579,6 +1579,30 @@ namespace FlashMeasurementSystem
                     }
                     an.DrawText(r.ValueText ?? (r.Name ?? string.Empty), (int)a.CenterRow, (int)a.CenterCol, gearColor);
                 }
+
+                // PCD 工具結果：Roi 刻意留 null（同 arc/gear），畫框那段不會經過。畫量測環帶 + 擬合節圓
+                // + 各孔中心十字 + 缺孔提示（洋紅）+ 名稱/數值。角度→(row,col) 沿用 gear 迴圈同一慣例。
+                foreach (ToolRunResult r in results)
+                {
+                    if (r == null || r.ToolType != "pcd" || r.PlacedArc == null) continue;
+                    string pcdColor = r.IsOk == true ? "green" : (r.IsOk == false ? "red" : "yellow");
+                    ArcMeasureRoi a = r.PlacedArc;
+                    an.DrawArcBand(a.CenterRow, a.CenterCol, a.Radius, a.AngleStart, a.AngleExtent, a.AnnulusRadius);
+                    if (r.Pcd != null && r.Pcd.Success)
+                    {
+                        var g = r.Pcd;
+                        an.DrawCircle(g.CenterRow, g.CenterCol, g.PcdPx / 2.0, pcdColor);   // 擬合節圓
+                        foreach (var hole in g.Holes)
+                            an.DrawCross(hole.Row, hole.Col, 12, pcdColor);
+                        foreach (double hintDeg in g.MissingHoleHintsDeg)
+                        {
+                            double th = hintDeg * Math.PI / 180.0;
+                            an.DrawCross(g.CenterRow + (g.PcdPx / 2.0) * Math.Sin(th),
+                                         g.CenterCol + (g.PcdPx / 2.0) * Math.Cos(th), 18, "magenta");
+                        }
+                    }
+                    an.DrawText(r.ValueText ?? (r.Name ?? string.Empty), (int)a.CenterRow, (int)a.CenterCol, pcdColor);
+                }
                 an.DrawResultTable(rows);
             });
 
