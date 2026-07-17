@@ -932,6 +932,10 @@ namespace FlashMeasurementSystem
                 Cursor = Cursors.WaitCursor;
                 EdgeResult result = _edgeDetector.DetectEdgesOnArc(_imageHelper.CurrentImage, arcRoi, parameters);
                 _latestArcRoi = arcRoi;
+                // 切線弧偵測 (DetectEdgesOnArc) 是與扇形不同的演算法：取得弧 ROI 擁有權，
+                // 使 overlay 回到 DrawArcBand、主 Detect 回到矩形路徑（比照 OnImageRoiSelected
+                // 切換 ROI 型別時的重置）。要再跑扇形量測，重新拖曳扇形即可。
+                _sectorRoiActive = false;
                 _latestEdgeRoi = null;
                 _imageHelper.EndRect2Edit();   // 結束殘留的邊緣 rect2 編輯把手（M5），避免與弧帶並存
                 _latestEdgeResult = result;
@@ -2265,6 +2269,7 @@ namespace FlashMeasurementSystem
             }
             _latestEdgeRoi = null;
             _latestArcRoi = null;
+            _sectorRoiActive = false;
             _latestEdgeResult = null;
             _latestLineFittingResult = null;
             _latestCircleFittingResult = null;
