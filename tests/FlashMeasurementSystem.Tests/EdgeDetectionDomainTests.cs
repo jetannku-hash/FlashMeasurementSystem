@@ -192,6 +192,13 @@ namespace FlashMeasurementSystem.Tests
                 r.EdgePoints.Add(new EdgePoint { Row = 1.0, Column = 2.0, Amplitude = 30.0, Distance = 0.0 });
                 return r;
             }
+
+            public EdgeResult DetectEdgesInAnnularSector(object image, ArcMeasureRoi roi, EdgeDetectionParameters parameters)
+            {
+                var r = new EdgeResult();
+                r.EdgePoints.Add(new EdgePoint { Row = 1.0, Column = 2.0, Amplitude = 30.0, Distance = 0.0 });
+                return r;
+            }
         }
     }
 }
