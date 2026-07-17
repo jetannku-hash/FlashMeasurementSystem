@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using FlashMeasurementSystem.Domain.EdgeDetection;
 using FlashMeasurementSystem.Domain.Gdt;
 using FlashMeasurementSystem.Domain.GearAnalysis;
+using FlashMeasurementSystem.Domain.PcdAnalysis;
 using FlashMeasurementSystem.Domain.Tolerance;
 
 namespace FlashMeasurementSystem.Domain.Roi
@@ -38,5 +39,9 @@ namespace FlashMeasurementSystem.Domain.Roi
         // v8：齒輪分析參數（重用 GearAnalysisParameters DTO）。null＝非齒輪工具。
         // 齒輪工具（ToolType="gear"）必填；量測環帶用 ArcRoi。
         public GearAnalysisParameters Gear { get; set; } = null;
+
+        // v9：PCD 螺栓孔圈分析參數（重用 PcdAnalysisParameters DTO）。null＝非 pcd 工具。
+        // pcd 工具（ToolType="pcd"）必填；量測環帶用 ArcRoi。
+        public PcdAnalysisParameters Pcd { get; set; } = null;
     }
 }
