@@ -22,7 +22,8 @@ namespace FlashMeasurementSystem.Infrastructure.Tolerance
 
             if (items == null)
             {
-                result.AllOk = true;
+                // audit #5：無資料判定不算 PASS（避免空洞 PASS）。
+                result.AllOk = false;
                 return result;
             }
 
@@ -121,7 +122,8 @@ namespace FlashMeasurementSystem.Infrastructure.Tolerance
                 result.Items.Add(j);
             }
 
-            result.AllOk = result.NgCount == 0;
+            // audit #5：AllOk 需真的判定過至少一項；空清單或全略過（items 皆 null）不算 PASS。
+            result.AllOk = result.NgCount == 0 && result.Items.Count > 0;
             return result;
         }
     }

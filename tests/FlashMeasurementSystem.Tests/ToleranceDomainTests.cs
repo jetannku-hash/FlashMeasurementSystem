@@ -42,10 +42,22 @@ namespace FlashMeasurementSystem.Tests
             // ─── 真實 ToleranceJudger 邏輯 ──────────────────────────
             IToleranceJudger judger = new ToleranceJudger();
 
-            // null 輸入 → AllOk true、無項目
+            // 修正契約（audit #5）：無資料判定 ≠ PASS。null / 空清單 / 全略過 → AllOk=false（避免空洞 PASS）。
             OverallJudgment nullResult = judger.Judge(null);
-            AssertEqual(true, nullResult.AllOk, "Null input is AllOk");
+            AssertEqual(false, nullResult.AllOk, "Null input is not a vacuous PASS");
             AssertEqual(0, nullResult.Items.Count, "Null input no items");
+
+            OverallJudgment emptyJudged = judger.Judge(new List<ToleranceItemInput>());
+            AssertEqual(false, emptyJudged.AllOk, "Empty list is not a vacuous PASS");
+            AssertEqual(0, emptyJudged.Items.Count, "Empty list no items");
+
+            OverallJudgment allNull = judger.Judge(new List<ToleranceItemInput> { null, null });
+            AssertEqual(false, allNull.AllOk, "All-null items is not a vacuous PASS");
+            AssertEqual(0, allNull.Items.Count, "All-null items no items");
+
+            // 正常單筆 OK 仍為 AllOk=true（確認修正未破壞正常通過）
+            OverallJudgment okOne = judger.Judge(new List<ToleranceItemInput> { MakeItem("OK1", 50.0, 50.0, -0.01, 0.01) });
+            AssertEqual(true, okOne.AllOk, "Single OK item is AllOk");
 
             // 一組混合案例：中央 OK、接近邊界 OK、超上限 NG、低於下限 NG
             var items = new List<ToleranceItemInput>
