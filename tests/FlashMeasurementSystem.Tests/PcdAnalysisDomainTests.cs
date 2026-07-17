@@ -23,6 +23,18 @@ namespace FlashMeasurementSystem.Tests
             return pts;
         }
 
+        // N 孔均分於以 (cr,cc) 為圓心、半徑 r 的圓（同 Ring 的 row=cr+r·sinθ, col=cc+r·cosθ 慣例）。
+        private static List<HolePoint> RingAt(int n, double cr, double cc, double r)
+        {
+            var pts = new List<HolePoint>();
+            for (int i = 0; i < n; i++)
+            {
+                double th = (i * 360.0 / n) * Math.PI / 180.0;
+                pts.Add(new HolePoint { Row = cr + r * Math.Sin(th), Col = cc + r * Math.Cos(th) });
+            }
+            return pts;
+        }
+
         public static void Run()
         {
             var p = new PcdAnalysisParameters { NominalHoleCount = 6, NominalPcdMm = 5.0,
@@ -57,6 +69,28 @@ namespace FlashMeasurementSystem.Tests
             var dd = new double[6]; dd[4] = 2.0;
             var ra = PcdAnalyzer.Analyze(Ring(6, dDeg: dd), Px, p);
             AssertEqual(false, ra.AngularOk, "angular dev → AngularOk false");
+
+            // 非對稱圓心 → 抓 Row/Col 對調（對稱圓心測不到）
+            var asym = PcdAnalyzer.Analyze(RingAt(6, 400, 600, 250), Px, p);
+            AssertClose(400.0, asym.CenterRow, 1e-6, "asym CenterRow 400");
+            AssertClose(600.0, asym.CenterCol, 1e-6, "asym CenterCol 600");
+            AssertClose(500.0, asym.PcdPx, 1e-6, "asym PcdPx 500");
+            // Holes 依角度升冪排序
+            for (int i = 1; i < asym.Holes.Count; i++)
+            {
+                double a0 = Math.Atan2(asym.Holes[i - 1].Row - asym.CenterRow, asym.Holes[i - 1].Col - asym.CenterCol);
+                double a1 = Math.Atan2(asym.Holes[i].Row - asym.CenterRow, asym.Holes[i].Col - asym.CenterCol);
+                if (a0 < 0) a0 += 2 * Math.PI; if (a1 < 0) a1 += 2 * Math.PI;
+                if (a1 < a0) throw new InvalidOperationException("asym holes not sorted ascending by angle");
+            }
+
+            // 角度 0/2π 接縫：全體 −30° → 孔 0 落 −30° 繞回 ~330°，測跨接縫的排序/角距數學
+            var seam = new double[6]; for (int i = 0; i < 6; i++) seam[i] = -30.0;
+            var rs = PcdAnalyzer.Analyze(Ring(6, dDeg: seam), Px, p);
+            AssertEqual(6, rs.HoleCount, "seam count 6");
+            AssertClose(500.0, rs.PcdPx, 1e-6, "seam PcdPx 500");
+            AssertClose(0.0, rs.AngularMaxDevDeg, 1e-6, "seam angular dev 0");
+            AssertEqual(true, rs.IsPass, "seam PASS");
 
             // PCD 邊界：標稱設成剛好內側 / 剛好外側夾 ≤ inclusive
             // PcdToleranceMm 加 1e-9 餘裕以吸收 Kasa 擬合的浮點捨入誤差（PcdMm 理論值 5.0 實際約
