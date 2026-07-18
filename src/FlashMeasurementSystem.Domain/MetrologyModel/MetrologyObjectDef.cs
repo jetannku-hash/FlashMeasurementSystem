@@ -43,6 +43,12 @@ namespace FlashMeasurementSystem.Domain.MetrologyModel
         // 對主要擬合參數（如圓的半徑）的選用公差，沿用既有 1D 的 ToleranceSpec。
         public ToleranceSpec Tolerance { get; set; } = null;
 
+        // v11：每「判定量」(Quantity key) 一個公差（方案B，px）。空清單＝不判定（IsOk=null）。
+        // 判定量由 Shape 決定（見 MetrologyJudger.QuantitiesOf）：circle=diameter；ellipse=major_axis/minor_axis；
+        // rectangle=side1/side2；line=length。舊 Tolerance 欄保留但未使用。
+        public System.Collections.Generic.List<MetrologyItemTolerance> Tolerances { get; set; }
+            = new System.Collections.Generic.List<MetrologyItemTolerance>();
+
         /// <summary>
         /// 各 Shape 在 HALCON 下能擬合的最少量測區數（量測矩形數需 ≥ 此值才有解）。
         /// 數值來源：HALCON 17.12 reference（02-RESEARCH.md 操作表 L159-268）。

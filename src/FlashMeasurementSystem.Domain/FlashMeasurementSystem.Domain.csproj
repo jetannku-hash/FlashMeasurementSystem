@@ -102,6 +102,9 @@
     <Compile Include="MetrologyModel\MetrologyModelDef.cs" />
     <Compile Include="MetrologyModel\MetrologyObjectResult.cs" />
     <Compile Include="MetrologyModel\MetrologyModelResult.cs" />
+    <Compile Include="MetrologyModel\MetrologyItemTolerance.cs" />
+    <Compile Include="MetrologyModel\MetrologyJudgment.cs" />
+    <Compile Include="MetrologyModel\MetrologyJudger.cs" />
     <Compile Include="Roi\MeasurementTool.cs" />
     <Compile Include="Roi\Recipe.cs" />
     <Compile Include="Roi\RecipeIssue.cs" />

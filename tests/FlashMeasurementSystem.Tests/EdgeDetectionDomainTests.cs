@@ -149,6 +149,8 @@ namespace FlashMeasurementSystem.Tests
             Console.WriteLine("CsvReportWriterTests passed");
             MetrologyModelDomainTests.Run();
             Console.WriteLine("MetrologyModelDomainTests passed");
+            MetrologyJudgerTests.Run();
+            Console.WriteLine("MetrologyJudgerTests passed");
             DxfComparisonDomainTests.Run();
             Console.WriteLine("DxfComparisonDomainTests passed");
             ArcRecipeToolDomainTests.Run();

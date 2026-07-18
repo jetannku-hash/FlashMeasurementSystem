@@ -28,7 +28,9 @@ namespace FlashMeasurementSystem.Domain.Roi
         //     純加欄位、向後相容、無遷移碼：舊檔載入 Pcd=null、無 pcd 工具，行為不變。
         // v10：circle 工具的 ROI 形狀選擇（MeasurementTool.RoiShape，加性欄，預設 "rect"）。
         //     純加欄位、向後相容、無遷移碼：舊檔載入 RoiShape="rect"＝走既有矩形路徑，行為不變。
-        public int SchemaVersion { get; set; } = 10;
+        // v11：量測模型物件每判定量公差（MetrologyObjectDef.Tolerances，加性欄，預設空清單）。
+        //     純加欄位、向後相容、無遷移碼：舊檔載入 Tolerances=空清單＝不判定（IsOk=null），行為不變。
+        public int SchemaVersion { get; set; } = 11;
         public string RecipeId { get; set; } = "";
         public string Name { get; set; } = "";
 
