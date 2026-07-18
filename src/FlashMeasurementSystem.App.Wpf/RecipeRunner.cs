@@ -71,6 +71,8 @@ namespace FlashMeasurementSystem
         public double AngleRadiusPx;    // angle 弧線半徑（供畫弧）
         public double AngleStartRad;    // angle 弧起點方位角（供畫弧）
         public bool? IsOk;             // 公差判定；null = 無判定
+        // v11：metrology 物件的每「判定量」判定結果（供 CSV 多列 + overlay 上色）。無公差時為 null/空。
+        public List<FlashMeasurementSystem.Domain.MetrologyModel.MetrologyJudgment> MetrologyJudgments;
         public string ValueText;       // 結果表顯示文字
         public string Message;         // 失敗/說明
         public GeometricPrimitive OutputPrimitive;  // A5：此工具的幾何輸出（resolver / 下游消費）
@@ -388,9 +390,18 @@ namespace FlashMeasurementSystem
 
                 if (mResult != null && mResult.Objects != null)
                 {
-                    foreach (MetrologyObjectResult o in mResult.Objects)
+                    // 依「索引」而非 Id 配對 def↔result：HalconMetrologyModelRunner.Apply 對
+                    // appliedModel.Objects 逐一 for (i=0..n-1) 依序 QueryResult/preFailure Add 進
+                    // mResult.Objects，順序與 appliedModel.Objects 保證 1:1；Id 預設為 ""，若使用者
+                    // 未填 Id 會造成 Dictionary key 碰撞、配對到錯的 def，索引配對更穩健。
+                    List<MetrologyObjectDef> appliedDefs = appliedModel.Objects;
+                    for (int i = 0; i < mResult.Objects.Count; i++)
                     {
-                        ToolRunResult res = MapToToolRunResult(o);
+                        MetrologyObjectResult o = mResult.Objects[i];
+                        MetrologyObjectDef def = (appliedDefs != null && i < appliedDefs.Count) ? appliedDefs[i] : null;
+                        List<MetrologyJudgment> mJudgments = MetrologyJudger.Judge(def, o);   // 設 o.IsOk
+                        ToolRunResult res = MapToToolRunResult(o);                              // 讀 o.IsOk（已設）
+                        res.MetrologyJudgments = mJudgments;
                         results.Add(res);
                         if (!string.IsNullOrEmpty(o.Id)) byId[o.Id] = res;
                     }
@@ -415,7 +426,7 @@ namespace FlashMeasurementSystem
                     MeasureLength1 = o.MeasureLength1, MeasureLength2 = o.MeasureLength2,
                     MeasureSigma = o.MeasureSigma, MeasureThreshold = o.MeasureThreshold,
                     MeasureDistance = o.MeasureDistance, NumMeasures = o.NumMeasures,
-                    Tolerance = o.Tolerance
+                    Tolerance = o.Tolerance, Tolerances = o.Tolerances
                 };
                 switch (o.Shape)
                 {
