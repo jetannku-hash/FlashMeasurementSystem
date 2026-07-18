@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Windows.Forms;
 using FlashMeasurementSystem.Domain.MetrologyModel;
 using FlashMeasurementSystem.Domain.Roi;
+using FlashMeasurementSystem.Domain.Tolerance;
 
 namespace FlashMeasurementSystem
 {
@@ -35,6 +36,15 @@ namespace FlashMeasurementSystem
         private NumericUpDown _row, _col, _radius;                       // circle / centre
         private NumericUpDown _phi, _radius1, _radius2, _length1, _length2; // ellipse / rectangle
         private NumericUpDown _ml1, _ml2, _sigma, _threshold, _measureDist, _numMeasures; // measure params
+
+        // 公差（px）— 固定兩個 slot，依 Shape 對應 MetrologyJudger.JudgedQuantityKeys 綁定。
+        private Label _slotALabel, _slotBLabel;
+        private CheckBox _slotAEnable, _slotBEnable;
+        private NumericUpDown _slotANominal, _slotALower, _slotAUpper;
+        private NumericUpDown _slotBNominal, _slotBLower, _slotBUpper;
+        private FlowLayoutPanel _slotAFlow, _slotBFlow;
+        private RowStyle _slotARowStyle, _slotBRowStyle;
+        private string _slotAKey, _slotBKey;
 
         public MetrologyModelEditorForm(Recipe recipe, int imageWidth, int imageHeight, Action<Recipe> savedCallback)
         {
@@ -119,6 +129,12 @@ namespace FlashMeasurementSystem
             _measureDist = AddNumeric(t, "MeasureDistance (0=use NumMeasures)", ref r, 0, 100000, 2, 1, 10);
             _numMeasures = AddNumeric(t, "NumMeasures (0=use Distance)", ref r, 0, 100000, 0, 1, 0);
 
+            t.RowStyles.Add(new RowStyle(SizeType.Absolute, 22F));
+            t.Controls.Add(new Label { Text = "公差 (px)", Dock = DockStyle.Fill, Font = new Font(Font, FontStyle.Bold) }, 0, r);
+            t.RowCount = ++r;
+            BuildToleranceSlot(t, ref r, out _slotALabel, out _slotAEnable, out _slotANominal, out _slotALower, out _slotAUpper, out _slotAFlow, out _slotARowStyle);
+            BuildToleranceSlot(t, ref r, out _slotBLabel, out _slotBEnable, out _slotBNominal, out _slotBLower, out _slotBUpper, out _slotBFlow, out _slotBRowStyle);
+
             _warnLabel = (Label)AddRow(t, "", ref r, new Label { Dock = DockStyle.Fill, ForeColor = Color.DarkRed, AutoSize = true });
 
             right.Controls.Add(t);
@@ -160,6 +176,14 @@ namespace FlashMeasurementSystem
             if (_updating || _selected == null) return;
             _selected.Shape = ParseShape(_shapeCombo.SelectedItem as string);
             SetGeometryEnabledForShape(_selected.Shape);
+            _updating = true;
+            try
+            {
+                RebindToleranceSlots(_selected.Shape);
+                LoadToleranceSlot(_slotAKey, _slotAEnable, _slotANominal, _slotALower, _slotAUpper);
+                LoadToleranceSlot(_slotBKey, _slotBEnable, _slotBNominal, _slotBLower, _slotBUpper);
+            }
+            finally { _updating = false; }
             RefreshSelectedItemText();
             UpdateWarning();
         }
@@ -180,6 +204,9 @@ namespace FlashMeasurementSystem
                 _sigma.Value = Clamp(d.MeasureSigma, _sigma); _threshold.Value = Clamp(d.MeasureThreshold, _threshold);
                 _measureDist.Value = Clamp(d.MeasureDistance, _measureDist); _numMeasures.Value = Clamp(d.NumMeasures, _numMeasures);
                 SetGeometryEnabledForShape(d.Shape);
+                RebindToleranceSlots(d.Shape);
+                LoadToleranceSlot(_slotAKey, _slotAEnable, _slotANominal, _slotALower, _slotAUpper);
+                LoadToleranceSlot(_slotBKey, _slotBEnable, _slotBNominal, _slotBLower, _slotBUpper);
             }
             finally { _updating = false; }
             UpdateWarning();
@@ -198,6 +225,107 @@ namespace FlashMeasurementSystem
             _selected.MeasureSigma = (double)_sigma.Value; _selected.MeasureThreshold = (double)_threshold.Value;
             _selected.MeasureDistance = (double)_measureDist.Value; _selected.NumMeasures = (int)_numMeasures.Value;
             UpdateWarning();
+        }
+
+        // 依 Shape 決定 slot A/B 對應哪個判定量 key（順序即 MetrologyJudger.JudgedQuantityKeys 順序）。
+        // Slot A 對 4 種 Shape 皆存在；Slot B 只在 ellipse/rectangle 存在，否則隱藏。
+        private void RebindToleranceSlots(MetrologyObjectType shape)
+        {
+            List<KeyValuePair<string, string>> keys = MetrologyJudger.JudgedQuantityKeys(shape);
+
+            _slotAKey = keys.Count > 0 ? keys[0].Key : null;
+            _slotALabel.Text = keys.Count > 0 ? keys[0].Value : "";
+            SetSlotRowVisible(_slotALabel, _slotAFlow, _slotARowStyle, keys.Count > 0);
+
+            _slotBKey = keys.Count > 1 ? keys[1].Key : null;
+            _slotBLabel.Text = keys.Count > 1 ? keys[1].Value : "";
+            SetSlotRowVisible(_slotBLabel, _slotBFlow, _slotBRowStyle, keys.Count > 1);
+        }
+
+        private static void SetSlotRowVisible(Label labelCtl, Control flow, RowStyle rowStyle, bool visible)
+        {
+            labelCtl.Visible = visible;
+            flow.Visible = visible;
+            rowStyle.Height = visible ? 28F : 0F;
+        }
+
+        // 依 key 從 _selected.Tolerances 找出既有公差載入 slot；找不到則取消啟用、欄位歸零。呼叫端須在 _updating guard 內。
+        private void LoadToleranceSlot(string key, CheckBox enableCtl, NumericUpDown nominal, NumericUpDown lower, NumericUpDown upper)
+        {
+            if (key == null) return;
+            MetrologyItemTolerance found = null;
+            if (_selected.Tolerances != null)
+            {
+                foreach (MetrologyItemTolerance it in _selected.Tolerances)
+                    if (it != null && it.Quantity == key) { found = it; break; }
+            }
+            if (found != null && found.Spec != null)
+            {
+                enableCtl.Checked = true;
+                nominal.Value = Clamp(found.Spec.Nominal, nominal);
+                lower.Value = Clamp(found.Spec.LowerTolerance, lower);
+                upper.Value = Clamp(found.Spec.UpperTolerance, upper);
+            }
+            else
+            {
+                enableCtl.Checked = false;
+                nominal.Value = 0; lower.Value = 0; upper.Value = 0;
+            }
+        }
+
+        // 任一公差欄位變更 → 依可見且啟用的 slot 重建 _selected.Tolerances（未啟用/隱藏的 slot 不寫入 → 該量不判定）。
+        private void WriteTolerances()
+        {
+            if (_updating || _selected == null) return;
+            var list = new List<MetrologyItemTolerance>();
+            if (_slotAKey != null && _slotAEnable.Checked)
+                list.Add(new MetrologyItemTolerance
+                {
+                    Quantity = _slotAKey,
+                    Spec = new ToleranceSpec { Nominal = (double)_slotANominal.Value, LowerTolerance = (double)_slotALower.Value, UpperTolerance = (double)_slotAUpper.Value, Unit = "px" }
+                });
+            if (_slotBKey != null && _slotBEnable.Checked)
+                list.Add(new MetrologyItemTolerance
+                {
+                    Quantity = _slotBKey,
+                    Spec = new ToleranceSpec { Nominal = (double)_slotBNominal.Value, LowerTolerance = (double)_slotBLower.Value, UpperTolerance = (double)_slotBUpper.Value, Unit = "px" }
+                });
+            _selected.Tolerances = list;
+            UpdateWarning();
+        }
+
+        private void BuildToleranceSlot(TableLayoutPanel t, ref int row, out Label labelCtl, out CheckBox enableCtl,
+            out NumericUpDown nominal, out NumericUpDown lower, out NumericUpDown upper, out FlowLayoutPanel flow, out RowStyle rowStyle)
+        {
+            rowStyle = new RowStyle(SizeType.Absolute, 28F);
+            t.RowStyles.Add(rowStyle);
+
+            labelCtl = new Label { Text = "", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft };
+            t.Controls.Add(labelCtl, 0, row);
+
+            flow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, AutoSize = false };
+
+            enableCtl = new CheckBox { Text = "啟用", AutoSize = true, Margin = new Padding(0, 5, 8, 0) };
+            enableCtl.CheckedChanged += (s, e) => WriteTolerances();
+            flow.Controls.Add(enableCtl);
+
+            flow.Controls.Add(new Label { Text = "Nominal", AutoSize = true, TextAlign = ContentAlignment.MiddleLeft, Margin = new Padding(4, 7, 2, 0) });
+            nominal = new NumericUpDown { Width = 70, Minimum = 0, Maximum = 100000, DecimalPlaces = 2, Increment = 1, Margin = new Padding(0, 3, 0, 0) };
+            nominal.ValueChanged += (s, e) => WriteTolerances();
+            flow.Controls.Add(nominal);
+
+            flow.Controls.Add(new Label { Text = "下限", AutoSize = true, TextAlign = ContentAlignment.MiddleLeft, Margin = new Padding(4, 7, 2, 0) });
+            lower = new NumericUpDown { Width = 70, Minimum = -100000, Maximum = 100000, DecimalPlaces = 2, Increment = 0.1M, Margin = new Padding(0, 3, 0, 0) };
+            lower.ValueChanged += (s, e) => WriteTolerances();
+            flow.Controls.Add(lower);
+
+            flow.Controls.Add(new Label { Text = "上限", AutoSize = true, TextAlign = ContentAlignment.MiddleLeft, Margin = new Padding(4, 7, 2, 0) });
+            upper = new NumericUpDown { Width = 70, Minimum = -100000, Maximum = 100000, DecimalPlaces = 2, Increment = 0.1M, Margin = new Padding(0, 3, 0, 0) };
+            upper.ValueChanged += (s, e) => WriteTolerances();
+            flow.Controls.Add(upper);
+
+            t.Controls.Add(flow, 1, row);
+            t.RowCount = ++row;
         }
 
         private void UpdateWarning()
@@ -252,6 +380,9 @@ namespace FlashMeasurementSystem
         {
             _nameBox.Enabled = _shapeCombo.Enabled = on;
             _ml1.Enabled = _ml2.Enabled = _sigma.Enabled = _threshold.Enabled = _measureDist.Enabled = _numMeasures.Enabled = on;
+            _slotAEnable.Enabled = _slotBEnable.Enabled = on;
+            _slotANominal.Enabled = _slotALower.Enabled = _slotAUpper.Enabled = on;
+            _slotBNominal.Enabled = _slotBLower.Enabled = _slotBUpper.Enabled = on;
             if (!on)
             {
                 _rowBegin.Enabled = _colBegin.Enabled = _rowEnd.Enabled = _colEnd.Enabled = false;
@@ -339,8 +470,26 @@ namespace FlashMeasurementSystem
                 MeasureLength1 = s.MeasureLength1, MeasureLength2 = s.MeasureLength2,
                 MeasureSigma = s.MeasureSigma, MeasureThreshold = s.MeasureThreshold,
                 MeasureDistance = s.MeasureDistance, NumMeasures = s.NumMeasures,
-                Tolerance = s.Tolerance
+                Tolerance = s.Tolerance,
+                Tolerances = CloneTolerances(s.Tolerances)
             };
+        }
+
+        private static List<MetrologyItemTolerance> CloneTolerances(List<MetrologyItemTolerance> src)
+        {
+            var list = new List<MetrologyItemTolerance>();
+            if (src == null) return list;
+            foreach (MetrologyItemTolerance it in src)
+            {
+                if (it == null) continue;
+                ToleranceSpec spec = it.Spec == null ? null : new ToleranceSpec
+                {
+                    Nominal = it.Spec.Nominal, LowerTolerance = it.Spec.LowerTolerance,
+                    UpperTolerance = it.Spec.UpperTolerance, Unit = it.Spec.Unit
+                };
+                list.Add(new MetrologyItemTolerance { Quantity = it.Quantity, Spec = spec });
+            }
+            return list;
         }
     }
 }
