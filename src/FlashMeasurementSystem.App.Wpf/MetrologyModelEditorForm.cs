@@ -60,8 +60,10 @@ namespace FlashMeasurementSystem
             }
 
             Text = "Metrology Model Editor";
-            MinimumSize = new Size(660, 520);
-            Size = new Size(660, 520);
+            // 800 寬：右側屬性欄 col1（Percent 100%）需容納公差列的 啟用/Nominal/下限/上限 四組控制
+            // （約 365px），660 寬時 col1 只剩 ~320px 會把「上限」切掉。
+            MinimumSize = new Size(800, 520);
+            Size = new Size(800, 520);
             StartPosition = FormStartPosition.CenterParent;
 
             BuildLayout();

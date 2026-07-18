@@ -1928,6 +1928,10 @@ namespace FlashMeasurementSystem
 
                     if (!string.IsNullOrEmpty(_loadedRecipePath))
                     {
+                        // 以檔名補上 RecipeId/Name（全新或既有但無名的量測配方，否則報表 Recipe 欄空白）。
+                        string baseName = Path.GetFileNameWithoutExtension(_loadedRecipePath);
+                        if (string.IsNullOrEmpty(_loadedRecipe.RecipeId)) _loadedRecipe.RecipeId = baseName;
+                        if (string.IsNullOrEmpty(_loadedRecipe.Name)) _loadedRecipe.Name = baseName;
                         try { _recipeStore.Save(_loadedRecipe, _loadedRecipePath); }
                         catch (Exception ex)
                         {
