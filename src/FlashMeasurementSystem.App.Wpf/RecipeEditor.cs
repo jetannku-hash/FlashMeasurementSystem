@@ -757,6 +757,8 @@ namespace FlashMeasurementSystem
             a.AngleStart = (double)_arcAngleStartNumeric.Value * Math.PI / 180.0;
             a.AngleExtent = (double)_arcAngleExtentNumeric.Value * Math.PI / 180.0;
             a.AnnulusRadius = (double)_arcAnnulusNumeric.Value;
+            // 改數值即回到「即時弧帶/扇形」overlay（若剛試測過，靜態結果 overlay 會蓋住即時框）。
+            InstallArcBandOverlay();
             if (_imageHelper.IsEditingArc)
             {
                 // 重下把手座標（即時預覽）；BeginArcEdit 內部會 Redraw，弧帶 persistent overlay 一併重畫。
@@ -1432,7 +1434,14 @@ namespace FlashMeasurementSystem
             _imageHelper.SetPersistentOverlayAction(() =>
             {
                 var a = _selectedTool?.ArcRoi;
-                if (a != null && a.IsDefined)
+                if (a == null || !a.IsDefined) return;
+                // 扇形 circle：畫封閉扇形（DrawSectorRoi，含起訖兩條徑向邊），與主頁一致，並和「弧形檢測開口環帶」
+                // 明確區分，避免使用者誤以為是弧形抓邊工具。弧形/齒輪/PCD 維持開口環帶（DrawArcBand）。
+                bool secCircle = _selectedTool != null && _selectedTool.ToolType == "circle" && _selectedTool.RoiShape == "sector";
+                if (secCircle)
+                    _imageHelper.Annotator.DrawSectorRoi(a.CenterRow, a.CenterCol, a.Radius,
+                        a.AnnulusRadius, a.AngleStart, a.AngleExtent);
+                else
                     _imageHelper.Annotator.DrawArcBand(a.CenterRow, a.CenterCol, a.Radius,
                         a.AngleStart, a.AngleExtent, a.AnnulusRadius);
             });
@@ -1515,6 +1524,9 @@ namespace FlashMeasurementSystem
             a.AnnulusRadius = annulus;
 
             LoadArcFieldsFromSelectedTool();
+            // 拖把手即回到「即時弧帶/扇形」overlay：若剛按過「在此試測」，其靜態結果 overlay 會蓋住即時框，
+            // 這裡重裝即時 overlay，讓框隨把手動態更新（拖曳後由 HWindowControlHelper 的 Redraw 呈現）。
+            InstallArcBandOverlay();
             MarkDirty();
         }
 
