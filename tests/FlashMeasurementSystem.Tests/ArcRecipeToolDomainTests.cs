@@ -15,7 +15,7 @@ namespace FlashMeasurementSystem.Tests
             // ─── 預設：非弧工具 ArcRoi 為 null（既有工具不受影響）───
             var plain = new MeasurementTool();
             AssertEqual(null, plain.ArcRoi, "Default ArcRoi is null");
-            AssertEqual(8, Recipe.Default().SchemaVersion, "SchemaVersion is 8");
+            AssertEqual(9, Recipe.Default().SchemaVersion, "SchemaVersion is 9");
 
             // ─── RecipeStore round-trip：ArcRoi 六個欄位逐一保留 ───
             var arc = new ArcMeasureRoi

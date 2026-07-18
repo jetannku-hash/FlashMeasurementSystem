@@ -26,6 +26,8 @@ using FlashMeasurementSystem.Domain.Roi;
 using FlashMeasurementSystem.Domain.Calibration;
 using FlashMeasurementSystem.Halcon.CoordinateSystem;
 using FlashMeasurementSystem.Halcon.MetrologyModel;
+using FlashMeasurementSystem.Application.HoleDetection;
+using FlashMeasurementSystem.Halcon.HoleDetection;
 using FlashMeasurementSystem.Infrastructure.Roi;
 using FlashMeasurementSystem.Infrastructure.Tolerance;
 using FlashMeasurementSystem.Infrastructure.Calibration;
@@ -50,6 +52,7 @@ namespace FlashMeasurementSystem
         private readonly HalconDistanceMeasurer _distanceMeasurer = new HalconDistanceMeasurer();
         private readonly HalconAngleMeasurer _angleMeasurer = new HalconAngleMeasurer();
         private readonly HalconMetrologyModelRunner _metrologyRunner = new HalconMetrologyModelRunner();
+        private readonly IHoleDetector<HImage> _holeDetector = new HalconHoleDetector();
         private EdgeDetectionRoi _latestEdgeRoi;
         private double _editCenterRow, _editCenterCol;
         private EdgeResult _latestEdgeResult;
@@ -101,7 +104,7 @@ namespace FlashMeasurementSystem
             _imageHelper.RoiSelected += OnImageRoiSelected;
 
             // 配方執行引擎：以既有 adapters 注入（邊緣 + 圓/線擬合 + 公差 + 座標映射）。
-            _recipeRunner = new RecipeRunner(_edgeDetector, _circleFitter, _lineFitter, _distanceMeasurer, _angleMeasurer, _judger, _coordinateMapper, _metrologyRunner);
+            _recipeRunner = new RecipeRunner(_edgeDetector, _circleFitter, _lineFitter, _distanceMeasurer, _angleMeasurer, _judger, _coordinateMapper, _metrologyRunner, _holeDetector);
             _workflow = new MeasurementWorkflow(_iqc, _templateMatcher, _recipeRunner, _judger, _reportWriter);
             // 一鍵量測逐階段進度：StateChanged 在 UI 執行緒同步觸發，於 status bar 即時顯示。
             _workflow.StateChanged += OnWorkflowStateChanged;
@@ -1521,6 +1524,7 @@ namespace FlashMeasurementSystem
                         an.DrawText(r.ValueText ?? string.Empty, (int)mTextRow, (int)mTextCol, mColor);
                     }
 
+                    // 結果表值欄由 DrawResultTable 統一裁到欄寬（過長截斷加「…」），任何工具皆不溢到判定欄。
                     rows.Add(new OverlayResultRow { Name = r.Name, ValueText = r.ValueText, IsOk = r.IsOk });
                 }
 
@@ -1574,7 +1578,36 @@ namespace FlashMeasurementSystem
                             an.DrawCross(a.CenterRow + a.Radius * Math.Sin(th), a.CenterCol + a.Radius * Math.Cos(th), 18, "magenta");
                         }
                     }
-                    an.DrawText(r.ValueText ?? (r.Name ?? string.Empty), (int)a.CenterRow, (int)a.CenterCol, gearColor);
+                    // 影像上只標工具名（比照 arc/pcd），避免三項長字串疊在環帶/齒中心上；數值看左上結果表 HUD。
+                    an.DrawText(r.Name ?? string.Empty, (int)a.CenterRow, (int)a.CenterCol, gearColor);
+                }
+
+                // PCD 工具結果：Roi 刻意留 null（同 arc/gear），畫框那段不會經過。畫量測環帶 + 擬合節圓
+                // + 各孔中心十字 + 缺孔提示（洋紅）+ 名稱/數值。偵測到的孔用原始質心（hole.Row/Col）畫十字；
+                // 僅缺孔提示需由角度→(row,col)（row=cr+R·sinθ、col=cc+R·cosθ）換算落到節圓上。
+                foreach (ToolRunResult r in results)
+                {
+                    if (r == null || r.ToolType != "pcd" || r.PlacedArc == null) continue;
+                    string pcdColor = r.IsOk == true ? "green" : (r.IsOk == false ? "red" : "yellow");
+                    ArcMeasureRoi a = r.PlacedArc;
+                    an.DrawArcBand(a.CenterRow, a.CenterCol, a.Radius, a.AngleStart, a.AngleExtent, a.AnnulusRadius);
+                    if (r.Pcd != null && r.Pcd.Success)
+                    {
+                        var pcd = r.Pcd;
+                        double pcdRadiusPx = pcd.PcdPx / 2.0;
+                        an.DrawCircle(pcd.CenterRow, pcd.CenterCol, pcdRadiusPx, pcdColor);   // 擬合節圓
+                        foreach (var hole in pcd.Holes)
+                            an.DrawCross(hole.Row, hole.Col, 12, pcdColor);
+                        foreach (double hintDeg in pcd.MissingHoleHintsDeg)
+                        {
+                            double th = hintDeg * Math.PI / 180.0;
+                            an.DrawCross(pcd.CenterRow + pcdRadiusPx * Math.Sin(th),
+                                         pcd.CenterCol + pcdRadiusPx * Math.Cos(th), 18, "magenta");
+                        }
+                    }
+                    // 影像上只標工具名（比照 arc 分支），避免四項長字串疊在環帶/節圓上；
+                    // 數值看左上結果表 HUD。名稱錨在弧心（節圓中心為空，不會蓋到孔/缺孔標記）。
+                    an.DrawText(r.Name ?? string.Empty, (int)a.CenterRow, (int)a.CenterCol, pcdColor);
                 }
                 an.DrawResultTable(rows);
             });

@@ -24,7 +24,9 @@ namespace FlashMeasurementSystem.Domain.Roi
         //     純加欄位、向後相容、無遷移碼：舊檔載入時 ArcRoi=null、無 arc 工具，1D 流程行為不變。
         // v8：齒輪工具（MeasurementTool.Gear，加性 nullable 欄）+ ToolType="gear"。
         //     純加欄位、向後相容、無遷移碼：舊檔載入時 Gear=null、無 gear 工具，行為不變。
-        public int SchemaVersion { get; set; } = 8;
+        // v9：PCD 螺栓孔圈工具（MeasurementTool.Pcd，加性 nullable 欄）+ ToolType="pcd"。
+        //     純加欄位、向後相容、無遷移碼：舊檔載入 Pcd=null、無 pcd 工具，行為不變。
+        public int SchemaVersion { get; set; } = 9;
         public string RecipeId { get; set; } = "";
         public string Name { get; set; } = "";
 

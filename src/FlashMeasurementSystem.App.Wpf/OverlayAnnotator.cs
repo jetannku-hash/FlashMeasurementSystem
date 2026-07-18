@@ -368,7 +368,8 @@ namespace FlashMeasurementSystem
                     HOperatorSet.SetColor(_window, color);
                     int y = 12 + (i + 1) * lineH;
                     WriteAt(y, col1, r.Name ?? string.Empty);
-                    WriteAt(y, col2, r.ValueText ?? string.Empty);
+                    // 值欄裁到欄寬（col2→col3 之間留 8px），過長截斷加「…」，任何工具的長字串皆不溢到判定欄。
+                    WriteAt(y, col2, ClipToWidth(r.ValueText ?? string.Empty, col3 - col2 - 8));
                     WriteAt(y, col3, r.IsOk == null ? string.Empty : (r.IsOk.Value ? "OK" : "NG"));
                 }
             }
@@ -383,6 +384,24 @@ namespace FlashMeasurementSystem
         {
             HOperatorSet.SetTposition(_window, row, col);
             HOperatorSet.WriteString(_window, text);
+        }
+
+        // 以目前視窗字型量測字串寬度，超過 maxWidthPx 就從尾端逐字截斷並補「…」。
+        // 用於結果表值欄，確保任何工具的長字串都不會溢出到判定欄。呼叫前字型須已設定。
+        private string ClipToWidth(string text, int maxWidthPx)
+        {
+            if (string.IsNullOrEmpty(text) || maxWidthPx <= 0) return text ?? string.Empty;
+            HOperatorSet.GetStringExtents(_window, text, out HTuple _, out HTuple _, out HTuple w, out HTuple _);
+            if (w.D <= maxWidthPx) return text;
+            const string ellipsis = "…";
+            string s = text;
+            while (s.Length > 1)
+            {
+                s = s.Substring(0, s.Length - 1);
+                HOperatorSet.GetStringExtents(_window, s + ellipsis, out HTuple _, out HTuple _, out HTuple w2, out HTuple _);
+                if (w2.D <= maxWidthPx) return s + ellipsis;
+            }
+            return ellipsis;
         }
 
         public void Clear() { HOperatorSet.ClearWindow(_window); }

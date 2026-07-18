@@ -6,6 +6,7 @@ using FlashMeasurementSystem.Application.CircleFitting;
 using FlashMeasurementSystem.Application.CoordinateSystem;
 using FlashMeasurementSystem.Application.DistanceMeasurement;
 using FlashMeasurementSystem.Application.EdgeDetection;
+using FlashMeasurementSystem.Application.HoleDetection;
 using FlashMeasurementSystem.Application.LineFitting;
 using FlashMeasurementSystem.Application.MetrologyModel;
 using FlashMeasurementSystem.Application.Tolerance;
@@ -15,8 +16,10 @@ using FlashMeasurementSystem.Domain.CoordinateSystem;
 using FlashMeasurementSystem.Domain.DistanceMeasurement;
 using FlashMeasurementSystem.Domain.EdgeDetection;
 using FlashMeasurementSystem.Domain.GearAnalysis;
+using FlashMeasurementSystem.Domain.HoleDetection;
 using FlashMeasurementSystem.Domain.LineFitting;
 using FlashMeasurementSystem.Domain.MetrologyModel;
+using FlashMeasurementSystem.Domain.PcdAnalysis;
 using FlashMeasurementSystem.Domain.Roi;
 using FlashMeasurementSystem.Domain.Geometry;
 using FlashMeasurementSystem.Domain.Gdt;
@@ -59,6 +62,8 @@ namespace FlashMeasurementSystem
         public List<double> ArcEdgeCols = new List<double>();
         // v8 齒輪工具：分析結果（供 overlay 齒中心標記/缺齒提示 + MeasurementWorkflow 三判定）。
         public GearAnalysisResult Gear;
+        // v9 PCD 工具：分析結果（供 overlay 節圓/孔中心/缺孔 + MeasurementWorkflow 四判定）。
+        public FlashMeasurementSystem.Domain.PcdAnalysis.PcdAnalysisResult Pcd;
         public double DistMm;          // distance：距離 (mm)
         public double DistRow1, DistCol1, DistRow2, DistCol2;  // distance 連線兩端（供繪製）
         public double AngleDeg;         // angle：夾角 AcuteAngleDeg (0~90)
@@ -90,11 +95,14 @@ namespace FlashMeasurementSystem
         private readonly ICoordinateMapper _mapper;
         // v6：2D 量測模型（加性、可為 null）。null 時 Pass 3 整段跳過，既有建構點/單元測試不受影響。
         private readonly IMetrologyModelRunner<HImage> _metrologyRunner;
+        // v9：PCD 環帶孔偵測（加性、可為 null）。null 時 Pass 1.4 該工具量測失敗但不擋其他工具。
+        private readonly IHoleDetector<HImage> _holeDetector;
 
         public RecipeRunner(IEdgeDetector<HImage> edgeDetector, ICircleFitter circleFitter,
             ILineFitter lineFitter, IDistanceMeasurer<HXLDCont> distanceMeasurer,
             IAngleMeasurer angleMeasurer, IToleranceJudger judger, ICoordinateMapper mapper,
-            IMetrologyModelRunner<HImage> metrologyRunner = null)
+            IMetrologyModelRunner<HImage> metrologyRunner = null,
+            IHoleDetector<HImage> holeDetector = null)
         {
             _edgeDetector = edgeDetector;
             _circleFitter = circleFitter;
@@ -104,6 +112,7 @@ namespace FlashMeasurementSystem
             _judger = judger;
             _mapper = mapper;
             _metrologyRunner = metrologyRunner;
+            _holeDetector = holeDetector;
         }
 
         public List<ToolRunResult> Run(Recipe recipe, HImage image,
@@ -247,6 +256,41 @@ namespace FlashMeasurementSystem
                 results.Add(res); if (!string.IsNullOrEmpty(tool.Id)) byId[tool.Id] = res;
             }
 
+            // ── Pass 1.4：PCD 螺栓孔圈（環帶 blob 偵測孔 → 純 Domain 圓擬合/四判定）──
+            foreach (MeasurementTool tool in recipe.Tools)
+            {
+                if (tool == null || tool.ToolType != "pcd") continue;
+                if (tool.ArcRoi == null || tool.Pcd == null) continue;   // Validator 已擋
+
+                ArcMeasureRoi placed = ArcRoiTransform.TransformArc(_mapper, tool.ArcRoi, transform);
+                var res = new ToolRunResult { Name = tool.Name, ToolType = tool.ToolType, PlacedArc = placed, Supported = true };
+
+                if (_holeDetector == null)
+                {
+                    res.Measured = false;
+                    res.ValueText = "PCD 量測失敗";
+                    res.Message = "未注入孔偵測器";
+                    results.Add(res); if (!string.IsNullOrEmpty(tool.Id)) byId[tool.Id] = res; continue;
+                }
+
+                HoleDetectionResult hd = _holeDetector.DetectHolesInAnnulus(image, placed, tool.Pcd);
+                if (!hd.Success)
+                {
+                    res.Measured = false;
+                    res.ValueText = "PCD 量測失敗";
+                    res.Message = string.IsNullOrEmpty(hd.ErrorMessage) ? "孔偵測失敗" : hd.ErrorMessage;
+                    results.Add(res); if (!string.IsNullOrEmpty(tool.Id)) byId[tool.Id] = res; continue;
+                }
+
+                PcdAnalysisResult pr = PcdAnalyzer.Analyze(hd.Holes, pixelSizeUm, tool.Pcd);
+                res.Pcd = pr;
+                res.Measured = pr.Success;
+                res.ValueText = pr.Message;
+                res.IsOk = pr.Success ? pr.IsPass : (bool?)null;
+                if (!pr.Success) res.Message = pr.Message;
+                results.Add(res); if (!string.IsNullOrEmpty(tool.Id)) byId[tool.Id] = res;
+            }
+
             // ── Pass 1.5：構造工具（intersection / midline / projection）──
             // 僅參照基礎元件（line/circle），不支援鏈式構造。
             foreach (MeasurementTool tool in recipe.Tools)
@@ -281,6 +325,7 @@ namespace FlashMeasurementSystem
                 if (tool.ToolType == "circle" || tool.ToolType == "line") continue;  // 已於 Pass 1 處理
                 if (tool.ToolType == "arc") continue;  // 已於 Pass 1.2 處理
                 if (tool.ToolType == "gear") continue;  // 已於 Pass 1.3 處理
+                if (tool.ToolType == "pcd") continue;  // 已於 Pass 1.4 處理
                 if (tool.ToolType == "intersection" || tool.ToolType == "midline" || tool.ToolType == "projection") continue;  // 已於 Pass 1.5 處理
                 if (IsGdtType(tool.ToolType)) continue;  // 已於 Pass 1.7 處理
 
