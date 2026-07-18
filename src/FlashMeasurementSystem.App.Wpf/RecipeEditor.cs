@@ -79,6 +79,9 @@ namespace FlashMeasurementSystem
         private TextBox _nameTextBox;
         private TextBox _idTextBox;
         private Label _typeLabel;
+        // v10：circle 工具的 ROI 類型選擇（矩形 rect2 / 扇形 ArcRoi，重用 _arcGroup）。
+        // 只在 ToolType=="circle" 時顯示；其餘工具型別隱藏（不影響 line/arc/gear/pcd 既有行為）。
+        private ComboBox _roiTypeCombo;
 
         private GroupBox _roiGroup;
         private NumericUpDown _centerRowNumeric;
@@ -330,7 +333,8 @@ namespace FlashMeasurementSystem
             // 7 列 × 28px（6 個數值 + 擷取按鈕）+ 標題與內距。roi 群組同構但少一列。
             _arcGroup = CreateGroupBox("Arc ROI", parent, 240);
             _roiGroup = CreateGroupBox("ROI Geometry", parent, 210);
-            _commonGroup = CreateGroupBox("Common", parent, 130);
+            // v10：新增第 4 列「ROI 類型」下拉（circle 專用），130 已不夠放 4 列 × 28px，比照 Tolerance 群組的加法（+30）。
+            _commonGroup = CreateGroupBox("Common", parent, 160);
 
             FillCommonGroup(_commonGroup);
             FillRoiGroup(_roiGroup);
@@ -389,6 +393,10 @@ namespace FlashMeasurementSystem
                 TextAlign = ContentAlignment.MiddleLeft,
                 Text = "-"
             });
+
+            // v10：circle 專用 ROI 類型下拉（矩形／扇形）；PopulateFromTool 依 ToolType 控制 Visible，
+            // 其餘工具型別一律隱藏。SelectedIndex：0=矩形("rect")，1=扇形("sector")。
+            _roiTypeCombo = AddComboRow(t, "ROI 類型", ref r, new[] { "矩形", "扇形" });
 
             gb.Controls.Add(t);
         }
@@ -646,6 +654,8 @@ namespace FlashMeasurementSystem
 
         private void WireChangeEvents()
         {
+            _roiTypeCombo.SelectedIndexChanged += RoiTypeCombo_SelectedIndexChanged;
+
             _centerRowNumeric.ValueChanged += (s, e) => WriteRoi();
             _centerColNumeric.ValueChanged += (s, e) => WriteRoi();
             _length1Numeric.ValueChanged += (s, e) => WriteRoi();
@@ -706,6 +716,35 @@ namespace FlashMeasurementSystem
             MarkDirty();
         }
 
+        // v10：circle 專用 ROI 類型切換（矩形/扇形）。比照 WriteRoi/WriteArc 以 _updatingControls 守衛，
+        // 且僅在選中工具為 circle 時生效（其餘工具型別即使 combo 值變動也不寫回，因為 combo 對它們是隱藏的）。
+        // 切到扇形且尚無 ArcRoi 時，比照 AddTool("arc") 種一個預設弧（此處用四分之一弧，而非整圈，
+        // 避免使用者誤以為「扇形」預設是整圓，需自己拖把手縮小）。
+        private void RoiTypeCombo_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            if (_updatingControls || _selectedTool == null || _selectedTool.ToolType != "circle") return;
+
+            string newShape = _roiTypeCombo.SelectedIndex == 1 ? "sector" : "rect";
+            _selectedTool.RoiShape = newShape;
+            if (newShape == "sector" && _selectedTool.ArcRoi == null)
+            {
+                _selectedTool.ArcRoi = new ArcMeasureRoi
+                {
+                    CenterRow = 200,
+                    CenterCol = 200,
+                    Radius = 100,
+                    AngleStart = 0.0,
+                    AngleExtent = Math.PI / 2.0,
+                    AnnulusRadius = 15.0
+                };
+            }
+            MarkDirty();
+            // 重新套用面板可見性（矩形 ROI 群組 ↔ Arc ROI 群組）並切換影像編輯把手，
+            // 直接沿用選工具時的既有路徑（PopulateFromTool + ShowRoiEdit），不另建一套。
+            PopulateFromTool(_selectedTool);
+            ShowRoiEdit();
+        }
+
         // 數值框 → ArcRoi。比照 WriteRoi：若弧形把手正在編輯中，同步重下把手座標（即時預覽）。
         private void WriteArc()
         {
@@ -718,6 +757,8 @@ namespace FlashMeasurementSystem
             a.AngleStart = (double)_arcAngleStartNumeric.Value * Math.PI / 180.0;
             a.AngleExtent = (double)_arcAngleExtentNumeric.Value * Math.PI / 180.0;
             a.AnnulusRadius = (double)_arcAnnulusNumeric.Value;
+            // 改數值即回到「即時弧帶/扇形」overlay（若剛試測過，靜態結果 overlay 會蓋住即時框）。
+            InstallArcBandOverlay();
             if (_imageHelper.IsEditingArc)
             {
                 // 重下把手座標（即時預覽）；BeginArcEdit 內部會 Redraw，弧帶 persistent overlay 一併重畫。
@@ -851,18 +892,20 @@ namespace FlashMeasurementSystem
             bool isArc = tool.ToolType == "arc";
             bool isGear = tool.ToolType == "gear";
             bool isPcd = tool.ToolType == "pcd";
+            // v10：circle 選扇形 ROI 時比照弧形工具（借 ArcRoi/PlacedArc、不畫 rect 框）。
+            bool isSectorCircle = tool.ToolType == "circle" && tool.RoiShape == "sector";
             ArcMeasureRoi arc = tool.ArcRoi;
             _imageHelper.SetPersistentOverlayAction(() =>
             {
                 OverlayAnnotator an = _imageHelper.Annotator;
                 if (an == null) return;
-                // 弧形/齒輪/PCD 工具的 Roi 是全零 rect2（未使用），畫出來會是 (0,0) 退化橘框——只有這三者以外才畫 ROI 框。
-                if (roi != null && !isArc && !isGear && !isPcd)
+                // 弧形/齒輪/PCD/扇形 circle 的 Roi 未使用（畫出來會是退化橘框）——只有這些以外才畫矩形 ROI 框。
+                if (roi != null && !isArc && !isGear && !isPcd && !isSectorCircle)
                     an.DrawRectangle2(roi.CenterRow, roi.CenterCol, roi.AngleRad,
                                       roi.Length1, roi.Length2, "orange");
 
-                // 文字錨點：弧形/齒輪/PCD 錨在弧心，其餘錨在 rect2 ROI 中心。
-                bool usesArcRoi = isArc || isGear || isPcd;
+                // 文字錨點：弧形/齒輪/PCD/扇形 circle 錨在弧心，其餘錨在 rect2 ROI 中心。
+                bool usesArcRoi = isArc || isGear || isPcd || isSectorCircle;
                 double txtR = usesArcRoi && arc != null ? arc.CenterRow : (roi != null ? roi.CenterRow : 20);
                 double txtC = usesArcRoi && arc != null ? arc.CenterCol : (roi != null ? roi.CenterCol : 20);
                 if (result == null || !result.Measured)
@@ -890,6 +933,13 @@ namespace FlashMeasurementSystem
                     double labelRow = a.CenterRow - (a.Radius + a.AnnulusRadius) - 20;
                     an.DrawText(result.ValueText ?? string.Empty, (int)labelRow, (int)a.CenterCol, c);
                     return;
+                }
+
+                // v10：扇形 ROI 的 circle：先畫量測扇形帶（PlacedArc），再由下方 circle 分支畫擬合圓（不 return）。
+                if (isSectorCircle && result.PlacedArc != null)
+                {
+                    ArcMeasureRoi sa = result.PlacedArc;
+                    an.DrawSectorRoi(sa.CenterRow, sa.CenterCol, sa.Radius, sa.AnnulusRadius, sa.AngleStart, sa.AngleExtent);
                 }
 
                 if (result.ToolType == "circle")
@@ -1196,6 +1246,9 @@ namespace FlashMeasurementSystem
                 Id = src.Id,
                 Name = src.Name,
                 ToolType = src.ToolType,
+                // v10：circle 的 ROI 類型選擇（rect/sector）——單一 scalar，漏掉會在載入/存檔時
+                // 遺失使用者選的扇形 ROI，變回矩形（RoiShape 預設 "rect"）。
+                RoiShape = src.RoiShape,
                 Roi = new RoiGeometry
                 {
                     CenterRow = roi.CenterRow,
@@ -1320,8 +1373,11 @@ namespace FlashMeasurementSystem
 
             // 弧形/齒輪/PCD 工具：進入弧形互動編輯（BeginArcEdit 內部會自行關閉 rect2 編輯，故不重複呼叫
             // EndRect2Edit 以免多一次 Redraw）。齒輪/PCD 重用相同的量測環 ArcRoi。
+            // v10：circle 選扇形 ROI（isSectorCircle）比照弧形工具，同樣走弧形互動編輯（借用 _arcGroup/ArcRoi）；
+            // circle 選矩形 ROI 則不進此分支，落到下面 isElement 分支走既有 rect2 編輯。
             // 無 ArcRoi 或尚未載入影像時只收把手，不進編輯。
-            if (_selectedTool.ToolType == "arc" || _selectedTool.ToolType == "gear" || _selectedTool.ToolType == "pcd")
+            bool isSectorCircle = _selectedTool.ToolType == "circle" && _selectedTool.RoiShape == "sector";
+            if (_selectedTool.ToolType == "arc" || _selectedTool.ToolType == "gear" || _selectedTool.ToolType == "pcd" || isSectorCircle)
             {
                 _imageHelper.ClearSelectionHighlight();
                 ArcMeasureRoi a = _selectedTool.ArcRoi;
@@ -1378,7 +1434,14 @@ namespace FlashMeasurementSystem
             _imageHelper.SetPersistentOverlayAction(() =>
             {
                 var a = _selectedTool?.ArcRoi;
-                if (a != null && a.IsDefined)
+                if (a == null || !a.IsDefined) return;
+                // 扇形 circle：畫封閉扇形（DrawSectorRoi，含起訖兩條徑向邊），與主頁一致，並和「弧形檢測開口環帶」
+                // 明確區分，避免使用者誤以為是弧形抓邊工具。弧形/齒輪/PCD 維持開口環帶（DrawArcBand）。
+                bool secCircle = _selectedTool != null && _selectedTool.ToolType == "circle" && _selectedTool.RoiShape == "sector";
+                if (secCircle)
+                    _imageHelper.Annotator.DrawSectorRoi(a.CenterRow, a.CenterCol, a.Radius,
+                        a.AnnulusRadius, a.AngleStart, a.AngleExtent);
+                else
                     _imageHelper.Annotator.DrawArcBand(a.CenterRow, a.CenterCol, a.Radius,
                         a.AngleStart, a.AngleExtent, a.AnnulusRadius);
             });
@@ -1461,6 +1524,9 @@ namespace FlashMeasurementSystem
             a.AnnulusRadius = annulus;
 
             LoadArcFieldsFromSelectedTool();
+            // 拖把手即回到「即時弧帶/扇形」overlay：若剛按過「在此試測」，其靜態結果 overlay 會蓋住即時框，
+            // 這裡重裝即時 overlay，讓框隨把手動態更新（拖曳後由 HWindowControlHelper 的 Redraw 呈現）。
+            InstallArcBandOverlay();
             MarkDirty();
         }
 
@@ -1549,6 +1615,9 @@ namespace FlashMeasurementSystem
                 bool isArc = tool.ToolType == "arc";
                 bool isGear = tool.ToolType == "gear";
                 bool isPcd = tool.ToolType == "pcd";
+                // v10：circle 選扇形 ROI → 借用弧形群組（_arcGroup/ArcRoi），矩形 ROI 群組改隱藏。
+                // 僅 circle 工具讀 RoiShape；其餘工具型別忽略（isSectorCircle 恆為 false）。
+                bool isSectorCircle = tool.ToolType == "circle" && tool.RoiShape == "sector";
                 bool isConstruction = tool.ToolType == "intersection" || tool.ToolType == "midline" || tool.ToolType == "projection";
                 bool isComposite = tool.ToolType == "distance" || tool.ToolType == "angle";
                 bool isGdt = IsGdtType(tool.ToolType);
@@ -1563,8 +1632,10 @@ namespace FlashMeasurementSystem
                 // 齒輪判定走三條件（齒數/齒距/齒寬），不用雙邊 Tolerance 群組，故一併隱藏。
                 // PCD 工具同樣重用弧形 ROI 群組（環帶偵測孔），但不用邊緣參數（孔偵測非邊緣掃描，故
                 // 不加進 _edgeGroup 的可見條件），並顯示 PCD 參數群組；PCD 判定走四條件，同樣隱藏雙邊 Tolerance。
-                _roiGroup.Visible = isElement;
-                _arcGroup.Visible = isArc || isGear || isPcd;
+                // 扇形 circle（isSectorCircle）比照弧形工具：借用 _arcGroup，矩形 _roiGroup 隱藏；
+                // 邊緣參數/雙邊 Tolerance 維持（isElement 已含 circle，兩者條件本就成立，不必額外加項）。
+                _roiGroup.Visible = isElement && !isSectorCircle;
+                _arcGroup.Visible = isArc || isGear || isPcd || isSectorCircle;
                 _gearGroup.Visible = isGear;
                 _pcdGroup.Visible = isPcd;
                 _edgeGroup.Visible = isElement || isArc || isGear;
@@ -1573,13 +1644,18 @@ namespace FlashMeasurementSystem
                 _gdtGroup.Visible = isGdt;
                 _angleHintLabel.Visible = tool.ToolType == "line";
 
+                // v10：ROI 類型下拉只在 circle 工具顯示；其餘工具型別隱藏（combo 對它們無意義）。
+                _roiTypeCombo.Visible = tool.ToolType == "circle";
+                if (tool.ToolType == "circle")
+                    _roiTypeCombo.SelectedIndex = isSectorCircle ? 1 : 0;
+
                 if (isGdt && tool.Gdt != null)
                 {
                     _gdtCharLabel.Text = GdtCharLabelText(tool.ToolType);
                     _gdtZoneNumeric.Value = ClampDecimal(tool.Gdt.ToleranceZoneMm, _gdtZoneNumeric.Minimum, _gdtZoneNumeric.Maximum);
                 }
 
-                if (isElement)
+                if (isElement && !isSectorCircle)
                 {
                     _centerRowNumeric.Value = ClampDecimal(tool.Roi.CenterRow, _centerRowNumeric.Minimum, _centerRowNumeric.Maximum);
                     _centerColNumeric.Value = ClampDecimal(tool.Roi.CenterCol, _centerColNumeric.Minimum, _centerColNumeric.Maximum);
@@ -1587,7 +1663,7 @@ namespace FlashMeasurementSystem
                     _length2Numeric.Value = ClampDecimal(tool.Roi.Length2, _length2Numeric.Minimum, _length2Numeric.Maximum);
                     _angleRadNumeric.Value = ClampDecimal(tool.Roi.AngleRad, _angleRadNumeric.Minimum, _angleRadNumeric.Maximum);
                 }
-                else if (isArc)
+                else if (isArc || isSectorCircle)
                 {
                     LoadArcFieldsFromSelectedTool();
                 }

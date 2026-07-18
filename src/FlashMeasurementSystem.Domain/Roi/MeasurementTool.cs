@@ -22,6 +22,11 @@ namespace FlashMeasurementSystem.Domain.Roi
         public string ToolType { get; set; } = "edge";
 
         public RoiGeometry Roi { get; set; } = new RoiGeometry();
+
+        // v10：circle 工具的 ROI 形狀："rect"（預設，矩形 rect2 Roi）或 "sector"（環形扇形 ArcRoi）。
+        // 舊檔無此欄→預設 "rect"＝行為不變。目前僅 circle 工具讀取；其他工具型別忽略此欄。
+        public string RoiShape { get; set; } = "rect";
+
         public EdgeDetectionParameters EdgeParameters { get; set; } = EdgeDetectionParameters.Default();
         public ToleranceSpec Tolerance { get; set; } = ToleranceSpec.Default();
 

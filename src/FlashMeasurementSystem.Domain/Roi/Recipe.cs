@@ -26,7 +26,9 @@ namespace FlashMeasurementSystem.Domain.Roi
         //     純加欄位、向後相容、無遷移碼：舊檔載入時 Gear=null、無 gear 工具，行為不變。
         // v9：PCD 螺栓孔圈工具（MeasurementTool.Pcd，加性 nullable 欄）+ ToolType="pcd"。
         //     純加欄位、向後相容、無遷移碼：舊檔載入 Pcd=null、無 pcd 工具，行為不變。
-        public int SchemaVersion { get; set; } = 9;
+        // v10：circle 工具的 ROI 形狀選擇（MeasurementTool.RoiShape，加性欄，預設 "rect"）。
+        //     純加欄位、向後相容、無遷移碼：舊檔載入 RoiShape="rect"＝走既有矩形路徑，行為不變。
+        public int SchemaVersion { get; set; } = 10;
         public string RecipeId { get; set; } = "";
         public string Name { get; set; } = "";
 

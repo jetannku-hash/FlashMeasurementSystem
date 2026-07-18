@@ -139,9 +139,25 @@ namespace FlashMeasurementSystem
             // ── Pass 1：元素工具（line / circle）──
             foreach (MeasurementTool tool in recipe.Tools)
             {
-                if (tool == null || tool.Roi == null) continue;
+                if (tool == null) continue;
                 if (tool.ToolType != "circle" && tool.ToolType != "line") continue;
 
+                // v10：circle 選扇形 ROI → 用環形 ArcRoi 掃描（DetectEdgesInAnnularSector）再擬合圓。
+                // res.Roi 刻意留 null（避免 overlay 畫橘色矩形，比照 arc 分支）；改帶 PlacedArc。
+                if (tool.ToolType == "circle" && tool.RoiShape == "sector")
+                {
+                    if (tool.ArcRoi == null) continue;   // Validator 已擋
+                    ArcMeasureRoi placedArc = ArcRoiTransform.TransformArc(_mapper, tool.ArcRoi, transform);
+                    var sres = new ToolRunResult { Name = tool.Name, ToolType = "circle", PlacedArc = placedArc };
+                    MeasureCircleSector(image, sres, tool, placedArc, pixelSizeUm);
+                    if (sres.Measured)
+                        sres.OutputPrimitive = GeometricPrimitive.Circle(sres.FitCenterRow, sres.FitCenterCol, sres.FitRadiusPx);
+                    results.Add(sres);
+                    if (!string.IsNullOrEmpty(tool.Id)) byId[tool.Id] = sres;
+                    continue;
+                }
+
+                if (tool.Roi == null) continue;
                 RoiGeometry g = tool.Roi;
                 double row = g.CenterRow, col = g.CenterCol, ang = g.AngleRad;
                 if (transform != null)
@@ -504,35 +520,8 @@ namespace FlashMeasurementSystem
             {
                 EdgeDetectionRoi edgeRoi = EdgeDetectionRoi.FromCenter(row, col, length1, length2, ang);
                 EdgeDetectionParameters edgeParams = tool.EdgeParameters ?? EdgeDetectionParameters.Default();
-
                 EdgeResult edges = _edgeDetector.DetectEdgesSubPix(image, edgeRoi, edgeParams);
-                if (!edges.Success || edges.EdgePoints == null || edges.EdgePoints.Count < 3)
-                {
-                    res.Measured = false;
-                    res.ValueText = "邊緣不足";
-                    res.Message = edges.ErrorMessage;
-                    return;
-                }
-
-                CircleFittingResult circle = _circleFitter.FitCircle(edges.EdgePoints, CircleFittingParameters.Default());
-                if (!circle.Success)
-                {
-                    res.Measured = false;
-                    res.ValueText = "擬合失敗";
-                    res.Message = circle.ErrorMessage;
-                    return;
-                }
-
-                res.Measured = true;
-                res.FitCenterRow = circle.CenterRow;
-                res.FitCenterCol = circle.CenterColumn;
-                res.FitRadiusPx = circle.RadiusPx;
-                res.ResidualRmsPx = circle.ResidualRms;
-                res.CircleRoundnessPx = circle.Roundness;   // max-min 徑向＝GD&T 真圓度帶（真值）
-                res.DiameterMm = circle.DiameterPx * pixelSizeUm / 1000.0;
-                res.ValueText = string.Format(CultureInfo.InvariantCulture, "D={0:F4}mm", res.DiameterMm);
-
-                JudgeSingle(res, tool, res.DiameterMm);
+                FitCircleFromEdges(res, tool, edges, pixelSizeUm);
             }
             catch (HalconException ex)
             {
@@ -540,6 +529,58 @@ namespace FlashMeasurementSystem
                 res.ValueText = "量測異常";
                 res.Message = ex.Message;
             }
+        }
+
+        // v10：circle 選扇形 ROI 的量測——與 MeasureCircle 唯一差異是邊緣偵測改用環帶掃描
+        // （DetectEdgesInAnnularSector），擬合/欄位/判定尾段共用 FitCircleFromEdges。
+        private void MeasureCircleSector(HImage image, ToolRunResult res, MeasurementTool tool,
+            ArcMeasureRoi placedArc, double pixelSizeUm)
+        {
+            res.Supported = true;
+            try
+            {
+                EdgeDetectionParameters edgeParams = tool.EdgeParameters ?? EdgeDetectionParameters.Default();
+                EdgeResult edges = _edgeDetector.DetectEdgesInAnnularSector(image, placedArc, edgeParams);
+                FitCircleFromEdges(res, tool, edges, pixelSizeUm);
+            }
+            catch (HalconException ex)
+            {
+                res.Measured = false;
+                res.ValueText = "量測異常";
+                res.Message = ex.Message;
+            }
+        }
+
+        // 由邊點擬合圓並回填結果欄位 + 單值判定。矩形（MeasureCircle）與扇形（MeasureCircleSector）共用。
+        private void FitCircleFromEdges(ToolRunResult res, MeasurementTool tool, EdgeResult edges, double pixelSizeUm)
+        {
+            if (!edges.Success || edges.EdgePoints == null || edges.EdgePoints.Count < 3)
+            {
+                res.Measured = false;
+                res.ValueText = "邊緣不足";
+                res.Message = edges.ErrorMessage;
+                return;
+            }
+
+            CircleFittingResult circle = _circleFitter.FitCircle(edges.EdgePoints, CircleFittingParameters.Default());
+            if (!circle.Success)
+            {
+                res.Measured = false;
+                res.ValueText = "擬合失敗";
+                res.Message = circle.ErrorMessage;
+                return;
+            }
+
+            res.Measured = true;
+            res.FitCenterRow = circle.CenterRow;
+            res.FitCenterCol = circle.CenterColumn;
+            res.FitRadiusPx = circle.RadiusPx;
+            res.ResidualRmsPx = circle.ResidualRms;
+            res.CircleRoundnessPx = circle.Roundness;   // max-min 徑向＝GD&T 真圓度帶（真值）
+            res.DiameterMm = circle.DiameterPx * pixelSizeUm / 1000.0;
+            res.ValueText = string.Format(CultureInfo.InvariantCulture, "D={0:F4}mm", res.DiameterMm);
+
+            JudgeSingle(res, tool, res.DiameterMm);
         }
 
         // line 元素（B2a）：ROI → subpix 邊緣 → 擬合線。元素本身不判定（IsOk=null），

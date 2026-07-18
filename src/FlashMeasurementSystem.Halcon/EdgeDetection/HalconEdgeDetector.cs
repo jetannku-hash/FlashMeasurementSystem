@@ -651,6 +651,241 @@ namespace FlashMeasurementSystem.Halcon.EdgeDetection
             return result;
         }
 
+        /// <summary>
+        /// 扇形環帶 ROI（gen_circle_sector 差集）內的亞像素邊緣：region 換成扇環，其餘（單通道轉換、
+        /// edges_sub_pix、contour→EdgePoint 萃取、amplitude 屬性探查、dispose 慣例）與 DetectEdgesSubPix 相同。
+        /// AngleStart/AngleExtent 的角度「慣例」與 ArcMeasureRoi 其他使用處（gen_measure_arc、ArcEditMath）一致，
+        /// 沿用 HALCON 原生「mathematically positive」CCW 弧度慣例、不做座標軸翻轉或正負號反轉（已用合成影像驗證，
+        /// 見 2026-07-17 annular-sector-roi 實作記錄）。但角度「數值」會被 NormalizeSectorAngles 正規化
+        /// （負 extent 交換端點、起始角取模進 [0,2π)），且當扇形跨越 0/2π 接縫時（endAngle>2π）拆成兩段
+        /// gen_circle_sector 再 union2（因 gen_circle_sector 限制 EndAngle<=2π，直接傳會拋 #1305，已用合成影像驗證）。
+        /// </summary>
+        public EdgeResult DetectEdgesInAnnularSector(HImage image, ArcMeasureRoi roi, EdgeDetectionParameters parameters)
+        {
+            var result = new EdgeResult();
+            EdgeDetectionParameters effectiveParameters = parameters ?? EdgeDetectionParameters.Default();
+
+            if (image == null)
+            {
+                result.ErrorMessage = "請先載入影像";
+                Log("DetectEdgesInAnnularSector EARLY-EXIT msg=" + result.ErrorMessage);
+                return result;
+            }
+
+            if (roi == null || !roi.IsDefined)
+            {
+                result.ErrorMessage = "請先定義扇形 ROI（" + (roi?.ValidationError ?? "null") + "）";
+                Log("DetectEdgesInAnnularSector EARLY-EXIT " + (roi?.ValidationError ?? "null"));
+                return result;
+            }
+
+            if (roi.AnnulusRadius >= roi.Radius)
+            {
+                result.ErrorMessage = "環寬(AnnulusRadius)必須小於半徑(Radius)，否則內圈半徑會變成 0 或負值";
+                Log("DetectEdgesInAnnularSector DEGENERATE msg=" + result.ErrorMessage);
+                return result;
+            }
+
+            HOperatorSet.GetImageSize(image, out HTuple width, out HTuple height);
+            int channels = TryGetChannels(image);
+            string pixelType = TryGetPixelType(image);
+            string imgDesc = DescribeImage(width.I, height.I, channels, pixelType);
+
+            Log(string.Format(CultureInfo.InvariantCulture,
+                "DetectEdgesInAnnularSector START {0} roi(CtrRow={1:F1},CtrCol={2:F1},R={3:F1},Annulus={4:F1},Start={5:F4},Extent={6:F4}) {7}",
+                imgDesc, roi.CenterRow, roi.CenterCol, roi.Radius, roi.AnnulusRadius, roi.AngleStart, roi.AngleExtent,
+                DescribeParams(effectiveParameters)));
+
+            HObject outer = null, inner = null, ring = null, reduced = null;
+            HObject contours = null;
+            HImage convertedImage = EnsureSingleChannel(image, channels, "DetectEdgesInAnnularSector");
+            HImage workingImage = convertedImage ?? image;
+
+            try
+            {
+                double rOut = roi.Radius + roi.AnnulusRadius;
+                double rIn = Math.Max(roi.Radius - roi.AnnulusRadius, 0.0);
+
+                // gen_circle_sector(Start=0, End=2π) 是 degenerate case：HALCON 把 Start==End(mod 2π)
+                // 視為零面積扇形（非整圓），已用合成影像驗證（area=0）。|AngleExtent| 逼近整圈時改用
+                // gen_circle 取代 gen_circle_sector，避免整圈扇環誤判成空 region。
+                const double fullRingEps = 1e-6;
+                bool isFullRing = Math.Abs(roi.AngleExtent) >= 2.0 * Math.PI - fullRingEps;
+
+                string angleDesc;
+                if (isFullRing)
+                {
+                    HOperatorSet.GenCircle(out outer, roi.CenterRow, roi.CenterCol, rOut);
+                    HOperatorSet.GenCircle(out inner, roi.CenterRow, roi.CenterCol, rIn);
+                    angleDesc = "full-ring";
+                }
+                else
+                {
+                    NormalizeSectorAngles(roi.AngleStart, roi.AngleExtent, out double loNorm, out double sweep);
+                    outer = BuildSectorRegion(roi.CenterRow, roi.CenterCol, rOut, loNorm, sweep);
+                    inner = BuildSectorRegion(roi.CenterRow, roi.CenterCol, rIn, loNorm, sweep);
+                    angleDesc = string.Format(CultureInfo.InvariantCulture,
+                        "lo={0:F4} sweep={1:F4} end={2:F4}", loNorm, sweep, loNorm + sweep);
+                }
+                HOperatorSet.Difference(outer, inner, out ring);
+                HOperatorSet.ReduceDomain(workingImage, ring, out reduced);
+
+                HOperatorSet.EdgesSubPix(
+                    reduced,
+                    out contours,
+                    "canny",
+                    new HTuple(effectiveParameters.Sigma),
+                    new HTuple(effectiveParameters.Threshold),
+                    new HTuple(effectiveParameters.HighThreshold));
+
+                HOperatorSet.CountObj(contours, out HTuple contourCount);
+                int totalContours = contourCount.I;
+
+                string amplitudeAttr = ProbeAmplitudeAttribute(contours, totalContours);
+
+                Log(string.Format(CultureInfo.InvariantCulture,
+                    "DetectEdgesInAnnularSector EDGES_SUB_PIX {0} rOut={1:F1} rIn={2:F1} contours={3} amplitudeAttr={4}",
+                    angleDesc, rOut, rIn, totalContours, amplitudeAttr ?? "(none)"));
+
+                for (int c = 1; c <= totalContours; c++)
+                {
+                    HObject contour = null;
+                    try
+                    {
+                        HOperatorSet.SelectObj(contours, out contour, c);
+                        HOperatorSet.GetContourXld(contour, out HTuple rowTuple, out HTuple colTuple);
+
+                        HTuple amplitudeTuple = null;
+                        if (amplitudeAttr != null)
+                        {
+                            try
+                            {
+                                HOperatorSet.GetContourAttribXld(contour, amplitudeAttr, out amplitudeTuple);
+                            }
+                            catch (HalconException)
+                            {
+                                amplitudeTuple = null;
+                            }
+                        }
+
+                        int n = rowTuple.Length;
+                        for (int i = 0; i < n; i++)
+                        {
+                            double row = rowTuple[i].D;
+                            double col = colTuple[i].D;
+                            double amp = (amplitudeTuple != null && i < amplitudeTuple.Length)
+                                ? amplitudeTuple[i].D
+                                : 0.0;
+                            double dist = 0.0;
+                            if (i + 1 < n)
+                            {
+                                double dr = rowTuple[i + 1].D - row;
+                                double dc = colTuple[i + 1].D - col;
+                                dist = Math.Sqrt(dr * dr + dc * dc);
+                            }
+
+                            result.EdgePoints.Add(new EdgePoint
+                            {
+                                Row = row,
+                                Column = col,
+                                Amplitude = amp,
+                                Distance = dist
+                            });
+                        }
+                    }
+                    finally
+                    {
+                        contour?.Dispose();
+                    }
+                }
+
+                result.Success = result.EdgePoints.Count > 0;
+                result.ErrorMessage = result.Success
+                    ? string.Empty
+                    : string.Format(CultureInfo.InvariantCulture,
+                        "扇形環帶內未檢測到亞像素邊緣 | {0} roi(R={1:F0}±{2:F0},Start={3:F4},Extent={4:F4}) {5} | 提示：降低 threshold/highThreshold 或調整 sigma",
+                        DescribeParams(effectiveParameters),
+                        roi.Radius, roi.AnnulusRadius, roi.AngleStart, roi.AngleExtent,
+                        imgDesc);
+            }
+            catch (HalconException ex)
+            {
+                result.Success = false;
+                result.ErrorMessage = string.Format(CultureInfo.InvariantCulture,
+                    "扇形環帶邊緣檢測異常 [{0}]: {1} | {2} {3}",
+                    ex.GetErrorCode(), ex.Message,
+                    DescribeParams(effectiveParameters),
+                    imgDesc);
+                Log("DetectEdgesInAnnularSector EXCEPTION " + result.ErrorMessage);
+            }
+            finally
+            {
+                contours?.Dispose();
+                reduced?.Dispose();
+                ring?.Dispose();
+                inner?.Dispose();
+                outer?.Dispose();
+                convertedImage?.Dispose();
+            }
+
+            Log(string.Format(CultureInfo.InvariantCulture,
+                "DetectEdgesInAnnularSector END success={0} edges={1} msg={2}",
+                result.Success, result.EdgePoints.Count, string.IsNullOrEmpty(result.ErrorMessage) ? "(none)" : result.ErrorMessage));
+
+            return result;
+        }
+
+        // gen_circle_sector 要求 0<=StartAngle<=2π、0<=EndAngle<=2π（reference L133655）。
+        // ArcMeasureRoi.AngleExtent 可正可負（負 = 順時針），故先攤平成 [lo,hi]（lo<hi，跨距=|AngleExtent|），
+        // 再把 lo 取模進 [0,2π) 得 loNorm、sweep=跨距（(0,2π]）。跨越 0/2π 接縫（loNorm+sweep>2π）
+        // 由 BuildSectorRegion 拆兩段處理，不在此正規化。
+        private static void NormalizeSectorAngles(double angleStart, double angleExtent, out double loNorm, out double sweep)
+        {
+            const double twoPi = 2.0 * Math.PI;
+            double lo = angleStart;
+            double hi = angleStart + angleExtent;
+            if (lo > hi)
+            {
+                double tmp = lo; lo = hi; hi = tmp;
+            }
+            sweep = Math.Min(hi - lo, twoPi);
+
+            loNorm = lo % twoPi;
+            if (loNorm < 0) loNorm += twoPi;
+        }
+
+        // 建構單一半徑的扇形 region（呼叫端 dispose）。
+        // 若 [loNorm, loNorm+sweep] 未跨 0/2π 接縫 → 單一 gen_circle_sector。
+        // 若跨接縫（end>2π）→ 拆成 [loNorm,2π] ∪ [0,end-2π] 兩段再 union2，
+        // 因 gen_circle_sector 限制 EndAngle<=2π，直接傳 end>2π 會拋 #1305（已用合成影像驗證）。
+        private static HObject BuildSectorRegion(double cr, double cc, double radius, double loNorm, double sweep)
+        {
+            const double twoPi = 2.0 * Math.PI;
+            const double eps = 1e-9;
+            double end = loNorm + sweep;
+
+            if (end <= twoPi + eps)
+            {
+                double clampedEnd = Math.Min(end, twoPi);
+                HOperatorSet.GenCircleSector(out HObject single, cr, cc, radius, loNorm, clampedEnd);
+                return single;
+            }
+
+            HObject piece1 = null, piece2 = null;
+            try
+            {
+                HOperatorSet.GenCircleSector(out piece1, cr, cc, radius, loNorm, twoPi);
+                HOperatorSet.GenCircleSector(out piece2, cr, cc, radius, 0.0, end - twoPi);
+                HOperatorSet.Union2(piece1, piece2, out HObject union);
+                return union;
+            }
+            finally
+            {
+                piece1?.Dispose();
+                piece2?.Dispose();
+            }
+        }
+
         private static string ProbeAmplitudeAttribute(HObject contours, int totalContours)
         {
             if (totalContours <= 0)

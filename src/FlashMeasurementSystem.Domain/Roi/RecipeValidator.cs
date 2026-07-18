@@ -99,7 +99,17 @@ namespace FlashMeasurementSystem.Domain.Roi
 
                 if (RoiElementTypes.Contains(type))
                 {
-                    ValidateRoi(issues, tool, imageWidth, imageHeight);
+                    // v10：circle 選扇形 ROI 時改驗環形 ArcRoi、跳過矩形 rect2 檢查；其餘（矩形 circle、line、edge）維持矩形檢查。
+                    if (type == "circle" && tool.RoiShape == "sector")
+                    {
+                        if (tool.ArcRoi == null || !tool.ArcRoi.IsDefined)
+                            issues.Add(new RecipeIssue(RecipeIssueSeverity.Error, tool.Id, tool.Name,
+                                "圓形工具（扇形 ROI）的量測環帶無效：" + (tool.ArcRoi == null ? "缺少 ArcRoi" : tool.ArcRoi.ValidationError)));
+                    }
+                    else
+                    {
+                        ValidateRoi(issues, tool, imageWidth, imageHeight);
+                    }
                 }
 
                 if (tool.ToolType == "arc")
