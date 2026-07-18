@@ -24,6 +24,7 @@ using FlashMeasurementSystem.Domain.AngleMeasurement;
 using FlashMeasurementSystem.Halcon.AngleMeasurement;
 using FlashMeasurementSystem.Domain.Roi;
 using FlashMeasurementSystem.Domain.Calibration;
+using FlashMeasurementSystem.Domain.MetrologyModel;
 using FlashMeasurementSystem.Halcon.CoordinateSystem;
 using FlashMeasurementSystem.Halcon.MetrologyModel;
 using FlashMeasurementSystem.Application.HoleDetection;
@@ -1903,6 +1904,29 @@ namespace FlashMeasurementSystem
                 catch (HalconException) { /* 取不到尺寸用 0：apply 時 adapter 會即時查詢 */ }
             }
 
+            // Phase 3：編輯器內「試測」委派——用目前（未存檔）模型建一份暫態純量測配方（無 1D 工具、
+            // 無參考姿態），跑法與 overlay 繪製比照 RunRecipeButton_Click，直接重用 DrawRecipeResults，
+            // 讓量測模型 overlay（含判定上色）直接畫在主視窗共用影像上。不做 IQC/CSV，僅擬合預覽。
+            Action<MetrologyModelDef> metrologyTrial = (model) =>
+            {
+                if (_imageHelper == null || _imageHelper.CurrentImage == null) return;
+                var tempRecipe = new Recipe { MetrologyModel = model };
+                ResolvePixelSize(out double pxUmX, out double pxUmY, out string pxSource);
+                try
+                {
+                    System.Collections.Generic.List<ToolRunResult> results = _recipeRunner.Run(
+                        tempRecipe, _imageHelper.CurrentImage,
+                        _hasMatch, _lastMatchRow, _lastMatchCol, _lastMatchAngleDeg * Math.PI / 180.0,
+                        pxUmX, pxUmY);
+                    DrawRecipeResults(results, pxSource);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(this, "試測失敗：" + ex.Message, "Metrology Trial",
+                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
+            };
+
             using (var editor = new MetrologyModelEditorForm(_loadedRecipe, imgW, imgH,
                 (recipe) =>
                 {
@@ -1946,7 +1970,8 @@ namespace FlashMeasurementSystem
                         ? "（未存檔，僅暫存記憶體）" : "（已存至 " + Path.GetFileName(_loadedRecipePath) + "）";
                     measureResultLabel.Text = string.Format(CultureInfo.InvariantCulture,
                         "已更新量測模型（{0} 物件）{1}。可執行 Run Recipe。", count, savedNote);
-                }))
+                },
+                metrologyTrial))
             {
                 editor.ShowDialog(this);
             }

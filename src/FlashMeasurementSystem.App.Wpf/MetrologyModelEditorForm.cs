@@ -19,6 +19,7 @@ namespace FlashMeasurementSystem
     {
         private readonly Recipe _recipe;
         private readonly Action<Recipe> _savedCallback;
+        private readonly Action<MetrologyModelDef> _trialCallback;
         private readonly int _imgW;
         private readonly int _imgH;
 
@@ -27,7 +28,7 @@ namespace FlashMeasurementSystem
         private bool _updating;
 
         private ListBox _list;
-        private Button _addButton, _removeButton, _saveButton, _cancelButton;
+        private Button _addButton, _removeButton, _saveButton, _cancelButton, _trialButton;
         private TextBox _nameBox;
         private ComboBox _shapeCombo;
         private Label _warnLabel;
@@ -46,10 +47,12 @@ namespace FlashMeasurementSystem
         private RowStyle _slotARowStyle, _slotBRowStyle;
         private string _slotAKey, _slotBKey;
 
-        public MetrologyModelEditorForm(Recipe recipe, int imageWidth, int imageHeight, Action<Recipe> savedCallback)
+        public MetrologyModelEditorForm(Recipe recipe, int imageWidth, int imageHeight, Action<Recipe> savedCallback,
+            Action<MetrologyModelDef> trialCallback = null)
         {
             _recipe = recipe ?? throw new ArgumentNullException(nameof(recipe));
             _savedCallback = savedCallback;
+            _trialCallback = trialCallback;
             _imgW = imageWidth;
             _imgH = imageHeight;
 
@@ -79,8 +82,13 @@ namespace FlashMeasurementSystem
             _cancelButton.Click += (s, e) => { DialogResult = DialogResult.Cancel; Close(); };
             _saveButton = new Button { Text = "Save", Width = 80 };
             _saveButton.Click += OnSave;
+            // Phase 3：在此以「目前（未存檔）模型」跑一次量測，把擬合結果畫在主視窗共用影像上，
+            // 免去 Save → 關閉 → Run Recipe → 重開編輯器的來回。無委派（trialCallback==null）時停用。
+            _trialButton = new Button { Text = "試測", Width = 80, Enabled = _trialCallback != null };
+            _trialButton.Click += OnTrial;
             bottom.Controls.Add(_cancelButton);
             bottom.Controls.Add(_saveButton);
+            bottom.Controls.Add(_trialButton);
 
             var left = new Panel { Dock = DockStyle.Left, Width = 200, Padding = new Padding(6) };
             _list = new ListBox { Dock = DockStyle.Fill };
@@ -333,22 +341,75 @@ namespace FlashMeasurementSystem
         private void UpdateWarning()
         {
             if (_selected == null) { _warnLabel.Text = ""; return; }
-            string msg = null;
+            var msgs = new List<string>();
+
             switch (_selected.Shape)
             {
                 case MetrologyObjectType.Circle:
-                    if (_selected.MeasureLength1 >= _selected.Radius) msg = "MeasureLength1 必須 < Radius，否則此物件量測會失敗。";
+                    if (_selected.MeasureLength1 >= _selected.Radius) msgs.Add("MeasureLength1 必須 < Radius，否則此物件量測會失敗。");
                     break;
                 case MetrologyObjectType.Ellipse:
                     if (_selected.MeasureLength1 >= _selected.Radius1 || _selected.MeasureLength1 >= _selected.Radius2)
-                        msg = "MeasureLength1 必須 < Radius1 且 < Radius2。";
+                        msgs.Add("MeasureLength1 必須 < Radius1 且 < Radius2。");
                     break;
                 case MetrologyObjectType.Rectangle:
                     if (_selected.MeasureLength1 >= _selected.Length1 || _selected.MeasureLength1 >= _selected.Length2)
-                        msg = "MeasureLength1 必須 < Length1 且 < Length2。";
+                        msgs.Add("MeasureLength1 必須 < Length1 且 < Length2。");
                     break;
             }
-            _warnLabel.Text = msg ?? "";
+
+            // Phase 2a：量測區數是否足夠讓 HALCON 佈點成形（MinMeasureRegions：Line 2/Circle 3/Ellipse 5/Rectangle 8）。
+            int min = MetrologyObjectDef.MinMeasureRegions(_selected.Shape);
+            if (_selected.NumMeasures > 0 && _selected.NumMeasures < min)
+            {
+                msgs.Add(string.Format(CultureInfo.InvariantCulture,
+                    "量測區數 {0} 少於此形狀最少 {1}", _selected.NumMeasures, min));
+            }
+            else if (_selected.MeasureDistance > 0)
+            {
+                double perimeter = EstimateNominalPerimeterPx(_selected);
+                if (perimeter > 0)
+                {
+                    double regions = perimeter / _selected.MeasureDistance;
+                    if (regions < min)
+                    {
+                        msgs.Add(string.Format(CultureInfo.InvariantCulture,
+                            "以間距估計約 {0:0} 區，少於最少 {1}（縮小 MeasureDistance 或改用 NumMeasures）", regions, min));
+                    }
+                }
+            }
+
+            // Phase 2b：MeasureDistance 與 NumMeasures 同時設定時，執行期以 Distance 優先，NumMeasures 靜默被忽略。
+            if (_selected.MeasureDistance > 0 && _selected.NumMeasures > 0)
+            {
+                msgs.Add("MeasureDistance 與 NumMeasures 同時設定：以 MeasureDistance 優先，NumMeasures 被忽略");
+            }
+
+            _warnLabel.Text = string.Join(" ; ", msgs);
+        }
+
+        // Phase 2a 輔助：以標稱幾何估計形狀周長（px），供「距離模式」估算量測區數。
+        private static double EstimateNominalPerimeterPx(MetrologyObjectDef o)
+        {
+            switch (o.Shape)
+            {
+                case MetrologyObjectType.Circle:
+                    return 2.0 * Math.PI * o.Radius;
+                case MetrologyObjectType.Ellipse:
+                    // Ramanujan 近似。
+                    return Math.PI * (3.0 * (o.Radius1 + o.Radius2)
+                        - Math.Sqrt((3.0 * o.Radius1 + o.Radius2) * (o.Radius1 + 3.0 * o.Radius2)));
+                case MetrologyObjectType.Rectangle:
+                    // Length1/Length2 為半邊 → 全周長 = 2*(2*Length1 + 2*Length2) = 4*(Length1+Length2)。
+                    return 4.0 * (o.Length1 + o.Length2);
+                case MetrologyObjectType.Line:
+                    {
+                        double dr = o.RowEnd - o.RowBegin, dc = o.ColumnEnd - o.ColumnBegin;
+                        return Math.Sqrt(dr * dr + dc * dc);
+                    }
+                default:
+                    return 0;
+            }
         }
 
         private void OnSave(object sender, EventArgs e)
@@ -362,6 +423,19 @@ namespace FlashMeasurementSystem
             _savedCallback?.Invoke(_recipe);
             DialogResult = DialogResult.OK;
             Close();
+        }
+
+        // Phase 3：不寫回 _recipe、不關閉編輯器 —— 只把目前 _objects 建成暫態模型交給呼叫端跑一次量測。
+        private void OnTrial(object sender, EventArgs e)
+        {
+            if (_trialCallback == null) return;
+            var model = new MetrologyModelDef
+            {
+                Objects = _objects,
+                ImageWidth = _imgW,
+                ImageHeight = _imgH
+            };
+            _trialCallback(model);
         }
 
         private void SetGeometryEnabledForShape(MetrologyObjectType shape)
