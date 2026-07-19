@@ -30,6 +30,8 @@ namespace FlashMeasurementSystem.Tests.Halcon
             TestMultiFeature(runner);
             TestBadMeasureLength(runner);
             TestAlignmentToMatchedPose(runner);
+            TestAlignmentRectangleRotated(runner);
+            TestAlignmentLineRotated(runner);
             Console.WriteLine("MetrologyModelHalconTests passed");
         }
 
@@ -219,6 +221,87 @@ namespace FlashMeasurementSystem.Tests.Halcon
                 Assert(Math.Abs(r.FitRow - partRow) < 1.5, "aligned FitRow ~100 (got " + r.FitRow.ToString("F2") + ")");
                 Assert(Math.Abs(r.FitColumn - partCol) < 1.5, "aligned FitColumn ~150 (got " + r.FitColumn.ToString("F2") + ")");
                 Assert(Math.Abs(r.FitRadius - radius) < 1.5, "aligned FitRadius ~40 (got " + r.FitRadius.ToString("F2") + ")");
+            }
+        }
+
+        // 對齊路徑 — 旋轉的「有方向」形狀（rectangle/ellipse 共用 center+Phi 變換路徑）。
+        // TestAlignmentToMatchedPose 只用圓（無 Phi），故 Phi 隨姿態旋轉這條從未測到。
+        //
+        // 非循環設計：同一個 hom_mat2d 走兩條不同程式路徑，必須一致 fit 才會中——
+        //   ① 影像：AffineTransImage 把 master 矩形實際轉成 part（方向由矩陣決定）。
+        //   ② 標稱：TransformRoi 的角度公式（refPhi + RotationRad）。
+        // 若 TransformRoi 漏轉 Phi 或角度符號錯，標稱方向對不上轉過的影像 → 量測區落在旋轉邊外
+        // → 擬合失敗，測試變紅。Phi 比較用 sin(Δ) 容許矩形軸 π 翻轉的等價歧義。
+        private static void TestAlignmentRectangleRotated(HalconMetrologyModelRunner runner)
+        {
+            var mapper = new HalconCoordinateMapper();
+            const double masterRow = 128, masterCol = 128, l1 = 60, l2 = 40;
+            const double partRow = 120, partCol = 140;
+            double theta = 20.0 * Math.PI / 180.0;   // 帶方向的姿態
+
+            RigidTransform t = mapper.CreateFromMatch(masterRow, masterCol, 0.0, partRow, partCol, theta);
+            TransformedRoi tr = mapper.TransformRoi(masterRow, masterCol, 0.0, t);   // 生產端預轉：center + Phi
+
+            using (HImage master = TestImageGenerator.CreateRectangleImage(256, 256, (int)masterRow, (int)masterCol, 0.0, (int)l1, (int)l2))
+            using (HImage part = master.AffineTransImage(new HHomMat2D(new HTuple(t.HomMat2D)), "bilinear", "false"))
+            {
+                var model = OneObject(new MetrologyObjectDef
+                {
+                    Id = "rot-rect", Name = "rotated-rect", Shape = MetrologyObjectType.Rectangle,
+                    Row = tr.Row, Column = tr.Col, Phi = tr.AngleRad, Length1 = l1, Length2 = l2,
+                    MeasureLength1 = 15
+                });
+                MetrologyObjectResult r = ApplyOne(runner, model, part);
+                Assert(r.Success, "rotated rect Success (" + r.ErrorMessage + ")");
+                Assert(Math.Abs(r.FitRow - partRow) < 1.5, "rotated rect FitRow ~120 (got " + r.FitRow.ToString("F2") + ")");
+                Assert(Math.Abs(r.FitColumn - partCol) < 1.5, "rotated rect FitColumn ~140 (got " + r.FitColumn.ToString("F2") + ")");
+                // sin(Δ)≈0 於 Δ=0 與 Δ=π：既確認方向跟隨姿態旋轉、又容許矩形長軸的 π 等價翻轉。
+                Assert(Math.Abs(Math.Sin(r.FitPhi - tr.AngleRad)) < 0.08,
+                    "rotated rect FitPhi follows pose (fit " + r.FitPhi.ToString("F3") + " vs nominal " + tr.AngleRad.ToString("F3") + ")");
+                Assert(Math.Abs(r.FitLength1 - l1) < 2.0, "rotated rect FitLength1 ~60 (got " + r.FitLength1.ToString("F2") + ")");
+                Assert(Math.Abs(r.FitLength2 - l2) < 2.0, "rotated rect FitLength2 ~40 (got " + r.FitLength2.ToString("F2") + ")");
+            }
+        }
+
+        // 對齊路徑 — 旋轉的直線（line 走「兩端點各自變換」路徑，與 center+Phi 不同）。
+        // 純旋轉（part center = master center）把整條階梯邊繞影像中心轉；標稱兩端點經 TransformRoi
+        // 預轉後仍落在轉過的邊上，量測到才代表兩端點變換與方向都對。
+        private static void TestAlignmentLineRotated(HalconMetrologyModelRunner runner)
+        {
+            var mapper = new HalconCoordinateMapper();
+            double theta = 20.0 * Math.PI / 180.0;
+
+            RigidTransform t = mapper.CreateFromMatch(128, 128, 0.0, 128, 128, theta);   // 繞中心純旋轉
+            TransformedRoi b = mapper.TransformRoi(50, 128, 0.0, t);
+            TransformedRoi e = mapper.TransformRoi(200, 128, 0.0, t);
+
+            using (HImage master = TestImageGenerator.CreateEdgeImage(256, 256))
+            using (HImage part = master.AffineTransImage(new HHomMat2D(new HTuple(t.HomMat2D)), "bilinear", "false"))
+            {
+                var model = OneObject(new MetrologyObjectDef
+                {
+                    Id = "rot-line", Name = "rotated-line", Shape = MetrologyObjectType.Line,
+                    RowBegin = b.Row, ColumnBegin = b.Col, RowEnd = e.Row, ColumnEnd = e.Col,
+                    MeasureLength1 = 30
+                });
+                MetrologyObjectResult r = ApplyOne(runner, model, part);
+                Assert(r.Success, "rotated line Success (" + r.ErrorMessage + ")");
+                Assert(r.MeasurePointRows.Count > 0, "rotated line measure points non-empty");
+
+                // HALCON line metrology 的端點是「擬合線段在量測區內的終點」，沿線方向會內縮，
+                // 不等於標稱端點（同 TestLine 只驗 column、不驗 row 端點）。故驗真正被釘住的量：
+                // 擬合線與變換後標稱線「共線」＝方向一致 + 垂直距離≈0，證明兩端點變換與方向都跟隨姿態。
+                double ndr = e.Row - b.Row, ndc = e.Col - b.Col;
+                double nlen = Math.Sqrt(ndr * ndr + ndc * ndc);
+                ndr /= nlen; ndc /= nlen;                                  // 標稱線單位方向
+                double fdr = r.FitRowEnd - r.FitRowBegin, fdc = r.FitColumnEnd - r.FitColumnBegin;
+                double flen = Math.Sqrt(fdr * fdr + fdc * fdc);
+                double sinBetween = (ndr * fdc - ndc * fdr) / flen;       // 兩方向夾角 sin（π 翻轉等價）
+                Assert(Math.Abs(sinBetween) < 0.05,
+                    "rotated line direction follows pose (sin=" + sinBetween.ToString("F3") + ")");
+                double perp = Math.Abs((r.FitRowBegin - b.Row) * ndc - (r.FitColumnBegin - b.Col) * ndr);
+                Assert(perp < 2.0,
+                    "rotated line collinear with transformed nominal (perp=" + perp.ToString("F2") + "px)");
             }
         }
 
