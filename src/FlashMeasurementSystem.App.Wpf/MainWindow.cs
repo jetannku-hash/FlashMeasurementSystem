@@ -1881,7 +1881,8 @@ namespace FlashMeasurementSystem
             editor.Show(this);
         }
 
-        // 開啟 2D 量測模型編輯器（modal）。編輯的是目前載入的配方；存檔後回寫 _loadedRecipe
+        // 開啟 2D 量測模型編輯器（modeless，Phase 4：與 RecipeEditor 一致，讓稍後加入的
+        // on-image 繪製能操作主視窗共用影像）。編輯的是目前載入的配方；存檔後回寫 _loadedRecipe
         // 並（若有路徑）以 RecipeStore 持久化，Run Recipe 立即經 Pass 3 套用此模型。
         private void OpenMetrologyModelEditor(object sender, EventArgs e)
         {
@@ -1927,7 +1928,10 @@ namespace FlashMeasurementSystem
                 }
             };
 
-            using (var editor = new MetrologyModelEditorForm(_loadedRecipe, imgW, imgH,
+            // 編輯器改 modeless 後同樣接管共用影像視窗（比照 OpenRecipeEditor）：先解除所有互動模式，
+            // 避免主視窗殘留的扇形繪製等 pending callback 洩漏進編輯器共用的 helper。
+            _imageHelper.DisarmInteractiveModes();
+            var editor = new MetrologyModelEditorForm(_loadedRecipe, imgW, imgH,
                 (recipe) =>
                 {
                     _loadedRecipe = recipe;
@@ -1971,10 +1975,8 @@ namespace FlashMeasurementSystem
                     measureResultLabel.Text = string.Format(CultureInfo.InvariantCulture,
                         "已更新量測模型（{0} 物件）{1}。可執行 Run Recipe。", count, savedNote);
                 },
-                metrologyTrial))
-            {
-                editor.ShowDialog(this);
-            }
+                metrologyTrial);
+            editor.Show(this);
         }
 
         // 獨立動作（Task 4）：DXF/CAD 輪廓度比對面板。非配方/一鍵量測流程的一環，

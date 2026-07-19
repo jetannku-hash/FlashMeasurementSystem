@@ -10,7 +10,8 @@ using FlashMeasurementSystem.Domain.Tolerance;
 namespace FlashMeasurementSystem
 {
     /// <summary>
-    /// 2D 量測模型編輯器（獨立 modal Form，純程式建構，無 Designer）。
+    /// 2D 量測模型編輯器（獨立 modeless Form，純程式建構，無 Designer；Phase 4 起與主視窗
+    /// 共存，讓稍後加入的 on-image 繪製能操作主視窗共用影像）。
     /// 操作員輸入各物件的標稱幾何 + 量測參數；量測矩形的自動佈放由 HALCON 在 apply 時負責，
     /// 此處不計算任何佈點。Save 時寫入 recipe.MetrologyModel 並回呼；Cancel 不動原配方
     /// （編輯的是 clone，未存檔前原 recipe.MetrologyModel 不變）。
@@ -26,6 +27,11 @@ namespace FlashMeasurementSystem
         private readonly List<MetrologyObjectDef> _objects = new List<MetrologyObjectDef>();
         private MetrologyObjectDef _selected;
         private bool _updating;
+        private bool _dirty;
+        // Phase 4 groundwork：比照 RecipeEditor 的 _editorInstalledOverlay——目前編輯器尚未持有
+        // _imageHelper（仍全經由 callback 與 MainWindow 溝通），故此旗標尚未被設為 true；
+        // on-image 繪製 commit 注入 _imageHelper 後才會在裝 overlay 處設定它，並於 FormClosed 清除。
+        private bool _editorInstalledOverlay;
 
         private ListBox _list;
         private Button _addButton, _removeButton, _saveButton, _cancelButton, _trialButton;
@@ -73,6 +79,19 @@ namespace FlashMeasurementSystem
             RefreshList();
             if (_objects.Count > 0) _list.SelectedIndex = 0;
             else SetPropertyEnabled(false);
+
+            // Phase 4：改 modeless 後，關閉前需比照 RecipeEditor 檔未存變更確認，
+            // 並在關閉時做編輯器自己持有資源的 teardown（目前尚無，見下方註解）。
+            FormClosing += OnFormClosing;
+            FormClosed += (s, e) =>
+            {
+                // 目前編輯器尚未持有 _imageHelper（仍全經由建構子傳入的 callback 與 MainWindow 溝通），
+                // 故尚無 rect2/arc edit 把手或本編輯器裝的 persistent overlay 需要在此拆除。
+                // on-image 繪製 commit 會在建構子注入 _imageHelper，屆時比照 RecipeEditor 補上
+                // EndRect2Edit()/EndArcEdit()/ClearSelectionHighlight()，並在 _editorInstalledOverlay
+                // 為 true 時 ClearOverlay()。此處先保留旗標重置，維持 teardown scaffold 存在。
+                _editorInstalledOverlay = false;
+            };
         }
 
         private void BuildLayout()
@@ -112,7 +131,7 @@ namespace FlashMeasurementSystem
             _nameBox = (TextBox)AddRow(t, "Name", ref r, new TextBox { Dock = DockStyle.Fill });
             // 只更新名稱欄位值；清單標籤改在離開欄位時刷新。直接在 TextChanged 重設 ListBox.Items[idx]
             // 會把焦點搶回清單，導致每打一字就跳開。
-            _nameBox.TextChanged += (s, e) => { if (!_updating && _selected != null) _selected.Name = _nameBox.Text; };
+            _nameBox.TextChanged += (s, e) => { if (!_updating && _selected != null) { _selected.Name = _nameBox.Text; _dirty = true; } };
             _nameBox.Leave += (s, e) => { if (!_updating) RefreshSelectedItemText(); };
 
             _shapeCombo = (ComboBox)AddRow(t, "Shape", ref r, new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList });
@@ -158,6 +177,7 @@ namespace FlashMeasurementSystem
         {
             var def = new MetrologyObjectDef { Name = "obj" + (_objects.Count + 1), Shape = MetrologyObjectType.Circle };
             _objects.Add(def);
+            _dirty = true;
             RefreshList();
             _list.SelectedIndex = _objects.Count - 1;
         }
@@ -167,6 +187,7 @@ namespace FlashMeasurementSystem
             int idx = _list.SelectedIndex;
             if (idx < 0 || idx >= _objects.Count) return;
             _objects.RemoveAt(idx);
+            _dirty = true;
             RefreshList();
             if (_objects.Count > 0) _list.SelectedIndex = Math.Min(idx, _objects.Count - 1);
             else { _selected = null; SetPropertyEnabled(false); }
@@ -185,6 +206,7 @@ namespace FlashMeasurementSystem
         {
             if (_updating || _selected == null) return;
             _selected.Shape = ParseShape(_shapeCombo.SelectedItem as string);
+            _dirty = true;
             SetGeometryEnabledForShape(_selected.Shape);
             _updating = true;
             try
@@ -226,6 +248,7 @@ namespace FlashMeasurementSystem
         private void WriteBack()
         {
             if (_updating || _selected == null) return;
+            _dirty = true;
             _selected.RowBegin = (double)_rowBegin.Value; _selected.ColumnBegin = (double)_colBegin.Value;
             _selected.RowEnd = (double)_rowEnd.Value; _selected.ColumnEnd = (double)_colEnd.Value;
             _selected.Row = (double)_row.Value; _selected.Column = (double)_col.Value; _selected.Radius = (double)_radius.Value;
@@ -287,6 +310,7 @@ namespace FlashMeasurementSystem
         private void WriteTolerances()
         {
             if (_updating || _selected == null) return;
+            _dirty = true;
             var list = new List<MetrologyItemTolerance>();
             if (_slotAKey != null && _slotAEnable.Checked)
                 list.Add(new MetrologyItemTolerance
@@ -421,8 +445,32 @@ namespace FlashMeasurementSystem
                 ImageHeight = _imgH
             };
             _savedCallback?.Invoke(_recipe);
+            _dirty = false;
             DialogResult = DialogResult.OK;
             Close();
+        }
+
+        // ─── Dirty tracking / close safety（比照 RecipeEditor.ConfirmDiscardIfDirty/OnFormClosing）───
+
+        private bool ConfirmDiscardIfDirty()
+        {
+            if (!_dirty) return true;
+            DialogResult r = MessageBox.Show(this,
+                "有未儲存的變更，是否於關閉前儲存？", "未儲存的變更",
+                MessageBoxButtons.YesNoCancel, MessageBoxIcon.Warning);
+            if (r == DialogResult.Cancel) return false;
+            if (r == DialogResult.Yes)
+            {
+                OnSave(this, EventArgs.Empty);
+                return !_dirty; // OnSave 一定會清 _dirty；若日後改為可能失敗，這裡仍是正確的守門
+            }
+            return true; // No → 放棄變更
+        }
+
+        private void OnFormClosing(object sender, FormClosingEventArgs e)
+        {
+            if (!ConfirmDiscardIfDirty())
+                e.Cancel = true;
         }
 
         // Phase 3：不寫回 _recipe、不關閉編輯器 —— 只把目前 _objects 建成暫態模型交給呼叫端跑一次量測。
