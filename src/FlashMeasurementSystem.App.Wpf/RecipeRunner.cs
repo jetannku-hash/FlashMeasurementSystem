@@ -367,13 +367,19 @@ namespace FlashMeasurementSystem
 
                 PinPitchAnalysisResult analysis = PinPitchAnalyzer.Analyze(det.Pins, pixelSizeUm, tool.PinPitch);
                 res.PinPitch = analysis;
-                res.Measured = true;
-                res.IsOk = analysis.Success ? analysis.IsPass : (bool?)null;
                 if (analysis.Success)
+                {
+                    res.Measured = true;
+                    res.IsOk = analysis.IsPass;
                     res.ValueText = string.Format(CultureInfo.InvariantCulture,
                         "腳數={0} 平均間距={1:F3}mm", analysis.PinCount, analysis.PitchMeanMm);
+                }
                 else
                 {
+                    // 分析失敗（如偵到 <2 腳）＝量測失敗，須計 NG（Supported && !Measured 或 IsOk=false），
+                    // 不可留 Measured=true/IsOk=null 讓兩條 NG 規則都漏 → 假 PASS（audit 教訓）。
+                    res.Measured = false;
+                    res.IsOk = false;
                     res.ValueText = "引腳間距分析失敗";
                     res.Message = analysis.ErrorMessage;
                 }
