@@ -1,4 +1,6 @@
 using System;
+using System.Globalization;
+using System.IO;
 using FlashMeasurementSystem.Application.MetrologyModel;
 using FlashMeasurementSystem.Domain.MetrologyModel;
 using HalconDotNet;
@@ -51,6 +53,9 @@ namespace FlashMeasurementSystem.Halcon.MetrologyModel
                 }
                 HOperatorSet.SetMetrologyModelImageSize(handle, w, h);
 
+                Log("APPLY START imgW=" + w + " imgH=" + h + " objects=" + model.Objects.Count
+                    + " hasRef=" + hasReferencePose + " hasMatch=" + hasMatch);
+
                 // 4) 參考座標系（reference_hdevelop.txt ~L7000：[row, column, angle]）。
                 //    HasReferencePose=false 時略過，標稱幾何即絕對影像座標。
                 if (hasReferencePose)
@@ -69,6 +74,7 @@ namespace FlashMeasurementSystem.Halcon.MetrologyModel
                     string validationError = ValidateMeasureLength1(def);
                     if (validationError != null)
                     {
+                        Log("ADD skip(validate) " + DescribeDef(def) + " err=" + validationError);
                         preFailures[i] = FailResult(def, validationError);
                         continue;
                     }
@@ -77,6 +83,7 @@ namespace FlashMeasurementSystem.Halcon.MetrologyModel
                     {
                         HTuple idx = AddObject(handle, def);
                         indices[i] = idx.I;
+                        Log("ADD ok idx=" + indices[i] + " " + DescribeDef(def));
                         // 單一實例 → 結果 tuple 以每形狀固定長度解析（Pitfall 6）。
                         HOperatorSet.SetMetrologyObjectParam(handle, new HTuple(indices[i]), "num_instances", 1);
                         if (def.MeasureDistance > 0)
@@ -88,6 +95,7 @@ namespace FlashMeasurementSystem.Halcon.MetrologyModel
                     catch (HalconException ex)
                     {
                         indices[i] = -1;
+                        Log("ADD fail " + DescribeDef(def) + " ex=" + ex.Message);
                         preFailures[i] = FailResult(def, "add 失敗: " + ex.Message);
                     }
                 }
@@ -107,11 +115,15 @@ namespace FlashMeasurementSystem.Halcon.MetrologyModel
                         result.Objects.Add(preFailures[i]);
                         continue;
                     }
-                    result.Objects.Add(QueryResult(handle, indices[i], model.Objects[i]));
+                    MetrologyObjectResult r = QueryResult(handle, indices[i], model.Objects[i]);
+                    Log("RESULT " + r.Shape + " success=" + r.Success + " score=" + r.Score.ToString("F2")
+                        + " value=" + r.ValueText + " msg=" + r.ErrorMessage);
+                    result.Objects.Add(r);
                 }
             }
             catch (HalconException ex)
             {
+                Log("APPLY EXCEPTION " + ex.Message);
                 result.ErrorMessage = ex.Message;
             }
             finally
@@ -210,6 +222,8 @@ namespace FlashMeasurementSystem.Halcon.MetrologyModel
                 int need = ExpectedParamCount(def.Shape);
                 if (p == null || p.Length < need)
                 {
+                    Log("FIT insufficient shape=" + def.Shape + " gotParams=" + (p == null ? 0 : p.Length)
+                        + " need=" + need + " score=" + r.Score.ToString("F2"));
                     r.Success = false;
                     r.ErrorMessage = "未取得有效擬合（量測區無足夠邊點）";
                     return r;
@@ -270,6 +284,100 @@ namespace FlashMeasurementSystem.Halcon.MetrologyModel
                 ErrorMessage = message,
                 ValueText = message   // 讓結果表/疊加顯示失敗原因，而非空白
             };
+        }
+
+        // 診斷用：格式化物件的標稱幾何 + measure 參數（形狀相關欄位 + 共通量測參數）。
+        private static string DescribeDef(MetrologyObjectDef d)
+        {
+            if (d == null) return "def=null";
+            string geom;
+            switch (d.Shape)
+            {
+                case MetrologyObjectType.Line:
+                    geom = string.Format(CultureInfo.InvariantCulture,
+                        "Line(RB={0:F1},CB={1:F1},RE={2:F1},CE={3:F1})",
+                        d.RowBegin, d.ColumnBegin, d.RowEnd, d.ColumnEnd);
+                    break;
+                case MetrologyObjectType.Circle:
+                    geom = string.Format(CultureInfo.InvariantCulture,
+                        "Circle(R={0:F1},C={1:F1},Rad={2:F1})", d.Row, d.Column, d.Radius);
+                    break;
+                case MetrologyObjectType.Ellipse:
+                    geom = string.Format(CultureInfo.InvariantCulture,
+                        "Ellipse(R={0:F1},C={1:F1},Phi={2:F4},Rad1={3:F1},Rad2={4:F1})",
+                        d.Row, d.Column, d.Phi, d.Radius1, d.Radius2);
+                    break;
+                case MetrologyObjectType.Rectangle:
+                    geom = string.Format(CultureInfo.InvariantCulture,
+                        "Rectangle(R={0:F1},C={1:F1},Phi={2:F4},L1={3:F1},L2={4:F1})",
+                        d.Row, d.Column, d.Phi, d.Length1, d.Length2);
+                    break;
+                default:
+                    geom = d.Shape.ToString();
+                    break;
+            }
+            return string.Format(CultureInfo.InvariantCulture,
+                "{0} measure(ML1={1},ML2={2},Sig={3},Thr={4},MeasDist={5},NumMeas={6})",
+                geom, d.MeasureLength1, d.MeasureLength2, d.MeasureSigma, d.MeasureThreshold,
+                d.MeasureDistance, d.NumMeasures);
+        }
+
+        // ─── 診斷 log（檔案 + Debug.WriteLine） ───────────────────────────
+        private static readonly object _logLock = new object();
+        private static string _cachedLogPath;
+        private const long MaxLogBytes = 5L * 1024 * 1024; // 超過 5MB 自動截斷
+
+        private static string GetLogPath()
+        {
+            if (_cachedLogPath != null) return _cachedLogPath;
+            try
+            {
+                var current = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory);
+                while (current != null)
+                {
+                    if (File.Exists(Path.Combine(current.FullName, "FlashMeasurementSystem.sln")))
+                    {
+                        var logsDir = Path.Combine(current.FullName, "data", "logs");
+                        Directory.CreateDirectory(logsDir);
+                        _cachedLogPath = Path.Combine(logsDir, "metrology.log");
+                        return _cachedLogPath;
+                    }
+                    current = current.Parent;
+                }
+            }
+            catch
+            {
+                // 任何路徑問題都退回到 TEMP
+            }
+            _cachedLogPath = Path.Combine(Path.GetTempPath(), "FlashMeasurementSystem_metrology.log");
+            return _cachedLogPath;
+        }
+
+        private static void Log(string line)
+        {
+            string stamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture);
+            string msg = "[" + stamp + "] " + line;
+            System.Diagnostics.Debug.WriteLine(msg);
+            try
+            {
+                string path = GetLogPath();
+                lock (_logLock)
+                {
+                    if (File.Exists(path) && new FileInfo(path).Length > MaxLogBytes)
+                    {
+                        // 截斷時保留上一輪歷史到 .bak（除錯需要回溯），而非直接刪除。
+                        // 先刪舊 .bak 再 Move，避免 Move 因目標已存在而拋例外。
+                        string bak = path + ".bak";
+                        if (File.Exists(bak)) File.Delete(bak);
+                        File.Move(path, bak);
+                    }
+                    File.AppendAllText(path, msg + Environment.NewLine);
+                }
+            }
+            catch
+            {
+                // log 永遠不可拋例外
+            }
         }
     }
 }
