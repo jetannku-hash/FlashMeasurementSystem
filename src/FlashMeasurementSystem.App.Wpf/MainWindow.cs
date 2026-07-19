@@ -28,7 +28,9 @@ using FlashMeasurementSystem.Domain.MetrologyModel;
 using FlashMeasurementSystem.Halcon.CoordinateSystem;
 using FlashMeasurementSystem.Halcon.MetrologyModel;
 using FlashMeasurementSystem.Application.HoleDetection;
+using FlashMeasurementSystem.Application.PinDetection;
 using FlashMeasurementSystem.Halcon.HoleDetection;
+using FlashMeasurementSystem.Halcon.PinDetection;
 using FlashMeasurementSystem.Infrastructure.Roi;
 using FlashMeasurementSystem.Infrastructure.Tolerance;
 using FlashMeasurementSystem.Infrastructure.Calibration;
@@ -54,6 +56,7 @@ namespace FlashMeasurementSystem
         private readonly HalconAngleMeasurer _angleMeasurer = new HalconAngleMeasurer();
         private readonly HalconMetrologyModelRunner _metrologyRunner = new HalconMetrologyModelRunner();
         private readonly IHoleDetector<HImage> _holeDetector = new HalconHoleDetector();
+        private readonly IPinDetector<HImage> _pinDetector = new HalconPinDetector();
         private EdgeDetectionRoi _latestEdgeRoi;
         private double _editCenterRow, _editCenterCol;
         private EdgeResult _latestEdgeResult;
@@ -109,7 +112,7 @@ namespace FlashMeasurementSystem
             _imageHelper.RoiSelected += OnImageRoiSelected;
 
             // 配方執行引擎：以既有 adapters 注入（邊緣 + 圓/線擬合 + 公差 + 座標映射）。
-            _recipeRunner = new RecipeRunner(_edgeDetector, _circleFitter, _lineFitter, _distanceMeasurer, _angleMeasurer, _judger, _coordinateMapper, _metrologyRunner, _holeDetector);
+            _recipeRunner = new RecipeRunner(_edgeDetector, _circleFitter, _lineFitter, _distanceMeasurer, _angleMeasurer, _judger, _coordinateMapper, _metrologyRunner, _holeDetector, _pinDetector);
             _workflow = new MeasurementWorkflow(_iqc, _templateMatcher, _recipeRunner, _judger, _reportWriter);
             // 一鍵量測逐階段進度：StateChanged 在 UI 執行緒同步觸發，於 status bar 即時顯示。
             _workflow.StateChanged += OnWorkflowStateChanged;

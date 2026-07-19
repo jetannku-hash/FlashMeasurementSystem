@@ -20,7 +20,7 @@ namespace FlashMeasurementSystem.Domain.Roi
         // 已知型別；未列入者執行時會被略過，故視為 Warning。
         private static readonly HashSet<string> KnownTypes = new HashSet<string>
         {
-            "circle", "line", "edge", "arc", "gear", "pcd",
+            "circle", "line", "edge", "arc", "gear", "pcd", "pin_pitch",
             "intersection", "midline", "projection",
             "roundness", "straightness", "parallelism", "perpendicularity", "concentricity",
             "distance", "angle"
@@ -147,6 +147,17 @@ namespace FlashMeasurementSystem.Domain.Roi
                     if (tool.ArcRoi == null || !tool.ArcRoi.IsDefined)
                         issues.Add(new RecipeIssue(RecipeIssueSeverity.Error, tool.Id, tool.Name,
                             "PCD 工具的量測環帶無效：" + (tool.ArcRoi == null ? "缺少 ArcRoi" : tool.ArcRoi.ValidationError)));
+                }
+
+                if (tool.ToolType == "pin_pitch")
+                {
+                    if (tool.PinPitch == null)
+                        issues.Add(new RecipeIssue(RecipeIssueSeverity.Error, tool.Id, tool.Name, "引腳間距工具缺少引腳間距參數（PinPitch）"));
+                    else if (tool.PinPitch.NominalPitchMm <= 0 || tool.PinPitch.PitchToleranceMm < 0
+                             || tool.PinPitch.UniformityToleranceMm < 0)
+                        issues.Add(new RecipeIssue(RecipeIssueSeverity.Error, tool.Id, tool.Name, "引腳間距參數無效（標稱間距需 > 0、公差需 ≥ 0）"));
+                    if (tool.Roi == null)
+                        issues.Add(new RecipeIssue(RecipeIssueSeverity.Error, tool.Id, tool.Name, "引腳間距工具缺少量測 ROI（rect2）"));
                 }
 
                 // 公差反向：只檢查真正消費雙邊 Tolerance 的型別。GD&T（用 Gdt）、gear（三判定）、

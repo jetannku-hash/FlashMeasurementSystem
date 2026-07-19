@@ -165,6 +165,8 @@ namespace FlashMeasurementSystem.Tests
             Console.WriteLine("PcdRecipeToolDomainTests passed");
             PinPitchAnalysisDomainTests.Run();
             Console.WriteLine("PinPitchAnalysisDomainTests passed");
+            PinPitchRecipeToolDomainTests.Run();
+            Console.WriteLine("PinPitchRecipeToolDomainTests passed");
             Console.WriteLine("EdgeDetectionDomainTests passed");
             return 0;
         }

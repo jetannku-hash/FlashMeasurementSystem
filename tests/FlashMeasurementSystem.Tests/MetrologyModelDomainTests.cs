@@ -36,7 +36,7 @@ namespace FlashMeasurementSystem.Tests
             // ── MET2D-03：Recipe 預設（向後相容基線） ──
             Recipe d = Recipe.Default();
             Assert(d.MetrologyModel == null, "Recipe.Default MetrologyModel null");
-            Assert(d.SchemaVersion == 11, "Recipe.Default SchemaVersion 11");
+            Assert(d.SchemaVersion == 12, "Recipe.Default SchemaVersion 12");
 
             // ── MET2D-03：舊 v5 配方（無 MetrologyModel 欄）載入不丟例外、欄位為 null ──
             string oldPath = TempZcp("old");
