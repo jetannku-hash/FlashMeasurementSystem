@@ -510,18 +510,21 @@ namespace FlashMeasurementSystem
                 && _imageHelper != null && _imageHelper.CurrentImage != null
                 && (_selected.Shape == MetrologyObjectType.Rectangle
                     || _selected.Shape == MetrologyObjectType.Circle
-                    || _selected.Shape == MetrologyObjectType.Ellipse);
+                    || _selected.Shape == MetrologyObjectType.Ellipse
+                    || _selected.Shape == MetrologyObjectType.Line);
         }
 
         private void OnDrawOnImage(object sender, EventArgs e)
         {
             if (_selected == null || _imageHelper == null || _imageHelper.CurrentImage == null) return;
-            if (_selected.Shape == MetrologyObjectType.Line) return; // 直線由後續 commit 處理
             try
             {
-                // RequestRoi 內部已會 DisarmInteractiveModes，這裡再呼叫一次確保無殘留 pending 手勢。
+                // RequestRoi/RequestLine 內部已會 DisarmInteractiveModes，這裡再呼叫一次確保無殘留 pending 手勢。
                 _imageHelper.DisarmInteractiveModes();
-                _imageHelper.RequestRoi(OnDrawnRoi);
+                if (_selected.Shape == MetrologyObjectType.Line)
+                    _imageHelper.RequestLine(OnDrawnLine);   // 直線：兩點拖曳手勢
+                else
+                    _imageHelper.RequestRoi(OnDrawnRoi);
             }
             catch (Exception ex)
             {
@@ -557,6 +560,25 @@ namespace FlashMeasurementSystem
                 BeginInvoke(new Action(() => ApplyDrawnShape(centerRow, centerCol, length1, length2, angleRad)));
             else
                 ApplyDrawnShape(centerRow, centerCol, length1, length2, angleRad);
+        }
+
+        // RequestLine 於 MouseUp 傳回兩端點（>5px 才觸發）。直接寫進直線標稱幾何欄位。
+        private void OnDrawnLine(double r1, double c1, double r2, double c2)
+        {
+            if (InvokeRequired)
+                BeginInvoke(new Action(() => ApplyDrawnLine(r1, c1, r2, c2)));
+            else
+                ApplyDrawnLine(r1, c1, r2, c2);
+        }
+
+        private void ApplyDrawnLine(double r1, double c1, double r2, double c2)
+        {
+            if (_selected == null || _selected.Shape != MetrologyObjectType.Line) return;
+            _selected.RowBegin = r1; _selected.ColumnBegin = c1;
+            _selected.RowEnd = r2; _selected.ColumnEnd = c2;
+            Populate(_selected);   // 於 _updating guard 下刷新 NUD
+            _dirty = true;
+            UpdateWarning();
         }
 
         // 依 Shape 把繪製結果寫進標稱幾何欄位（只動當前形狀相關欄位），再刷 NUD、標記 dirty、更新警示。

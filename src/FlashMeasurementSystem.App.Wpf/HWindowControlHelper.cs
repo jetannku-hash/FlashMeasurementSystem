@@ -33,6 +33,20 @@ namespace FlashMeasurementSystem
             }
         }
         private bool _isSectorMode;
+        /// <summary>
+        /// true 期間下一次左鍵按下會開始「兩點拖曳」建立直線標稱幾何（見 RequestLine）。
+        /// 設為 false 時一併清掉 pending callback——比照 IsSectorMode，讓殘留的 request 完全失效。
+        /// </summary>
+        public bool IsLineMode
+        {
+            get => _isLineMode;
+            set
+            {
+                _isLineMode = value;
+                if (!value) _lineCallback = null;
+            }
+        }
+        private bool _isLineMode;
         public bool HasRoi => Math.Abs(_roiEndRow - _roiStartRow) > 0.1 && Math.Abs(_roiEndCol - _roiStartCol) > 0.1;
         public double MouseRow { get; private set; }
         public double MouseCol { get; private set; }
@@ -70,6 +84,10 @@ namespace FlashMeasurementSystem
         private bool _isDrawingSector;
         private double _sectorCenterRow, _sectorCenterCol, _sectorCursorRow, _sectorCursorCol;
         private Action<ArcMeasureRoi> _sectorCallback;
+        // 直線標稱幾何「兩點拖曳」建立手勢狀態（與 rect2/arc/扇形互斥；由 RequestLine 一次性請求）。
+        private bool _isDrawingLine;
+        private double _lineStartRow, _lineStartCol, _lineCurRow, _lineCurCol;
+        private Action<double, double, double, double> _lineCallback;
 
         public HWindowControlHelper(HWindowControl control)
         {
@@ -101,6 +119,10 @@ namespace FlashMeasurementSystem
             IsSectorMode = false;
             _isDrawingSector = false;
             _sectorCallback = null;
+            // 對稱清除直線拖曳建立狀態——否則換新圖後 pending RequestLine 仍以舊圖座標觸發。
+            IsLineMode = false;
+            _isDrawingLine = false;
+            _lineCallback = null;
             CurrentImage?.Dispose();
             CurrentImage = image;
             HOperatorSet.GetImageSize(image, out HTuple w, out HTuple h);
@@ -164,6 +186,13 @@ namespace FlashMeasurementSystem
                 {
                     Annotator.DrawSectorRoi(_sectorCenterRow, _sectorCenterCol, pRadius, pAnnulus, pA0, pExtent);
                 }
+                return;
+            }
+
+            // 正在拖曳新直線時：比照 _isDrawingSector，只畫即時預覽線、跳過 persistent overlay。
+            if (_isDrawingLine)
+            {
+                Annotator.DrawLine(_lineStartRow, _lineStartCol, _lineCurRow, _lineCurCol, "green");
                 return;
             }
 
@@ -240,6 +269,9 @@ namespace FlashMeasurementSystem
             IsSectorMode = false;
             _isDrawingSector = false;
             _sectorCallback = null;
+            IsLineMode = false;
+            _isDrawingLine = false;
+            _lineCallback = null;
             ClearOverlay();
         }
 
@@ -252,10 +284,13 @@ namespace FlashMeasurementSystem
         {
             IsRoiMode = false;
             IsSectorMode = false;          // setter 會一併清 _sectorCallback
+            IsLineMode = false;            // setter 會一併清 _lineCallback
             _isDrawingRoi = false;
             _isDrawingSector = false;
+            _isDrawingLine = false;
             _roiCallback = null;
             _sectorCallback = null;
+            _lineCallback = null;
             EndRect2Edit();
             EndArcEdit();
             ClearRoiCoordinates();         // 消除 fallback 藍框殘留（見既有 tab-switch 註解）
@@ -290,6 +325,22 @@ namespace FlashMeasurementSystem
             _persistentOverlayAction = null;
             _selectionHighlightAction = null;
             IsSectorMode = true;
+            Redraw();
+        }
+
+        /// <summary>
+        /// 請求一次性「兩點拖曳」建立直線標稱幾何。MouseDown 記錄起點，拖曳中即時預覽直線，
+        /// MouseUp 若拖曳距離 > 5px 則以 callback 傳回 (startRow,startCol,endRow,endCol)；
+        /// 否則視為取消，保留 pending 狀態讓使用者可重新拖曳。
+        /// 先解除其他互動模式（矩形/扇形繪製/rect2/弧形編輯），確保模式互斥。
+        /// </summary>
+        public void RequestLine(Action<double, double, double, double> callback)
+        {
+            DisarmInteractiveModes();
+            _lineCallback = callback;
+            _persistentOverlayAction = null;
+            _selectionHighlightAction = null;
+            IsLineMode = true;
             Redraw();
         }
 
@@ -449,6 +500,14 @@ namespace FlashMeasurementSystem
                 _sectorCursorRow = _sectorCenterRow;
                 _sectorCursorCol = _sectorCenterCol;
             }
+
+            if (e.Button == MouseButtons.Left && IsLineMode)
+            {
+                _isDrawingLine = true;
+                PixelToImage(e.X, e.Y, out _lineStartRow, out _lineStartCol);
+                _lineCurRow = _lineStartRow;
+                _lineCurCol = _lineStartCol;
+            }
         }
 
         private void OnMouseMove(object sender, MouseEventArgs e)
@@ -477,6 +536,12 @@ namespace FlashMeasurementSystem
             {
                 // 拖曳中的扇形預覽由 Redraw() 統一繪製（_sectorCursor 已先更新）。
                 PixelToImage(e.X, e.Y, out _sectorCursorRow, out _sectorCursorCol);
+                Redraw();
+            }
+            else if (_isDrawingLine)
+            {
+                // 拖曳中的直線預覽由 Redraw() 統一繪製（_lineCur 已先更新）。
+                PixelToImage(e.X, e.Y, out _lineCurRow, out _lineCurCol);
                 Redraw();
             }
             else if (_editMode != Rect2Handle.None)
@@ -580,6 +645,24 @@ namespace FlashMeasurementSystem
                 }
                 // 成功時 callback 鏈（OnSectorRoiCreated → 勾選互動編輯 → BeginArcEdit）已重繪；
                 // 這裡的 Redraw 主要服務「取消」路徑（radius<=5，未觸發 callback），清掉最後一幀預覽。
+                Redraw();
+            }
+
+            if (_isDrawingLine)
+            {
+                _isDrawingLine = false;
+                PixelToImage(e.X, e.Y, out _lineCurRow, out _lineCurCol);
+                double dr = _lineCurRow - _lineStartRow, dc = _lineCurCol - _lineStartCol;
+                // 拖曳距離 > 5px 才視為成立，否則保留 pending 狀態讓使用者可重新拖曳（比照 RequestSector）。
+                if (Math.Sqrt(dr * dr + dc * dc) > 5.0)
+                {
+                    // 先取出 callback 再清模式：IsLineMode 的 setter 會 null 掉 _lineCallback，
+                    // 若先設 IsLineMode=false 再讀 _lineCallback 會拿到 null → 手勢無回呼（比照扇形 line 567）。
+                    var cb = _lineCallback;
+                    _lineCallback = null;
+                    IsLineMode = false;
+                    cb?.Invoke(_lineStartRow, _lineStartCol, _lineCurRow, _lineCurCol);
+                }
                 Redraw();
             }
         }
