@@ -28,7 +28,7 @@ namespace FlashMeasurementSystem.Tests
             AssertEqual(0, defaultTool.RefToolIds.Count, "Default tool no RefToolIds");
 
             Recipe recipe = Recipe.Default();
-            AssertEqual(10, recipe.SchemaVersion, "Default Recipe SchemaVersion");
+            AssertEqual(11, recipe.SchemaVersion, "Default Recipe SchemaVersion");
             AssertEqual(0, recipe.Tools.Count, "Default Recipe empty tools");
             AssertEqual("", recipe.CalibrationProfileId, "Default no calibration ref");
             AssertEqual(false, recipe.HasReferencePose, "Default no reference pose");
@@ -127,7 +127,7 @@ namespace FlashMeasurementSystem.Tests
                     throw new InvalidOperationException("Recipe file not written");
                 Recipe rt = store.Load(path);
 
-                AssertEqual(10, rt.SchemaVersion, "Round-trip SchemaVersion");
+                AssertEqual(11, rt.SchemaVersion, "Round-trip SchemaVersion");
                 AssertEqual("R-1", rt.RecipeId, "Round-trip RecipeId");
                 AssertEqual("CAL-1", rt.CalibrationProfileId, "Round-trip calibration ref by id");
                 AssertEqual(true, rt.HasReferencePose, "Round-trip HasReferencePose");

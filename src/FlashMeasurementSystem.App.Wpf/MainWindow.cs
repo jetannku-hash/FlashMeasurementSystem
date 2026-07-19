@@ -24,6 +24,7 @@ using FlashMeasurementSystem.Domain.AngleMeasurement;
 using FlashMeasurementSystem.Halcon.AngleMeasurement;
 using FlashMeasurementSystem.Domain.Roi;
 using FlashMeasurementSystem.Domain.Calibration;
+using FlashMeasurementSystem.Domain.MetrologyModel;
 using FlashMeasurementSystem.Halcon.CoordinateSystem;
 using FlashMeasurementSystem.Halcon.MetrologyModel;
 using FlashMeasurementSystem.Application.HoleDetection;
@@ -1880,7 +1881,8 @@ namespace FlashMeasurementSystem
             editor.Show(this);
         }
 
-        // 開啟 2D 量測模型編輯器（modal）。編輯的是目前載入的配方；存檔後回寫 _loadedRecipe
+        // 開啟 2D 量測模型編輯器（modeless，Phase 4：與 RecipeEditor 一致，讓稍後加入的
+        // on-image 繪製能操作主視窗共用影像）。編輯的是目前載入的配方；存檔後回寫 _loadedRecipe
         // 並（若有路徑）以 RecipeStore 持久化，Run Recipe 立即經 Pass 3 套用此模型。
         private void OpenMetrologyModelEditor(object sender, EventArgs e)
         {
@@ -1903,7 +1905,33 @@ namespace FlashMeasurementSystem
                 catch (HalconException) { /* 取不到尺寸用 0：apply 時 adapter 會即時查詢 */ }
             }
 
-            using (var editor = new MetrologyModelEditorForm(_loadedRecipe, imgW, imgH,
+            // Phase 3：編輯器內「試測」委派——用目前（未存檔）模型建一份暫態純量測配方（無 1D 工具、
+            // 無參考姿態），跑法與 overlay 繪製比照 RunRecipeButton_Click，直接重用 DrawRecipeResults，
+            // 讓量測模型 overlay（含判定上色）直接畫在主視窗共用影像上。不做 IQC/CSV，僅擬合預覽。
+            Action<MetrologyModelDef> metrologyTrial = (model) =>
+            {
+                if (_imageHelper == null || _imageHelper.CurrentImage == null) return;
+                var tempRecipe = new Recipe { MetrologyModel = model };
+                ResolvePixelSize(out double pxUmX, out double pxUmY, out string pxSource);
+                try
+                {
+                    System.Collections.Generic.List<ToolRunResult> results = _recipeRunner.Run(
+                        tempRecipe, _imageHelper.CurrentImage,
+                        _hasMatch, _lastMatchRow, _lastMatchCol, _lastMatchAngleDeg * Math.PI / 180.0,
+                        pxUmX, pxUmY);
+                    DrawRecipeResults(results, pxSource);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(this, "試測失敗：" + ex.Message, "Metrology Trial",
+                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
+            };
+
+            // 編輯器改 modeless 後同樣接管共用影像視窗（比照 OpenRecipeEditor）：先解除所有互動模式，
+            // 避免主視窗殘留的扇形繪製等 pending callback 洩漏進編輯器共用的 helper。
+            _imageHelper.DisarmInteractiveModes();
+            var editor = new MetrologyModelEditorForm(_loadedRecipe, imgW, imgH,
                 (recipe) =>
                 {
                     _loadedRecipe = recipe;
@@ -1928,6 +1956,10 @@ namespace FlashMeasurementSystem
 
                     if (!string.IsNullOrEmpty(_loadedRecipePath))
                     {
+                        // 以檔名補上 RecipeId/Name（全新或既有但無名的量測配方，否則報表 Recipe 欄空白）。
+                        string baseName = Path.GetFileNameWithoutExtension(_loadedRecipePath);
+                        if (string.IsNullOrEmpty(_loadedRecipe.RecipeId)) _loadedRecipe.RecipeId = baseName;
+                        if (string.IsNullOrEmpty(_loadedRecipe.Name)) _loadedRecipe.Name = baseName;
                         try { _recipeStore.Save(_loadedRecipe, _loadedRecipePath); }
                         catch (Exception ex)
                         {
@@ -1942,10 +1974,10 @@ namespace FlashMeasurementSystem
                         ? "（未存檔，僅暫存記憶體）" : "（已存至 " + Path.GetFileName(_loadedRecipePath) + "）";
                     measureResultLabel.Text = string.Format(CultureInfo.InvariantCulture,
                         "已更新量測模型（{0} 物件）{1}。可執行 Run Recipe。", count, savedNote);
-                }))
-            {
-                editor.ShowDialog(this);
-            }
+                },
+                _imageHelper,
+                metrologyTrial);
+            editor.Show(this);
         }
 
         // 獨立動作（Task 4）：DXF/CAD 輪廓度比對面板。非配方/一鍵量測流程的一環，

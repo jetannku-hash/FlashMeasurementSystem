@@ -372,6 +372,39 @@ namespace FlashMeasurementSystem
                     if (overall.Items.Count > 0)
                         judgments.Add(overall.Items[0]);
                 }
+                else if (r.ToolType != null && r.ToolType.StartsWith("metrology_"))
+                {
+                    // metrology 物件：每個「判定量」發一列（比照 pcd 多列，px）。有設公差才有判定列。
+                    string mName = r.Name ?? "";
+                    if (r.MetrologyJudgments != null && r.MetrologyJudgments.Count > 0)
+                    {
+                        foreach (var mj in r.MetrologyJudgments)
+                            judgments.Add(new ItemJudgment
+                            {
+                                ToolId = "",
+                                ToolName = mName + "-" + mj.Label,
+                                MeasuredValue = mj.MeasuredValue,
+                                Nominal = mj.Nominal,
+                                LowerLimit = mj.LowerLimit,
+                                UpperLimit = mj.UpperLimit,
+                                Unit = string.IsNullOrEmpty(mj.Unit) ? "px" : mj.Unit,
+                                Deviation = mj.MeasuredValue - mj.Nominal,
+                                IsOk = mj.IsOk,
+                                Message = mj.Label
+                            });
+                    }
+                    else
+                    {
+                        // 量測成功但未設公差 → 資訊列（以量測成功當 OK）；量測失敗 → NG。
+                        judgments.Add(new ItemJudgment
+                        {
+                            ToolName = mName,
+                            MeasuredValue = 0,
+                            IsOk = r.Measured,
+                            Message = string.IsNullOrEmpty(r.ValueText) ? (r.Message ?? "") : r.ValueText
+                        });
+                    }
+                }
                 else
                 {
                     judgments.Add(new ItemJudgment
