@@ -243,7 +243,10 @@ namespace FlashMeasurementSystem.Halcon.MetrologyModel
                     case MetrologyObjectType.Line:
                         r.FitRowBegin = p[0].D; r.FitColumnBegin = p[1].D;
                         r.FitRowEnd = p[2].D; r.FitColumnEnd = p[3].D;
-                        r.ValueText = string.Format("Score={0:F2}", r.Score);
+                        double lineLen = Math.Sqrt(
+                            (r.FitRowEnd - r.FitRowBegin) * (r.FitRowEnd - r.FitRowBegin) +
+                            (r.FitColumnEnd - r.FitColumnBegin) * (r.FitColumnEnd - r.FitColumnBegin));
+                        r.ValueText = string.Format("Len={0:F2}px Score={1:F2}", lineLen, r.Score);
                         break;
                     case MetrologyObjectType.Rectangle:
                         r.FitRow = p[0].D; r.FitColumn = p[1].D; r.FitPhi = p[2].D;
