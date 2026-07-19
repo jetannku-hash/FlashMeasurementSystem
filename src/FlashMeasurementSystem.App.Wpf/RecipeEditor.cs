@@ -8,6 +8,7 @@ using FlashMeasurementSystem.Domain.EdgeDetection;
 using FlashMeasurementSystem.Domain.GearAnalysis;
 using FlashMeasurementSystem.Domain.Gdt;
 using FlashMeasurementSystem.Domain.PcdAnalysis;
+using FlashMeasurementSystem.Domain.PinPitchAnalysis;
 using FlashMeasurementSystem.Domain.Roi;
 using FlashMeasurementSystem.Domain.Tolerance;
 using FlashMeasurementSystem.Infrastructure.Roi;
@@ -56,6 +57,7 @@ namespace FlashMeasurementSystem
         private Button _addArcButton;
         private Button _addGearButton;
         private Button _addPcdButton;
+        private Button _addPinButton;
         private Button _addDistanceButton;
         private Button _addAngleButton;
         private Button _addIntersectionButton;
@@ -118,6 +120,16 @@ namespace FlashMeasurementSystem
         private NumericUpDown _pcdRadTolNumeric;
         private CheckBox _pcdDarkCheck;
         private NumericUpDown _pcdMinAreaNumeric;
+
+        // 引腳間距工具（ToolType == "pin_pitch"）專屬參數群組。量測區用 rect2 Roi（沿用 _roiGroup），
+        // 此處只放引腳判定參數（比照 _pcdGroup）。引腳偵測走 blob 而非邊緣掃描，故不顯示 _edgeGroup。
+        private GroupBox _pinGroup;
+        private NumericUpDown _pinCountNumeric;
+        private NumericUpDown _pinPitchNumeric;
+        private NumericUpDown _pinPitchTolNumeric;
+        private NumericUpDown _pinUniformTolNumeric;
+        private CheckBox _pinDarkCheck;
+        private NumericUpDown _pinMinAreaNumeric;
 
         private GroupBox _edgeGroup;
         private NumericUpDown _sigmaNumeric;
@@ -260,6 +272,8 @@ namespace FlashMeasurementSystem
             _addGearButton.Click += (s, e) => AddTool("gear");
             _addPcdButton = new Button { Text = "+ 螺栓孔圈", Width = 80 };
             _addPcdButton.Click += (s, e) => AddTool("pcd");
+            _addPinButton = new Button { Text = "+ 引腳間距", Width = 80 };
+            _addPinButton.Click += (s, e) => AddTool("pin_pitch");
             _addDistanceButton = new Button { Text = "+ Distance", Width = 80 };
             _addDistanceButton.Click += (s, e) => AddTool("distance");
             _addAngleButton = new Button { Text = "+ Angle", Width = 70 };
@@ -296,6 +310,7 @@ namespace FlashMeasurementSystem
             bar.Controls.Add(_addArcButton);
             bar.Controls.Add(_addGearButton);
             bar.Controls.Add(_addPcdButton);
+            bar.Controls.Add(_addPinButton);
             bar.Controls.Add(_addDistanceButton);
             bar.Controls.Add(_addAngleButton);
             bar.Controls.Add(_addIntersectionButton);
@@ -330,6 +345,8 @@ namespace FlashMeasurementSystem
             _gearGroup = CreateGroupBox("齒輪參數", parent, 150);
             // PCD 孔圈參數群組：7 列（孔數/標稱PCD/PCD公差/角度公差/徑向公差/暗孔核取/最小孔面積）× 28px + 標題與內距。
             _pcdGroup = CreateGroupBox("PCD 螺栓孔圈參數", parent, 240);
+            // 引腳間距參數群組：6 列（標稱腳數/標稱間距/間距公差/均勻度公差/暗腳核取/最小腳面積）× 28px + 標題與內距。
+            _pinGroup = CreateGroupBox("引腳間距參數", parent, 210);
             // 7 列 × 28px（6 個數值 + 擷取按鈕）+ 標題與內距。roi 群組同構但少一列。
             _arcGroup = CreateGroupBox("Arc ROI", parent, 240);
             _roiGroup = CreateGroupBox("ROI Geometry", parent, 210);
@@ -341,6 +358,7 @@ namespace FlashMeasurementSystem
             FillArcGroup(_arcGroup);
             FillGearGroup(_gearGroup);
             FillPcdGroup(_pcdGroup);
+            FillPinGroup(_pinGroup);
             FillEdgeGroup(_edgeGroup);
             FillRefGroup(_refGroup);
             FillToleranceGroup(_toleranceGroup);
@@ -490,6 +508,27 @@ namespace FlashMeasurementSystem
                 Dock = DockStyle.Fill
             });
             _pcdMinAreaNumeric = AddNumericRow(t, "最小孔面積(px)", ref r, 1M, 10000000M, 0, 20M, 1M);
+
+            gb.Controls.Add(t);
+        }
+
+        private void FillPinGroup(GroupBox gb)
+        {
+            var t = NewTable();
+            int r = 0;
+
+            // 標稱腳數 0＝不判定腳數（同 PCD 對 nominal 的處理慣例）。
+            _pinCountNumeric = AddNumericRow(t, "標稱腳數", ref r, 0M, 100000M, 0, 0M, 1M);
+            _pinPitchNumeric = AddNumericRow(t, "標稱間距(mm)", ref r, 0M, 100000M, 3, 0M, 0.1M);
+            _pinPitchTolNumeric = AddNumericRow(t, "間距公差(mm)", ref r, 0M, 1000000M, 3, 0.1M, 0.01M);
+            _pinUniformTolNumeric = AddNumericRow(t, "均勻度公差(mm)", ref r, 0M, 1000000M, 3, 0.05M, 0.01M);
+            _pinDarkCheck = AddRow(t, "", ref r, new CheckBox
+            {
+                Text = "引腳為暗（背光）",
+                Checked = true,
+                Dock = DockStyle.Fill
+            });
+            _pinMinAreaNumeric = AddNumericRow(t, "最小腳面積(px)", ref r, 1M, 10000000M, 0, 20M, 1M);
 
             gb.Controls.Add(t);
         }
@@ -682,6 +721,13 @@ namespace FlashMeasurementSystem
             _pcdDarkCheck.CheckedChanged += (s, e) => WritePcd();
             _pcdMinAreaNumeric.ValueChanged += (s, e) => WritePcd();
 
+            _pinCountNumeric.ValueChanged += (s, e) => WritePinPitch();
+            _pinPitchNumeric.ValueChanged += (s, e) => WritePinPitch();
+            _pinPitchTolNumeric.ValueChanged += (s, e) => WritePinPitch();
+            _pinUniformTolNumeric.ValueChanged += (s, e) => WritePinPitch();
+            _pinDarkCheck.CheckedChanged += (s, e) => WritePinPitch();
+            _pinMinAreaNumeric.ValueChanged += (s, e) => WritePinPitch();
+
             _sigmaNumeric.ValueChanged += (s, e) => WriteEdgeParams();
             _thresholdNumeric.ValueChanged += (s, e) => WriteEdgeParams();
             _polarityCombo.SelectedIndexChanged += (s, e) => WriteEdgeParams();
@@ -797,6 +843,19 @@ namespace FlashMeasurementSystem
             p.RadialToleranceMm = (double)_pcdRadTolNumeric.Value;
             p.HoleIsDark = _pcdDarkCheck.Checked;
             p.MinHoleAreaPx = (double)_pcdMinAreaNumeric.Value;
+            MarkDirty();
+        }
+
+        private void WritePinPitch()
+        {
+            if (_updatingControls || _selectedTool == null || _selectedTool.PinPitch == null) return;
+            PinPitchAnalysisParameters p = _selectedTool.PinPitch;
+            p.NominalPinCount = (int)_pinCountNumeric.Value;
+            p.NominalPitchMm = (double)_pinPitchNumeric.Value;
+            p.PitchToleranceMm = (double)_pinPitchTolNumeric.Value;
+            p.UniformityToleranceMm = (double)_pinUniformTolNumeric.Value;
+            p.PinIsDark = _pinDarkCheck.Checked;
+            p.MinPinAreaPx = (double)_pinMinAreaNumeric.Value;
             MarkDirty();
         }
 
@@ -1023,6 +1082,22 @@ namespace FlashMeasurementSystem
                     AnnulusRadius = 15.0
                 };
                 tool.Pcd = new PcdAnalysisParameters();
+            }
+            // 引腳間距工具：量測區用 rect2 Roi（與 circle/line 同座標變換，非 ArcRoi），另帶一組引腳判定參數。
+            // 種一個「寬而短」的預設 rect2（一排引腳沿主軸展開），使用者再以數值框或影像把手調整。
+            // Validator 要求 Roi != null（已由建構區塊的 new RoiGeometry() 保證），此處只覆寫成合用尺寸。
+            // 不設定 tool.Tolerance——pin_pitch 走引腳判定（PinPitchAnalysisParameters），自判定，不用雙邊 Tolerance 群組。
+            if (toolType == "pin_pitch")
+            {
+                tool.Roi = new RoiGeometry
+                {
+                    CenterRow = 200,
+                    CenterCol = 200,
+                    Length1 = 150,  // 半長：沿主軸（引腳排列方向）
+                    Length2 = 30,   // 半寬：垂直主軸
+                    AngleRad = 0.0
+                };
+                tool.PinPitch = PinPitchAnalysisParameters.Default();
             }
             // GD&T 工具：單邊形位公差，預設帶寬待使用者設定（0.05mm 佔位，非 0 以免一律 NG）。
             if (IsGdtType(toolType))
@@ -1310,6 +1385,17 @@ namespace FlashMeasurementSystem
                     HoleIsDark = src.Pcd.HoleIsDark,
                     MinHoleAreaPx = src.Pcd.MinHoleAreaPx
                 },
+                // 深複製引腳間距參數——漏掉會在載入/存檔時遺失引腳判定設定（比照 ArcRoi/Gdt/Gear/Pcd 的處理）。
+                // 必須逐欄複製 PinPitchAnalysisParameters 全部欄位，否則存後重載會悄悄還原成預設值。
+                PinPitch = src.PinPitch == null ? null : new PinPitchAnalysisParameters
+                {
+                    NominalPinCount = src.PinPitch.NominalPinCount,
+                    NominalPitchMm = src.PinPitch.NominalPitchMm,
+                    PitchToleranceMm = src.PinPitch.PitchToleranceMm,
+                    UniformityToleranceMm = src.PinPitch.UniformityToleranceMm,
+                    PinIsDark = src.PinPitch.PinIsDark,
+                    MinPinAreaPx = src.PinPitch.MinPinAreaPx
+                },
                 RefToolIds = new List<string>(src.RefToolIds ?? new List<string>())
             };
         }
@@ -1402,7 +1488,9 @@ namespace FlashMeasurementSystem
             // 只清編輯器裝的（_editorInstalledOverlay），不誤清 Run Recipe 結果 overlay。
             ClearEditorOverlayIfAny();
 
-            bool isElement = _selectedTool.ToolType == "circle" || _selectedTool.ToolType == "line";
+            // rect2 互動編輯：circle/line（元素）與 pin_pitch（引腳間距量測區）都用 rect2 Roi。
+            bool isElement = _selectedTool.ToolType == "circle" || _selectedTool.ToolType == "line"
+                || _selectedTool.ToolType == "pin_pitch";
             if (!isElement)
             {
                 // 參照型工具（GD&T/距離/角度/構造）：高亮其參照的元素 ROI（青色，疊在量測
@@ -1602,6 +1690,30 @@ namespace FlashMeasurementSystem
             }
         }
 
+        // PinPitchAnalysisParameters → 控制項。比照 LoadPcdFieldsFromSelectedTool：以「存後還原」而非硬設 false，
+        // 因為 PopulateFromTool 會在自己的 guard 內呼叫本方法；提前還原成 false 會使後續 pin 參數的
+        // ValueChanged 真的觸發 WritePinPitch → 只是選個工具就被標記 dirty。
+        private void LoadPinPitchFieldsFromSelectedTool()
+        {
+            if (_selectedTool == null || _selectedTool.PinPitch == null) return;
+            PinPitchAnalysisParameters p = _selectedTool.PinPitch;
+            bool prev = _updatingControls;
+            _updatingControls = true;
+            try
+            {
+                _pinCountNumeric.Value = ClampDecimal(p.NominalPinCount, _pinCountNumeric.Minimum, _pinCountNumeric.Maximum);
+                _pinPitchNumeric.Value = ClampDecimal(p.NominalPitchMm, _pinPitchNumeric.Minimum, _pinPitchNumeric.Maximum);
+                _pinPitchTolNumeric.Value = ClampDecimal(p.PitchToleranceMm, _pinPitchTolNumeric.Minimum, _pinPitchTolNumeric.Maximum);
+                _pinUniformTolNumeric.Value = ClampDecimal(p.UniformityToleranceMm, _pinUniformTolNumeric.Minimum, _pinUniformTolNumeric.Maximum);
+                _pinDarkCheck.Checked = p.PinIsDark;
+                _pinMinAreaNumeric.Value = ClampDecimal(p.MinPinAreaPx, _pinMinAreaNumeric.Minimum, _pinMinAreaNumeric.Maximum);
+            }
+            finally
+            {
+                _updatingControls = prev;
+            }
+        }
+
         private void PopulateFromTool(MeasurementTool tool)
         {
             _updatingControls = true;
@@ -1615,6 +1727,9 @@ namespace FlashMeasurementSystem
                 bool isArc = tool.ToolType == "arc";
                 bool isGear = tool.ToolType == "gear";
                 bool isPcd = tool.ToolType == "pcd";
+                // 引腳間距工具：量測區用 rect2 Roi（沿用 _roiGroup，比照 circle/line），另顯示引腳判定參數群組；
+                // 判定走引腳三條件（腳數/間距/均勻度），自判定，故隱藏雙邊 Tolerance；偵測走 blob 非邊緣掃描，故不顯示 _edgeGroup。
+                bool isPinPitch = tool.ToolType == "pin_pitch";
                 // v10：circle 選扇形 ROI → 借用弧形群組（_arcGroup/ArcRoi），矩形 ROI 群組改隱藏。
                 // 僅 circle 工具讀 RoiShape；其餘工具型別忽略（isSectorCircle 恆為 false）。
                 bool isSectorCircle = tool.ToolType == "circle" && tool.RoiShape == "sector";
@@ -1634,13 +1749,14 @@ namespace FlashMeasurementSystem
                 // 不加進 _edgeGroup 的可見條件），並顯示 PCD 參數群組；PCD 判定走四條件，同樣隱藏雙邊 Tolerance。
                 // 扇形 circle（isSectorCircle）比照弧形工具：借用 _arcGroup，矩形 _roiGroup 隱藏；
                 // 邊緣參數/雙邊 Tolerance 維持（isElement 已含 circle，兩者條件本就成立，不必額外加項）。
-                _roiGroup.Visible = isElement && !isSectorCircle;
+                _roiGroup.Visible = (isElement || isPinPitch) && !isSectorCircle;
                 _arcGroup.Visible = isArc || isGear || isPcd || isSectorCircle;
                 _gearGroup.Visible = isGear;
                 _pcdGroup.Visible = isPcd;
+                _pinGroup.Visible = isPinPitch;
                 _edgeGroup.Visible = isElement || isArc || isGear;
                 _refGroup.Visible = usesRefs;
-                _toleranceGroup.Visible = !isGdt && !isGear && !isPcd;
+                _toleranceGroup.Visible = !isGdt && !isGear && !isPcd && !isPinPitch;
                 _gdtGroup.Visible = isGdt;
                 _angleHintLabel.Visible = tool.ToolType == "line";
 
@@ -1655,7 +1771,8 @@ namespace FlashMeasurementSystem
                     _gdtZoneNumeric.Value = ClampDecimal(tool.Gdt.ToleranceZoneMm, _gdtZoneNumeric.Minimum, _gdtZoneNumeric.Maximum);
                 }
 
-                if (isElement && !isSectorCircle)
+                // 引腳間距工具亦用 rect2 Roi（比照 circle/line），故一同填 rect2 幾何欄位。
+                if ((isElement || isPinPitch) && !isSectorCircle)
                 {
                     _centerRowNumeric.Value = ClampDecimal(tool.Roi.CenterRow, _centerRowNumeric.Minimum, _centerRowNumeric.Maximum);
                     _centerColNumeric.Value = ClampDecimal(tool.Roi.CenterCol, _centerColNumeric.Minimum, _centerColNumeric.Maximum);
@@ -1682,6 +1799,13 @@ namespace FlashMeasurementSystem
                 else if (usesRefs)
                 {
                     PopulateRefCombos(tool);
+                }
+
+                // 引腳間距工具的 rect2 幾何已在上方 (isElement || isPinPitch) 分支填好；此處再填引腳判定參數
+                // （比照齒輪/PCD 同時載入量測 ROI 與判定參數）。放在 if/else 鏈外，因 pin_pitch 已被首個 if 消耗。
+                if (isPinPitch)
+                {
+                    LoadPinPitchFieldsFromSelectedTool();
                 }
 
                 // 邊緣參數：circle/line（rect2 卡尺）、arc（弧形卡尺）與 gear（齒輪弧卡尺量邊）都會用到。
@@ -1997,6 +2121,7 @@ namespace FlashMeasurementSystem
             _toolTip.SetToolTip(_addArcButton, "弧形卡尺：量圓周等分特徵邊數（孔數/齒數/引腳數）");
             _toolTip.SetToolTip(_addGearButton, "齒輪：量齒數/齒距/齒寬（背光剪影）");
             _toolTip.SetToolTip(_addPcdButton, "PCD 螺栓孔圈：量孔數/節圓直徑/角均勻/真圓度（背光）");
+            _toolTip.SetToolTip(_addPinButton, "新增引腳間距工具（一排引腳的腳數/間距/均勻度/缺腳）");
             _toolTip.SetToolTip(_addDistanceButton, "Add a distance tool (between two line/circle tools)");
             _toolTip.SetToolTip(_addAngleButton, "Add an angle tool (between two line tools)");
             _toolTip.SetToolTip(_addRoundnessButton, "真圓度：Ref1=一個 circle，偏差=圓擬合 max-min 徑向");
