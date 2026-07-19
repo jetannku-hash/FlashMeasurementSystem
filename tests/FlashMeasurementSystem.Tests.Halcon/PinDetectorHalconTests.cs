@@ -61,7 +61,55 @@ namespace FlashMeasurementSystem.Tests.Halcon
                     "negative polarity does NOT return " + Count + " pins (got " + neg.Pins.Count + ")");
             }
 
+            TestDetectAnalyzeChain();
             Console.WriteLine("PinDetectorHalconTests passed");
+        }
+
+        // 整合：真合成圖 → HalconPinDetector → PinPitchAnalyzer → 四判定（補 Domain-only 與 detector-only
+        // 之間的縫；RecipeRunner 屬 App.Wpf 無法在此測，這裡驗到分析器邊界）。pixelSizeUm=100 → 1px=0.1mm、
+        // pitch 60px=6.0mm。正常圖：8 腳、均勻、無缺腳、對 6.0±0.5mm → IsPass。掉腳圖：偵到 7 腳、一間隙 2× →
+        // CountOk/MissingOk false → IsPass false。
+        private static void TestDetectAnalyzeChain()
+        {
+            var detector = new HalconPinDetector();
+            const double pxUm = 100.0;   // 0.1mm/px
+            var roi = new RoiGeometry
+            {
+                CenterRow = Row,
+                CenterCol = (Col0 + (Col0 + (Count - 1) * Pitch)) / 2.0,
+                AngleRad = 0.0,
+                Length1 = ((Count - 1) * Pitch) / 2.0 + PinHalfLen + 15,
+                Length2 = PinHalfWid + 12
+            };
+            var prm = new PinPitchAnalysisParameters
+            {
+                NominalPinCount = Count, NominalPitchMm = 6.0,
+                PitchToleranceMm = 0.5, UniformityToleranceMm = 0.5, PinIsDark = true
+            };
+
+            // 正常圖 → PASS
+            using (HImage okImg = TestImageGenerator.CreatePinRowImage(Width, Height, Row, Col0, Pitch, Count, PinHalfLen, PinHalfWid))
+            {
+                PinDetectionResult det = detector.DetectPinsInRect(okImg, roi, prm);
+                Assert(det.Success && det.Pins.Count == Count, "chain-ok detects 8 (got " + det.Pins.Count + ")");
+                PinPitchAnalysisResult a = PinPitchAnalyzer.Analyze(det.Pins, pxUm, prm);
+                Assert(a.Success, "chain-ok analyze Success");
+                Assert(a.PinCount == Count, "chain-ok PinCount 8");
+                Assert(Math.Abs(a.PitchMeanMm - 6.0) < 0.3, "chain-ok mean ~6.0mm (got " + a.PitchMeanMm.ToString("F3") + ")");
+                Assert(a.MissingOk, "chain-ok MissingOk");
+                Assert(a.IsPass, "chain-ok IsPass");
+            }
+
+            // 掉一根內部引腳（index 3）→ 偵到 7、一間隙 2× → FAIL
+            using (HImage missImg = TestImageGenerator.CreatePinRowImage(Width, Height, Row, Col0, Pitch, Count, PinHalfLen, PinHalfWid, 3))
+            {
+                PinDetectionResult det = detector.DetectPinsInRect(missImg, roi, prm);
+                Assert(det.Success && det.Pins.Count == Count - 1, "chain-missing detects 7 (got " + det.Pins.Count + ")");
+                PinPitchAnalysisResult a = PinPitchAnalyzer.Analyze(det.Pins, pxUm, prm);
+                Assert(!a.MissingOk, "chain-missing MissingOk false");
+                Assert(!a.CountOk, "chain-missing CountOk false");
+                Assert(!a.IsPass, "chain-missing IsPass false");
+            }
         }
 
         private static void Assert(bool condition, string message)
