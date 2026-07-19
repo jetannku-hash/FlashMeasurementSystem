@@ -602,6 +602,11 @@ namespace FlashMeasurementSystem
                 default:
                     return; // Line 不處理
             }
+            // 手拉框為外接框，標稱邊會落在真實邊外一段距離；量測區只在垂直 ±MeasureLength1 內搜尋。
+            // 依框較短半邊自動放大搜尋帶（0.6 倍），讓粗略拉框也能往內吃到真邊；保持 < 幾何尺寸以通過驗證。
+            double refDim = _selected.Shape == MetrologyObjectType.Circle ? _selected.Radius : Math.Min(len1, len2);
+            if (refDim > 0)
+                _selected.MeasureLength1 = Math.Max(5.0, Math.Round(0.6 * refDim));
             Populate(_selected);   // 於 _updating guard 下刷新 NUD
             _dirty = true;
             UpdateWarning();
