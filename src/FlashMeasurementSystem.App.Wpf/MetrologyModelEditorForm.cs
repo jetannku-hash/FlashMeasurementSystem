@@ -23,6 +23,8 @@ namespace FlashMeasurementSystem
         private readonly Action<MetrologyModelDef> _trialCallback;
         private readonly int _imgW;
         private readonly int _imgH;
+        // Phase 4：編輯器改 modeless 後接管主視窗共用影像視窗，用來在影像上拉矩形擷取標稱幾何。
+        private readonly HWindowControlHelper _imageHelper;
 
         private readonly List<MetrologyObjectDef> _objects = new List<MetrologyObjectDef>();
         private MetrologyObjectDef _selected;
@@ -34,7 +36,7 @@ namespace FlashMeasurementSystem
         private bool _editorInstalledOverlay;
 
         private ListBox _list;
-        private Button _addButton, _removeButton, _saveButton, _cancelButton, _trialButton;
+        private Button _addButton, _removeButton, _saveButton, _cancelButton, _trialButton, _drawButton;
         private TextBox _nameBox;
         private ComboBox _shapeCombo;
         private Label _warnLabel;
@@ -54,11 +56,12 @@ namespace FlashMeasurementSystem
         private string _slotAKey, _slotBKey;
 
         public MetrologyModelEditorForm(Recipe recipe, int imageWidth, int imageHeight, Action<Recipe> savedCallback,
-            Action<MetrologyModelDef> trialCallback = null)
+            HWindowControlHelper imageHelper, Action<MetrologyModelDef> trialCallback = null)
         {
             _recipe = recipe ?? throw new ArgumentNullException(nameof(recipe));
             _savedCallback = savedCallback;
             _trialCallback = trialCallback;
+            _imageHelper = imageHelper;
             _imgW = imageWidth;
             _imgH = imageHeight;
 
@@ -85,11 +88,15 @@ namespace FlashMeasurementSystem
             FormClosing += OnFormClosing;
             FormClosed += (s, e) =>
             {
-                // 目前編輯器尚未持有 _imageHelper（仍全經由建構子傳入的 callback 與 MainWindow 溝通），
-                // 故尚無 rect2/arc edit 把手或本編輯器裝的 persistent overlay 需要在此拆除。
-                // on-image 繪製 commit 會在建構子注入 _imageHelper，屆時比照 RecipeEditor 補上
-                // EndRect2Edit()/EndArcEdit()/ClearSelectionHighlight()，並在 _editorInstalledOverlay
-                // 為 true 時 ClearOverlay()。此處先保留旗標重置，維持 teardown scaffold 存在。
+                // 本 commit 只用一次性 RequestRoi（不裝 persistent overlay），但比照 RecipeEditor
+                // 保險地結束任何 rect2/弧形編輯把手（兩者皆 idempotent），並僅在本編輯器曾裝過
+                // overlay 時 ClearOverlay()——不動別的元件裝的 overlay。
+                if (_imageHelper != null)
+                {
+                    _imageHelper.EndRect2Edit();
+                    _imageHelper.EndArcEdit();
+                    if (_editorInstalledOverlay) _imageHelper.ClearOverlay();
+                }
                 _editorInstalledOverlay = false;
             };
         }
@@ -105,9 +112,14 @@ namespace FlashMeasurementSystem
             // 免去 Save → 關閉 → Run Recipe → 重開編輯器的來回。無委派（trialCallback==null）時停用。
             _trialButton = new Button { Text = "試測", Width = 80, Enabled = _trialCallback != null };
             _trialButton.Click += OnTrial;
+            // Phase 4：在主視窗共用影像上拉一個矩形，把角點轉成選中物件的標稱幾何（矩形/橢圓/圓）。
+            // 僅在有影像且選中物件為 Rectangle/Circle/Ellipse 時啟用（Line 由後續 commit 處理）。
+            _drawButton = new Button { Text = "在影像上繪製", Width = 110, Enabled = false };
+            _drawButton.Click += OnDrawOnImage;
             bottom.Controls.Add(_cancelButton);
             bottom.Controls.Add(_saveButton);
             bottom.Controls.Add(_trialButton);
+            bottom.Controls.Add(_drawButton);
 
             var left = new Panel { Dock = DockStyle.Left, Width = 200, Padding = new Padding(6) };
             _list = new ListBox { Dock = DockStyle.Fill };
@@ -218,6 +230,7 @@ namespace FlashMeasurementSystem
             finally { _updating = false; }
             RefreshSelectedItemText();
             UpdateWarning();
+            UpdateDrawButtonEnabled();
         }
 
         private void Populate(MetrologyObjectDef d)
@@ -242,6 +255,7 @@ namespace FlashMeasurementSystem
             }
             finally { _updating = false; }
             UpdateWarning();
+            UpdateDrawButtonEnabled();
         }
 
         // 任一數值變更 → 寫回選中物件（量測矩形佈放仍由 HALCON 負責，這裡只存參數）。
@@ -486,6 +500,91 @@ namespace FlashMeasurementSystem
             _trialCallback(model);
         }
 
+        // ─── Phase 4：在影像上繪製標稱幾何（重用 RequestRoi 的拉矩形手勢）───
+
+        // 依選中物件與影像狀態決定「在影像上繪製」是否可用（Line 不支援此手勢，由後續 commit 處理）。
+        private void UpdateDrawButtonEnabled()
+        {
+            if (_drawButton == null) return;
+            _drawButton.Enabled = _selected != null
+                && _imageHelper != null && _imageHelper.CurrentImage != null
+                && (_selected.Shape == MetrologyObjectType.Rectangle
+                    || _selected.Shape == MetrologyObjectType.Circle
+                    || _selected.Shape == MetrologyObjectType.Ellipse);
+        }
+
+        private void OnDrawOnImage(object sender, EventArgs e)
+        {
+            if (_selected == null || _imageHelper == null || _imageHelper.CurrentImage == null) return;
+            if (_selected.Shape == MetrologyObjectType.Line) return; // 直線由後續 commit 處理
+            try
+            {
+                // RequestRoi 內部已會 DisarmInteractiveModes，這裡再呼叫一次確保無殘留 pending 手勢。
+                _imageHelper.DisarmInteractiveModes();
+                _imageHelper.RequestRoi(OnDrawnRoi);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, "在影像上繪製失敗：" + ex.Message, "繪製",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+
+        // RequestRoi 於 MouseUp 傳回原始角點（>5px 才觸發）。轉 rect2 的數學比照 RecipeEditor.OnCaptureRoi：
+        // center=中點；半邊=abs(delta)/2；長軸自動偵測（較長邊為 Length1，phi 取 0 或 π/2）。
+        private void OnDrawnRoi(double startRow, double startCol, double endRow, double endCol)
+        {
+            double centerRow = (startRow + endRow) / 2.0;
+            double centerCol = (startCol + endCol) / 2.0;
+            double rowExt = Math.Abs(endRow - startRow) / 2.0;
+            double colExt = Math.Abs(endCol - startCol) / 2.0;
+
+            double length1, length2, angleRad;
+            if (colExt >= rowExt)
+            {
+                length1 = colExt;
+                length2 = rowExt;
+                angleRad = 0.0;
+            }
+            else
+            {
+                length1 = rowExt;
+                length2 = colExt;
+                angleRad = Math.PI / 2.0;
+            }
+
+            if (InvokeRequired)
+                BeginInvoke(new Action(() => ApplyDrawnShape(centerRow, centerCol, length1, length2, angleRad)));
+            else
+                ApplyDrawnShape(centerRow, centerCol, length1, length2, angleRad);
+        }
+
+        // 依 Shape 把繪製結果寫進標稱幾何欄位（只動當前形狀相關欄位），再刷 NUD、標記 dirty、更新警示。
+        private void ApplyDrawnShape(double cr, double cc, double len1, double len2, double phi)
+        {
+            if (_selected == null) return;
+            switch (_selected.Shape)
+            {
+                case MetrologyObjectType.Rectangle:
+                    _selected.Row = cr; _selected.Column = cc; _selected.Phi = phi;
+                    _selected.Length1 = len1; _selected.Length2 = len2;
+                    break;
+                case MetrologyObjectType.Ellipse:
+                    _selected.Row = cr; _selected.Column = cc; _selected.Phi = phi;
+                    _selected.Radius1 = len1; _selected.Radius2 = len2;
+                    break;
+                case MetrologyObjectType.Circle:
+                    _selected.Row = cr; _selected.Column = cc;
+                    _selected.Radius = Math.Min(len1, len2);
+                    break;
+                default:
+                    return; // Line 不處理
+            }
+            Populate(_selected);   // 於 _updating guard 下刷新 NUD
+            _dirty = true;
+            UpdateWarning();
+        }
+
         private void SetGeometryEnabledForShape(MetrologyObjectType shape)
         {
             bool line = shape == MetrologyObjectType.Line;
@@ -514,6 +613,7 @@ namespace FlashMeasurementSystem
                 _radius1.Enabled = _radius2.Enabled = _length1.Enabled = _length2.Enabled = false;
                 _warnLabel.Text = "";
             }
+            UpdateDrawButtonEnabled();
         }
 
         private void RefreshList()

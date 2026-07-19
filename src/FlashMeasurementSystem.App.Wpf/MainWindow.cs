@@ -1975,6 +1975,7 @@ namespace FlashMeasurementSystem
                     measureResultLabel.Text = string.Format(CultureInfo.InvariantCulture,
                         "已更新量測模型（{0} 物件）{1}。可執行 Run Recipe。", count, savedNote);
                 },
+                _imageHelper,
                 metrologyTrial);
             editor.Show(this);
         }
