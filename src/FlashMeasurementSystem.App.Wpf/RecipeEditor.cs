@@ -928,7 +928,7 @@ namespace FlashMeasurementSystem
                 && _selectedTool != null
                 && (_selectedTool.ToolType == "circle" || _selectedTool.ToolType == "line"
                     || _selectedTool.ToolType == "arc" || _selectedTool.ToolType == "gear"
-                    || _selectedTool.ToolType == "pcd");
+                    || _selectedTool.ToolType == "pcd" || _selectedTool.ToolType == "pin_pitch");
         }
 
         // A1：在編輯器內就地試測選中的 circle/line/arc 工具，把擬合結果畫在共用主視窗影像上。

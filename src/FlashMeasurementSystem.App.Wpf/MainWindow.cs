@@ -1604,6 +1604,26 @@ namespace FlashMeasurementSystem
                         double mTextCol = r.ToolType == "metrology_line" ? (r.LineCol1 + r.LineCol2) / 2.0 : r.FitCenterCol;
                         an.DrawText(r.ValueText ?? string.Empty, (int)mTextRow, (int)mTextCol, mColor);
                     }
+                    else if (r.ToolType == "pin_pitch" && r.PinPitch != null)
+                    {
+                        // 引腳間距：rect2 ROI 橘框 + 橘名稱已由上方通用 r.Roi 分支畫（同 circle/line 慣例）。
+                        // 此處補畫各引腳質心十字（依判定上色）、首→末質心連線（引腳排列主軸）、
+                        // 與判定/數值文字。Pins 為影像座標，引腳數少故全畫（不抽樣）。
+                        string pinColor = r.IsOk == true ? "green" : (r.IsOk == false ? "red" : "yellow");
+                        var pins = r.PinPitch.Pins;
+                        if (pins != null && pins.Count > 0)
+                        {
+                            foreach (var p in pins)
+                                an.DrawCross(p.Row, p.Col, 12, pinColor);
+                            if (pins.Count >= 2)
+                                an.DrawLine(pins[0].Row, pins[0].Col,
+                                            pins[pins.Count - 1].Row, pins[pins.Count - 1].Col, pinColor);
+                        }
+                        // 判定/數值文字錨在 ROI 中心上方一段（避開橘名稱標籤與引腳本體），依判定上色。
+                        if (r.Roi != null)
+                            an.DrawText(r.ValueText ?? string.Empty,
+                                (int)r.Roi.Row - 24, (int)r.Roi.Col, pinColor);
+                    }
 
                     // 結果表值欄由 DrawResultTable 統一裁到欄寬（過長截斷加「…」），任何工具皆不溢到判定欄。
                     rows.Add(new OverlayResultRow { Name = r.Name, ValueText = r.ValueText, IsOk = r.IsOk });
