@@ -121,6 +121,7 @@
     <Compile Include="PinPitchAnalysis\PinPitchAnalysisResult.cs" />
     <Compile Include="PinPitchAnalysis\PinPitchAnalyzer.cs" />
     <Compile Include="HoleDetection\HoleDetectionResult.cs" />
+    <Compile Include="PinDetection\PinDetectionResult.cs" />
     <Compile Include="Workflow\MeasurementState.cs" />
     <Compile Include="Workflow\WorkflowResult.cs" />
   </ItemGroup>

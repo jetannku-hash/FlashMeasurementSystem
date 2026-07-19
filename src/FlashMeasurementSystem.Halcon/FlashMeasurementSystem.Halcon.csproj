@@ -70,6 +70,7 @@
     <Compile Include="MetrologyModel\HalconMetrologyModelRunner.cs" />
     <Compile Include="DxfComparison\HalconDxfContourComparer.cs" />
     <Compile Include="HoleDetection\HalconHoleDetector.cs" />
+    <Compile Include="PinDetection\HalconPinDetector.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\FlashMeasurementSystem.Application\FlashMeasurementSystem.Application.csproj">
