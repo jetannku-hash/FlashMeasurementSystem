@@ -85,6 +85,7 @@
     <Compile Include="MeasurementReportBuilderTests.cs" />
     <Compile Include="PdfReportWriterTests.cs" />
     <Compile Include="PinPitchAnalysisDomainTests.cs" />
+    <Compile Include="ReportRetentionDomainTests.cs" />
     <Compile Include="PinPitchRecipeToolDomainTests.cs" />
     <Compile Include="HoleArrayAnalysisDomainTests.cs" />
     <Compile Include="HoleArrayRecipeToolDomainTests.cs" />

@@ -122,6 +122,8 @@
     <Compile Include="Reporting\MeasurementReportModel.cs" />
     <Compile Include="Reporting\MeasurementReportRow.cs" />
     <Compile Include="Reporting\MeasurementReportBuilder.cs" />
+    <Compile Include="ReportRetention\ReportRetentionPolicy.cs" />
+    <Compile Include="ReportRetention\ReportRetentionPlanner.cs" />
     <Compile Include="PinPitchAnalysis\PinPitchAnalyzer.cs" />
     <Compile Include="HoleArrayAnalysis\HoleArrayPoint.cs" />
     <Compile Include="HoleArrayAnalysis\HoleArrayAnalysisParameters.cs" />

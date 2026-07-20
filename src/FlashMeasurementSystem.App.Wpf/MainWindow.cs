@@ -1909,7 +1909,9 @@ namespace FlashMeasurementSystem
                     MeasurementReportBuilder.Build(wfResult, judgments, pixelSizeText, savedPng);
                 _pdfReportWriter.Write(model, pdfPath);
 
-                return " | PDF: " + pdfPath + (string.IsNullOrEmpty(savedPng) ? "（無截圖）" : "");
+                // 報表寫成功後才清理，只保留最近 N 組；失敗只會多一段訊息，不影響本次報表。
+                return " | PDF: " + pdfPath + (string.IsNullOrEmpty(savedPng) ? "（無截圖）" : "")
+                    + ReportRetentionSweep.Sweep(reportDir);
             }
             catch (Exception ex)
             {
