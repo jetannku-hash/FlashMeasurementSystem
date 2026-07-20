@@ -3,6 +3,7 @@ using FlashMeasurementSystem.Domain.EdgeDetection;
 using FlashMeasurementSystem.Domain.Gdt;
 using FlashMeasurementSystem.Domain.GearAnalysis;
 using FlashMeasurementSystem.Domain.PcdAnalysis;
+using FlashMeasurementSystem.Domain.PinPitchAnalysis;
 using FlashMeasurementSystem.Domain.Tolerance;
 
 namespace FlashMeasurementSystem.Domain.Roi
@@ -48,5 +49,9 @@ namespace FlashMeasurementSystem.Domain.Roi
         // v9：PCD 螺栓孔圈分析參數（重用 PcdAnalysisParameters DTO）。null＝非 pcd 工具。
         // pcd 工具（ToolType="pcd"）必填；量測環帶用 ArcRoi。
         public PcdAnalysisParameters Pcd { get; set; } = null;
+
+        // v12：引腳間距分析參數（重用 PinPitchAnalysisParameters DTO）。null＝非 pin_pitch 工具。
+        // pin_pitch 工具（ToolType="pin_pitch"）必填；量測區用 rect2 Roi。
+        public PinPitchAnalysisParameters PinPitch { get; set; } = null;
     }
 }

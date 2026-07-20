@@ -30,7 +30,9 @@ namespace FlashMeasurementSystem.Domain.Roi
         //     純加欄位、向後相容、無遷移碼：舊檔載入 RoiShape="rect"＝走既有矩形路徑，行為不變。
         // v11：量測模型物件每判定量公差（MetrologyObjectDef.Tolerances，加性欄，預設空清單）。
         //     純加欄位、向後相容、無遷移碼：舊檔載入 Tolerances=空清單＝不判定（IsOk=null），行為不變。
-        public int SchemaVersion { get; set; } = 11;
+        // v12：引腳間距工具（MeasurementTool.PinPitch，加性 nullable 欄）+ ToolType="pin_pitch"。
+        //     純加欄位、向後相容、無遷移碼：舊檔載入 PinPitch=null、無 pin_pitch 工具，行為不變。
+        public int SchemaVersion { get; set; } = 12;
         public string RecipeId { get; set; } = "";
         public string Name { get; set; } = "";
 

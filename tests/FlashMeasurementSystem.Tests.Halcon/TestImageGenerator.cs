@@ -161,6 +161,42 @@ namespace FlashMeasurementSystem.Tests.Halcon
             return img;
         }
 
+        /// <summary>
+        /// Backlit linear pin row: bright background (220), <paramref name="count"/> dark pins (30).
+        /// Each pin is a dark rectangle centered at (row, col0 + i*pitch) with the given half-extents.
+        /// Ground truth: pin count = <paramref name="count"/>; pitch = <paramref name="pitch"/> px;
+        /// first pin col = col0; last pin col = col0 + (count-1)*pitch; all pins share row = row.
+        /// (pinHalfLen = half-extent along column axis, pinHalfWid = half-extent along row axis.)
+        /// </summary>
+        public static HImage CreatePinRowImage(int width, int height, int row, int col0, int pitch, int count, int pinHalfLen, int pinHalfWid)
+        {
+            HImage img = new HImage();
+            img.GenImageConst("byte", width, height);
+            img = PaintRect(img, 0, 0, height - 1, width - 1, 220.0);   // bright backlit background
+            for (int i = 0; i < count; i++)
+            {
+                double cc = col0 + i * pitch;
+                img = PaintRect(img, row - pinHalfWid, cc - pinHalfLen, row + pinHalfWid, cc + pinHalfLen, 30.0);
+            }
+            return img;
+        }
+
+        /// <summary>Backlit pin row (bright bg 220, dark pins 30) with one interior pin omitted
+        /// (missingIndex) to create a ~2× gap — demos the 缺腳 NG case. missingIndex &lt; 0 draws all pins.</summary>
+        public static HImage CreatePinRowImage(int width, int height, int row, int col0, int pitch, int count, int pinHalfLen, int pinHalfWid, int missingIndex)
+        {
+            HImage img = new HImage();
+            img.GenImageConst("byte", width, height);
+            img = PaintRect(img, 0, 0, height - 1, width - 1, 220.0);   // bright backlit background
+            for (int i = 0; i < count; i++)
+            {
+                if (i == missingIndex) continue;
+                double cc = col0 + i * pitch;
+                img = PaintRect(img, row - pinHalfWid, cc - pinHalfLen, row + pinHalfWid, cc + pinHalfLen, 30.0);
+            }
+            return img;
+        }
+
         /// <summary>Image with a thin straight line for line fitting.</summary>
         public static HImage CreateLineImage(bool horizontal, int w = DefaultSize, int h = DefaultSize)
         {

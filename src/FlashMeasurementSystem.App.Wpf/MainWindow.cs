@@ -28,7 +28,9 @@ using FlashMeasurementSystem.Domain.MetrologyModel;
 using FlashMeasurementSystem.Halcon.CoordinateSystem;
 using FlashMeasurementSystem.Halcon.MetrologyModel;
 using FlashMeasurementSystem.Application.HoleDetection;
+using FlashMeasurementSystem.Application.PinDetection;
 using FlashMeasurementSystem.Halcon.HoleDetection;
+using FlashMeasurementSystem.Halcon.PinDetection;
 using FlashMeasurementSystem.Infrastructure.Roi;
 using FlashMeasurementSystem.Infrastructure.Tolerance;
 using FlashMeasurementSystem.Infrastructure.Calibration;
@@ -54,6 +56,7 @@ namespace FlashMeasurementSystem
         private readonly HalconAngleMeasurer _angleMeasurer = new HalconAngleMeasurer();
         private readonly HalconMetrologyModelRunner _metrologyRunner = new HalconMetrologyModelRunner();
         private readonly IHoleDetector<HImage> _holeDetector = new HalconHoleDetector();
+        private readonly IPinDetector<HImage> _pinDetector = new HalconPinDetector();
         private EdgeDetectionRoi _latestEdgeRoi;
         private double _editCenterRow, _editCenterCol;
         private EdgeResult _latestEdgeResult;
@@ -109,7 +112,7 @@ namespace FlashMeasurementSystem
             _imageHelper.RoiSelected += OnImageRoiSelected;
 
             // 配方執行引擎：以既有 adapters 注入（邊緣 + 圓/線擬合 + 公差 + 座標映射）。
-            _recipeRunner = new RecipeRunner(_edgeDetector, _circleFitter, _lineFitter, _distanceMeasurer, _angleMeasurer, _judger, _coordinateMapper, _metrologyRunner, _holeDetector);
+            _recipeRunner = new RecipeRunner(_edgeDetector, _circleFitter, _lineFitter, _distanceMeasurer, _angleMeasurer, _judger, _coordinateMapper, _metrologyRunner, _holeDetector, _pinDetector);
             _workflow = new MeasurementWorkflow(_iqc, _templateMatcher, _recipeRunner, _judger, _reportWriter);
             // 一鍵量測逐階段進度：StateChanged 在 UI 執行緒同步觸發，於 status bar 即時顯示。
             _workflow.StateChanged += OnWorkflowStateChanged;
@@ -1600,6 +1603,26 @@ namespace FlashMeasurementSystem
                         double mTextRow = r.ToolType == "metrology_line" ? (r.LineRow1 + r.LineRow2) / 2.0 : r.FitCenterRow;
                         double mTextCol = r.ToolType == "metrology_line" ? (r.LineCol1 + r.LineCol2) / 2.0 : r.FitCenterCol;
                         an.DrawText(r.ValueText ?? string.Empty, (int)mTextRow, (int)mTextCol, mColor);
+                    }
+                    else if (r.ToolType == "pin_pitch" && r.PinPitch != null)
+                    {
+                        // 引腳間距：rect2 ROI 橘框 + 橘名稱已由上方通用 r.Roi 分支畫（同 circle/line 慣例）。
+                        // 此處補畫各引腳質心十字（依判定上色）、首→末質心連線（引腳排列主軸）、
+                        // 與判定/數值文字。Pins 為影像座標，引腳數少故全畫（不抽樣）。
+                        string pinColor = r.IsOk == true ? "green" : (r.IsOk == false ? "red" : "yellow");
+                        var pins = r.PinPitch.Pins;
+                        if (pins != null && pins.Count > 0)
+                        {
+                            foreach (var p in pins)
+                                an.DrawCross(p.Row, p.Col, 12, pinColor);
+                            if (pins.Count >= 2)
+                                an.DrawLine(pins[0].Row, pins[0].Col,
+                                            pins[pins.Count - 1].Row, pins[pins.Count - 1].Col, pinColor);
+                        }
+                        // 判定/數值文字錨在 ROI 中心上方一段（避開橘名稱標籤與引腳本體），依判定上色。
+                        if (r.Roi != null)
+                            an.DrawText(r.ValueText ?? string.Empty,
+                                (int)r.Roi.Row - 24, (int)r.Roi.Col, pinColor);
                     }
 
                     // 結果表值欄由 DrawResultTable 統一裁到欄寬（過長截斷加「…」），任何工具皆不溢到判定欄。

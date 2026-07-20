@@ -116,7 +116,12 @@
     <Compile Include="PcdAnalysis\PcdAnalysisParameters.cs" />
     <Compile Include="PcdAnalysis\PcdAnalysisResult.cs" />
     <Compile Include="PcdAnalysis\PcdAnalyzer.cs" />
+    <Compile Include="PinPitchAnalysis\PinPoint.cs" />
+    <Compile Include="PinPitchAnalysis\PinPitchAnalysisParameters.cs" />
+    <Compile Include="PinPitchAnalysis\PinPitchAnalysisResult.cs" />
+    <Compile Include="PinPitchAnalysis\PinPitchAnalyzer.cs" />
     <Compile Include="HoleDetection\HoleDetectionResult.cs" />
+    <Compile Include="PinDetection\PinDetectionResult.cs" />
     <Compile Include="Workflow\MeasurementState.cs" />
     <Compile Include="Workflow\WorkflowResult.cs" />
   </ItemGroup>

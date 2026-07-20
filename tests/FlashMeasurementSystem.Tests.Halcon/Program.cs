@@ -19,7 +19,9 @@ namespace FlashMeasurementSystem.Tests.Halcon
                 ImageQualityCheckerTests.Run,
                 TemplateMatcherTests.Run,
                 MetrologyModelHalconTests.Run,
+                PinDetectorHalconTests.Run,
                 SyntheticMetrologyImageGenerator.Run,
+                SyntheticPinRowImageGenerator.Run,
             };
 
             int passed = 0, failed = 0;

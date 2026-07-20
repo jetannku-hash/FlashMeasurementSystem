@@ -73,6 +73,7 @@
     <Compile Include="Roi\IRecipeStore.cs" />
     <Compile Include="Reporting\IMeasurementReportWriter.cs" />
     <Compile Include="HoleDetection\IHoleDetector.cs" />
+    <Compile Include="PinDetection\IPinDetector.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\FlashMeasurementSystem.Domain\FlashMeasurementSystem.Domain.csproj">

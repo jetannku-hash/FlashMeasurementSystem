@@ -358,6 +358,77 @@ namespace FlashMeasurementSystem
                         });
                     }
                 }
+                else if (tool != null && tool.PinPitch != null)
+                {
+                    // 引腳間距為四判定（引腳數/平均間距/均勻度/缺腳），不走單值雙邊判定器（會用 MeasuredValue=0 誤判）。
+                    // 比照 PCD：pin_pitch 工具的「所有」報表列都由本分支發出，成功發四列、失敗發一列，
+                    // 兩種情況都不落入下方雙邊 Tolerance 分支（Tolerance 為預設 [0,0]，0∈[0,0] 會被誤判為 OK＝假 PASS）。
+                    string ppBaseName = tool.Name ?? r.Name;
+                    if (r.PinPitch != null && r.PinPitch.Success)
+                    {
+                        var g = r.PinPitch;
+                        // 引腳數：NominalPinCount ≤ 0 代表不判定（分析器已令 CountOk=true）；仍發一列，用其 CountOk。
+                        judgments.Add(new ItemJudgment
+                        {
+                            ToolId = tool.Id ?? "",
+                            ToolName = ppBaseName + "-引腳數",
+                            MeasuredValue = g.PinCount,
+                            Nominal = tool.PinPitch.NominalPinCount,
+                            LowerLimit = tool.PinPitch.NominalPinCount,
+                            UpperLimit = tool.PinPitch.NominalPinCount,
+                            Unit = "count",
+                            Deviation = g.PinCount - tool.PinPitch.NominalPinCount,
+                            IsOk = g.CountOk,
+                            Message = "引腳數"
+                        });
+                        judgments.Add(new ItemJudgment
+                        {
+                            ToolId = tool.Id ?? "",
+                            ToolName = ppBaseName + "-平均間距",
+                            MeasuredValue = g.PitchMeanMm,
+                            Nominal = tool.PinPitch.NominalPitchMm,
+                            LowerLimit = tool.PinPitch.NominalPitchMm - tool.PinPitch.PitchToleranceMm,
+                            UpperLimit = tool.PinPitch.NominalPitchMm + tool.PinPitch.PitchToleranceMm,
+                            Unit = "mm",
+                            Deviation = g.PitchMeanMm - tool.PinPitch.NominalPitchMm,
+                            IsOk = g.PitchOk,
+                            Message = "平均間距"
+                        });
+                        judgments.Add(new ItemJudgment
+                        {
+                            ToolId = tool.Id ?? "",
+                            ToolName = ppBaseName + "-間距均勻度",
+                            MeasuredValue = g.PitchMaxDevMm,
+                            Nominal = 0,
+                            LowerLimit = 0,
+                            UpperLimit = tool.PinPitch.UniformityToleranceMm,
+                            Unit = "mm",
+                            Deviation = g.PitchMaxDevMm,
+                            IsOk = g.UniformityOk,
+                            Message = "間距最大偏差"
+                        });
+                        judgments.Add(new ItemJudgment
+                        {
+                            ToolId = tool.Id ?? "",
+                            ToolName = ppBaseName + "-缺腳",
+                            MeasuredValue = 0,
+                            IsOk = g.MissingOk,
+                            Message = g.MissingOk ? "無缺腳" : ("缺腳" + (string.IsNullOrEmpty(g.MissingHint) ? "" : "：" + g.MissingHint))
+                        });
+                    }
+                    else
+                    {
+                        // 量測失敗：發一列失敗訊息（比照 PCD 分支的失敗 else 列），不做雙邊重判。
+                        judgments.Add(new ItemJudgment
+                        {
+                            ToolId = tool.Id ?? "",
+                            ToolName = ppBaseName + " 引腳間距",
+                            MeasuredValue = 0,
+                            IsOk = r.IsOk ?? false,
+                            Message = string.IsNullOrEmpty(r.ValueText) ? (r.PinPitch != null ? r.PinPitch.ErrorMessage : (r.Message ?? "")) : r.ValueText
+                        });
+                    }
+                }
                 else if (tool != null && tool.Tolerance != null)
                 {
                     double measuredValue = GetMeasuredValue(r, tool);
