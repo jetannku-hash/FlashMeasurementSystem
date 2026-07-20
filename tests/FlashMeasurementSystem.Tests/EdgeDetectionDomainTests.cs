@@ -171,6 +171,8 @@ namespace FlashMeasurementSystem.Tests
             Console.WriteLine("HoleArrayAnalysisDomainTests passed");
             HoleArrayRecipeToolDomainTests.Run();
             Console.WriteLine("HoleArrayRecipeToolDomainTests passed");
+            MeasurementReportBuilderTests.Run();
+            Console.WriteLine("MeasurementReportBuilderTests passed");
             Console.WriteLine("EdgeDetectionDomainTests passed");
             return 0;
         }

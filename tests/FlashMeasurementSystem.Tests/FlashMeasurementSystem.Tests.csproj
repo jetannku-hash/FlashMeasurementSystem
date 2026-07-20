@@ -80,6 +80,7 @@
     <Compile Include="GearRecipeToolDomainTests.cs" />
     <Compile Include="PcdAnalysisDomainTests.cs" />
     <Compile Include="PcdRecipeToolDomainTests.cs" />
+    <Compile Include="MeasurementReportBuilderTests.cs" />
     <Compile Include="PinPitchAnalysisDomainTests.cs" />
     <Compile Include="PinPitchRecipeToolDomainTests.cs" />
     <Compile Include="HoleArrayAnalysisDomainTests.cs" />
