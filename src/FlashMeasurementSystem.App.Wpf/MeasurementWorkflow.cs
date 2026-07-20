@@ -478,7 +478,9 @@ namespace FlashMeasurementSystem
                             Unit = "mm",
                             Deviation = g.PitchXMm - tool.HoleArray.NominalPitchXMm,
                             IsOk = g.PitchXOk,
-                            Message = "X 方向孔距"
+                            // 單行(Cols≤1)無 X 間距可量，分析器令 PitchXOk=true。明講「未判定」，
+                            // 否則報表上的 0.000mm/OK 會被誤讀成真的量到 0。
+                            Message = tool.HoleArray.Cols <= 1 ? "X 方向孔距（單行，未判定）" : "X 方向孔距"
                         });
                         judgments.Add(new ItemJudgment
                         {
@@ -491,7 +493,7 @@ namespace FlashMeasurementSystem
                             Unit = "mm",
                             Deviation = g.PitchYMm - tool.HoleArray.NominalPitchYMm,
                             IsOk = g.PitchYOk,
-                            Message = "Y 方向孔距"
+                            Message = tool.HoleArray.Rows <= 1 ? "Y 方向孔距（單列，未判定）" : "Y 方向孔距"
                         });
                         judgments.Add(new ItemJudgment
                         {
