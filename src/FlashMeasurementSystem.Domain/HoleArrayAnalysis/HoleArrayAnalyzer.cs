@@ -5,7 +5,7 @@ namespace FlashMeasurementSystem.Domain.HoleArrayAnalysis
 {
     /// <summary>
     /// 純孔陣列分析（無 HALCON）。孔質心 → 主軸擬合（2×2 共變異的主特徵向量，支援傾斜網格）
-    /// → 沿主軸 u / 次軸 v 投影分群成 rows×cols 網格 → 孔距 + 理想節點位置偏差 + 孔徑 + 五條件判定。
+    /// → 沿主軸 u / 次軸 v 投影分群成 rows×cols 網格 → 孔距 + 理想節點位置偏差 + 孔徑 + 六條件判定。
     /// 判定全在此層（pixelSizeUm 由呼叫端傳入，px 轉 mm），合成質心可全驗。
     /// </summary>
     public static class HoleArrayAnalyzer
@@ -61,7 +61,7 @@ namespace FlashMeasurementSystem.Domain.HoleArrayAnalysis
             // 時主軸會落在列方向。故兩種軸指派都試，取網格擬合殘差(RMS)較小者。
             GridFit fitA = FitGrid(holes, meanRow, meanCol, ur, uc, vr, vc, p.Cols, p.Rows);
             GridFit fitB = FitGrid(holes, meanRow, meanCol, vr, vc, ur, uc, p.Cols, p.Rows);
-            GridFit fit = fitB.RmsDevPx < fitA.RmsDevPx - 1e-12 ? fitB : fitA;
+            GridFit fit = ChooseFit(fitA, fitB, mmPerPx, p);
 
             int[] colIdx = fit.ColIdx;
             int[] rowIdx = fit.RowIdx;
@@ -73,10 +73,12 @@ namespace FlashMeasurementSystem.Domain.HoleArrayAnalysis
             double meanDiaMm = 0;
             foreach (HoleArrayPoint pt in holes) meanDiaMm += pt.DiameterPx * mmPerPx;
             meanDiaMm /= n;
+            // 對「標稱」孔徑取最大偏差（不是對均值）：規格是「每一顆孔都要在公差內」，
+            // 對均值取偏差會讓單顆嚴重超規的孔被平均掉而假 PASS。
             double diaMaxDevMm = 0;
             foreach (HoleArrayPoint pt in holes)
             {
-                double d = Math.Abs(pt.DiameterPx * mmPerPx - meanDiaMm);
+                double d = Math.Abs(pt.DiameterPx * mmPerPx - p.NominalDiameterMm);
                 if (d > diaMaxDevMm) diaMaxDevMm = d;
             }
 
@@ -106,12 +108,40 @@ namespace FlashMeasurementSystem.Domain.HoleArrayAnalysis
             // 判定（單行/單列時該方向孔距不判定）
             result.CountOk = n == p.Rows * p.Cols;
             result.DiameterOk = Math.Abs(result.MeanDiameterMm - p.NominalDiameterMm) <= p.DiameterToleranceMm;
+            result.DiameterMaxDevOk = result.DiameterMaxDevMm <= p.DiameterToleranceMm;
             result.PitchXOk = p.Cols <= 1 || Math.Abs(result.PitchXMm - p.NominalPitchXMm) <= p.PitchToleranceMm;
             result.PitchYOk = p.Rows <= 1 || Math.Abs(result.PitchYMm - p.NominalPitchYMm) <= p.PitchToleranceMm;
             result.PositionOk = result.MaxPositionDevMm <= p.PositionToleranceMm;
-            result.IsPass = result.CountOk && result.DiameterOk && result.PitchXOk
-                            && result.PitchYOk && result.PositionOk;
+            result.IsPass = result.CountOk && result.DiameterOk && result.DiameterMaxDevOk
+                            && result.PitchXOk && result.PitchYOk && result.PositionOk;
             return result;
+        }
+
+        /// <summary>
+        /// 在兩種軸指派間挑一個。殘差(RMS)是主要判準：Rows != Cols 時錯誤的指派會被迫用錯的
+        /// 群數切分，殘差明顯變大，足以分辨。
+        /// 但 Rows == Cols 時兩種指派都能完美重建網格（殘差相同、完美網格下同為 0），殘差失去
+        /// 鑑別力，之前一律退回 fitA＝PCA 主軸＝「展幅較大」的方向，孔距不同的正方網格就會
+        /// X/Y 對調（真值 X 1.0 / Y 2.0 會報成 X 2.0 / Y 1.0）。
+        /// 故殘差打平時改用 nominal 孔距當第二判準：取 |pitchU−NominalX| + |pitchV−NominalY|
+        /// 較小的一組。兩個 nominal 都是 0（無標稱可依據）時維持原本的 PCA 主軸順序。
+        /// </summary>
+        private static GridFit ChooseFit(GridFit fitA, GridFit fitB, double mmPerPx,
+            HoleArrayAnalysisParameters p)
+        {
+            // 相對容忍：真實影像有雜訊，正方網格的兩組殘差只會「幾乎」相等而非完全相等。
+            double tie = 1e-9 + 0.01 * Math.Max(fitA.RmsDevPx, fitB.RmsDevPx);
+            if (Math.Abs(fitA.RmsDevPx - fitB.RmsDevPx) > tie)
+                return fitA.RmsDevPx <= fitB.RmsDevPx ? fitA : fitB;
+
+            if (p.NominalPitchXMm <= 0 && p.NominalPitchYMm <= 0)
+                return fitA; // 無標稱孔距可導引 → 沿用 PCA 主軸順序
+
+            double errA = Math.Abs(fitA.PitchUPx * mmPerPx - p.NominalPitchXMm)
+                        + Math.Abs(fitA.PitchVPx * mmPerPx - p.NominalPitchYMm);
+            double errB = Math.Abs(fitB.PitchUPx * mmPerPx - p.NominalPitchXMm)
+                        + Math.Abs(fitB.PitchVPx * mmPerPx - p.NominalPitchYMm);
+            return errB < errA ? fitB : fitA;
         }
 
         /// <summary>單一軸指派下的網格擬合結果。</summary>

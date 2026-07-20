@@ -9,10 +9,12 @@ namespace FlashMeasurementSystem.Tests
         private const double Px = 10.0; // 1px = 0.01mm → 100px = 1.0mm
 
         // rows×cols 網格：Row = row0 + j*pitchY、Col = col0 + i*pitchX，孔徑固定 diaPx。
-        // skipIndex ≥ 0 時略過該顆（缺孔）；bumpIndex ≥ 0 時該顆 Row 額外加 bumpPx（位移）。
+        // skipIndex ≥ 0 時略過該顆（缺孔）；bumpIndex ≥ 0 時該顆 Row 額外加 bumpPx（位移）；
+        // badDiaIndex ≥ 0 時該顆孔徑改為 badDiaPx（單孔孔徑異常）。
         private static List<HoleArrayPoint> Grid(int rows, int cols, double row0, double col0,
             double pitchY, double pitchX, double diaPx,
-            int skipIndex = -1, int bumpIndex = -1, double bumpPx = 0.0)
+            int skipIndex = -1, int bumpIndex = -1, double bumpPx = 0.0,
+            int badDiaIndex = -1, double badDiaPx = 0.0)
         {
             var pts = new List<HoleArrayPoint>();
             int k = 0;
@@ -22,7 +24,8 @@ namespace FlashMeasurementSystem.Tests
                 {
                     if (k == skipIndex) continue;
                     double rr = row0 + j * pitchY + (k == bumpIndex ? bumpPx : 0.0);
-                    pts.Add(new HoleArrayPoint { Row = rr, Col = col0 + i * pitchX, DiameterPx = diaPx });
+                    double dia = k == badDiaIndex ? badDiaPx : diaPx;
+                    pts.Add(new HoleArrayPoint { Row = rr, Col = col0 + i * pitchX, DiameterPx = dia });
                 }
             }
             return pts;
@@ -144,6 +147,45 @@ namespace FlashMeasurementSystem.Tests
             AssertEqual(true, rtall.PitchYOk, "tall PitchYOk");
             AssertEqual(true, rtall.CountOk, "tall CountOk");
             AssertEqual(true, rtall.IsPass, "tall PASS");
+
+            // 正方網格（Rows==Cols=3）但 X/Y 孔距不同（X 1.0mm、Y 2.0mm）。
+            // 兩種軸指派的網格殘差都是 0（正方網格下 RMS 無法辨別），若只靠 RMS 比大小會退回
+            // PCA 主軸＝展幅較大的 Y 方向，導致 X/Y 對調（PitchX 報 2.0）。此為回歸測試：
+            // 殘差打平時應以 nominal 孔距決定軸指派。
+            var squareP = new HoleArrayAnalysisParameters
+            {
+                Rows = 3, Cols = 3,
+                NominalDiameterMm = 0.4, DiameterToleranceMm = 0.02,
+                NominalPitchXMm = 1.0, NominalPitchYMm = 2.0,
+                PitchToleranceMm = 0.02, PositionToleranceMm = 0.01
+            };
+            var square = Grid(3, 3, 100, 200, 200, 100, 40);
+            var rsq = HoleArrayAnalyzer.Analyze(square, Px, squareP);
+            AssertEqual(true, rsq.Success, "square Success");
+            AssertEqual(9, rsq.HoleCount, "square count 9");
+            AssertClose(1.0, rsq.PitchXMm, 1e-9, "square PitchXMm 1.0");
+            AssertClose(2.0, rsq.PitchYMm, 1e-9, "square PitchYMm 2.0");
+            AssertEqual(true, rsq.PitchXOk, "square PitchXOk");
+            AssertEqual(true, rsq.PitchYOk, "square PitchYOk");
+            AssertEqual(true, rsq.IsPass, "square PASS");
+
+            // 單孔孔徑嚴重超規（11 顆 0.4mm、1 顆 0.9mm），平均 0.4417 仍在 0.4±0.05 內
+            // → 只判平均會假 PASS。逐孔最大偏差（對 nominal）必須攔下來。
+            var oneBadP = new HoleArrayAnalysisParameters
+            {
+                Rows = 3, Cols = 4,
+                NominalDiameterMm = 0.4, DiameterToleranceMm = 0.05,
+                NominalPitchXMm = 1.0, NominalPitchYMm = 0.8,
+                PitchToleranceMm = 0.02, PositionToleranceMm = 0.01
+            };
+            var oneBadDia = Grid(3, 4, 100, 200, 80, 100, 40, badDiaIndex: 7, badDiaPx: 90);
+            var rbd = HoleArrayAnalyzer.Analyze(oneBadDia, Px, oneBadP);
+            AssertEqual(true, rbd.Success, "oneBadDia Success");
+            AssertEqual(12, rbd.HoleCount, "oneBadDia count 12");
+            AssertEqual(true, rbd.DiameterOk, "oneBadDia mean still OK");
+            AssertClose(0.5, rbd.DiameterMaxDevMm, 1e-9, "oneBadDia max dev vs nominal 0.5");
+            AssertEqual(false, rbd.DiameterMaxDevOk, "oneBadDia DiameterMaxDevOk false");
+            AssertEqual(false, rbd.IsPass, "oneBadDia FAIL");
 
             // 單列（Rows=1）→ PitchYMm 0 且 PitchYOk 不判定為 true，其餘仍照判
             var single = new HoleArrayAnalysisParameters

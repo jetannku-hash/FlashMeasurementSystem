@@ -10,13 +10,14 @@ namespace FlashMeasurementSystem.Domain.HoleArrayAnalysis
         public int  HoleCount { get; set; }
 
         public double MeanDiameterMm   { get; set; }   // 各孔等效孔徑平均
-        public double DiameterMaxDevMm { get; set; }   // 各孔孔徑對均值的最大偏差
+        public double DiameterMaxDevMm { get; set; }   // 各孔孔徑對「標稱孔徑」的最大偏差(mm)：max |孔徑 − NominalDiameterMm|
         public double PitchXMm         { get; set; }   // 主軸 u 方向相鄰行群心平均間距（Cols==1 時為 0）
         public double PitchYMm         { get; set; }   // 次軸 v 方向相鄰列群心平均間距（Rows==1 時為 0）
         public double MaxPositionDevMm { get; set; }   // 各孔至其理想網格節點的最大距離
 
         public bool CountOk    { get; set; }
         public bool DiameterOk { get; set; }
+        public bool DiameterMaxDevOk { get; set; }
         public bool PitchXOk   { get; set; }
         public bool PitchYOk   { get; set; }
         public bool PositionOk { get; set; }

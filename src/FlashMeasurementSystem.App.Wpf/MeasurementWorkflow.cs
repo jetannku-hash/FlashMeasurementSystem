@@ -431,8 +431,8 @@ namespace FlashMeasurementSystem
                 }
                 else if (tool != null && tool.HoleArray != null)
                 {
-                    // 孔陣列為五判定（孔數/平均孔徑/X 間距/Y 間距/位置偏差），不走單值雙邊判定器（會用 MeasuredValue=0 誤判）。
-                    // 比照 pin_pitch：hole_array 工具的「所有」報表列都由本分支發出，成功發五列、失敗發一列，
+                    // 孔陣列為六判定（孔數/平均孔徑/X 間距/Y 間距/位置偏差/孔徑最大偏差），不走單值雙邊判定器（會用 MeasuredValue=0 誤判）。
+                    // 比照 pin_pitch：hole_array 工具的「所有」報表列都由本分支發出，成功發六列、失敗發一列，
                     // 兩種情況都不落入下方雙邊 Tolerance 分支（Tolerance 為預設 [0,0]，0∈[0,0] 會被誤判為 OK＝假 PASS）。
                     string haBaseName = tool.Name ?? r.Name;
                     if (r.HoleArray != null && r.HoleArray.Success)
@@ -507,6 +507,20 @@ namespace FlashMeasurementSystem
                             Deviation = g.MaxPositionDevMm,
                             IsOk = g.PositionOk,
                             Message = "位置最大偏差"
+                        });
+                        // 平均孔徑會把單顆嚴重超規的孔平均掉，故另發一列逐孔最大偏差（對標稱孔徑）。
+                        judgments.Add(new ItemJudgment
+                        {
+                            ToolId = tool.Id ?? "",
+                            ToolName = haBaseName + "-孔徑最大偏差",
+                            MeasuredValue = g.DiameterMaxDevMm,
+                            Nominal = 0,
+                            LowerLimit = 0,
+                            UpperLimit = tool.HoleArray.DiameterToleranceMm,
+                            Unit = "mm",
+                            Deviation = g.DiameterMaxDevMm,
+                            IsOk = g.DiameterMaxDevOk,
+                            Message = "孔徑最大偏差"
                         });
                     }
                     else
