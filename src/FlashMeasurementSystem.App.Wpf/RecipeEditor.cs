@@ -147,6 +147,7 @@ namespace FlashMeasurementSystem
         private NumericUpDown _holePositionTolNumeric;
         private CheckBox _holeDarkCheck;
         private NumericUpDown _holeMinAreaNumeric;
+        private NumericUpDown _holeMinCircularityNumeric;
 
         private GroupBox _edgeGroup;
         private NumericUpDown _sigmaNumeric;
@@ -574,6 +575,10 @@ namespace FlashMeasurementSystem
                 Dock = DockStyle.Fill
             });
             _holeMinAreaNumeric = AddNumericRow(t, "最小孔面積(px)", ref r, 1M, 10000000M, 0, 20M, 1M);
+            // 圓度下限：擋掉兩孔沾黏被 connection 併成一顆的情形（併起來的雙孔圓度明顯偏低，
+            // 實測乾淨圓=1.00、沾黏對≈0.63，預設 0.80 落在中間）。
+            // ⚠️ 長孔/橢圓孔本來圓度就低（2:1 橢圓≈0.5）會被誤拒 → 設 0 可完全停用此過濾。
+            _holeMinCircularityNumeric = AddNumericRow(t, "圓度下限(0=停用)", ref r, 0M, 1M, 2, 0.80M, 0.05M);
 
             gb.Controls.Add(t);
         }
@@ -783,6 +788,7 @@ namespace FlashMeasurementSystem
             _holePositionTolNumeric.ValueChanged += (s, e) => WriteHoleArray();
             _holeDarkCheck.CheckedChanged += (s, e) => WriteHoleArray();
             _holeMinAreaNumeric.ValueChanged += (s, e) => WriteHoleArray();
+            _holeMinCircularityNumeric.ValueChanged += (s, e) => WriteHoleArray();
 
             _sigmaNumeric.ValueChanged += (s, e) => WriteEdgeParams();
             _thresholdNumeric.ValueChanged += (s, e) => WriteEdgeParams();
@@ -930,6 +936,7 @@ namespace FlashMeasurementSystem
             h.PositionToleranceMm = (double)_holePositionTolNumeric.Value;
             h.HoleIsDark = _holeDarkCheck.Checked;
             h.MinHoleAreaPx = (double)_holeMinAreaNumeric.Value;
+            h.MinCircularity = (double)_holeMinCircularityNumeric.Value;
             MarkDirty();
         }
 
@@ -1836,6 +1843,7 @@ namespace FlashMeasurementSystem
                 _holePositionTolNumeric.Value = ClampDecimal(h.PositionToleranceMm, _holePositionTolNumeric.Minimum, _holePositionTolNumeric.Maximum);
                 _holeDarkCheck.Checked = h.HoleIsDark;
                 _holeMinAreaNumeric.Value = ClampDecimal(h.MinHoleAreaPx, _holeMinAreaNumeric.Minimum, _holeMinAreaNumeric.Maximum);
+                _holeMinCircularityNumeric.Value = ClampDecimal(h.MinCircularity, _holeMinCircularityNumeric.Minimum, _holeMinCircularityNumeric.Maximum);
             }
             finally
             {
