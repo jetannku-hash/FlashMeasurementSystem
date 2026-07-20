@@ -57,33 +57,17 @@ namespace FlashMeasurementSystem.Domain.HoleArrayAnalysis
             ur /= norm; uc /= norm;
             double vr = -uc, vc = ur; // 次軸＝主軸法向
 
-            // 投影到 (u, v) 座標
-            var av = new double[n];
-            var bv = new double[n];
-            for (int i = 0; i < n; i++)
-            {
-                double dr = holes[i].Row - meanRow, dc = holes[i].Col - meanCol;
-                av[i] = dr * ur + dc * uc;
-                bv[i] = dr * vr + dc * vc;
-            }
+            // PCA 主軸只代表「展幅最大」的方向，未必是行(X)方向：高瘦網格（Y 展幅 > X 展幅）
+            // 時主軸會落在列方向。故兩種軸指派都試，取網格擬合殘差(RMS)較小者。
+            GridFit fitA = FitGrid(holes, meanRow, meanCol, ur, uc, vr, vc, p.Cols, p.Rows);
+            GridFit fitB = FitGrid(holes, meanRow, meanCol, vr, vc, ur, uc, p.Cols, p.Rows);
+            GridFit fit = fitB.RmsDevPx < fitA.RmsDevPx - 1e-12 ? fitB : fitA;
 
-            // 分群成網格：沿 u 取最大的 (Cols−1) 個間隙切成 Cols 群；沿 v 同理切 Rows 群
-            double pitchUPx, pitchVPx;
-            int[] colIdx = Cluster(av, p.Cols, out pitchUPx);
-            int[] rowIdx = Cluster(bv, p.Rows, out pitchVPx);
-
-            // 理想網格 + 位置偏差：節點(i,j) = 原點 + (i−(Cols−1)/2)·pitchU·u + (j−(Rows−1)/2)·pitchV·v
-            double maxPosDevPx = 0;
-            for (int i = 0; i < n; i++)
-            {
-                double du = (colIdx[i] - (p.Cols - 1) / 2.0) * pitchUPx;
-                double dv = (rowIdx[i] - (p.Rows - 1) / 2.0) * pitchVPx;
-                double idealRow = meanRow + du * ur + dv * vr;
-                double idealCol = meanCol + du * uc + dv * vc;
-                double dr = holes[i].Row - idealRow, dc = holes[i].Col - idealCol;
-                double dev = Math.Sqrt(dr * dr + dc * dc);
-                if (dev > maxPosDevPx) maxPosDevPx = dev;
-            }
+            int[] colIdx = fit.ColIdx;
+            int[] rowIdx = fit.RowIdx;
+            double pitchUPx = fit.PitchUPx;
+            double pitchVPx = fit.PitchVPx;
+            double maxPosDevPx = fit.MaxDevPx;
 
             // 孔徑（px → mm）
             double meanDiaMm = 0;
@@ -128,6 +112,63 @@ namespace FlashMeasurementSystem.Domain.HoleArrayAnalysis
             result.IsPass = result.CountOk && result.DiameterOk && result.PitchXOk
                             && result.PitchYOk && result.PositionOk;
             return result;
+        }
+
+        /// <summary>單一軸指派下的網格擬合結果。</summary>
+        private sealed class GridFit
+        {
+            public int[] ColIdx;
+            public int[] RowIdx;
+            public double PitchUPx; // 沿行方向軸（X）的相鄰群心平均間距
+            public double PitchVPx; // 沿列方向軸（Y）的相鄰群心平均間距
+            public double MaxDevPx;
+            public double RmsDevPx;
+        }
+
+        /// <summary>
+        /// 給定一組 (行方向軸 uR/uC, 列方向軸 vR/vC)：投影 → 分群 → 理想節點殘差。
+        /// 節點(i,j) = 質心 + (i−(cols−1)/2)·pitchU·u + (j−(rows−1)/2)·pitchV·v。
+        /// </summary>
+        private static GridFit FitGrid(IList<HoleArrayPoint> holes, double meanRow, double meanCol,
+            double uR, double uC, double vR, double vC, int cols, int rows)
+        {
+            int n = holes.Count;
+            var av = new double[n];
+            var bv = new double[n];
+            for (int i = 0; i < n; i++)
+            {
+                double dr = holes[i].Row - meanRow, dc = holes[i].Col - meanCol;
+                av[i] = dr * uR + dc * uC;
+                bv[i] = dr * vR + dc * vC;
+            }
+
+            // 沿行方向軸取最大的 (cols−1) 個間隙切成 cols 群；沿列方向軸同理切 rows 群
+            double pitchU, pitchV;
+            int[] colIdx = Cluster(av, cols, out pitchU);
+            int[] rowIdx = Cluster(bv, rows, out pitchV);
+
+            double maxDev = 0, sumSq = 0;
+            for (int i = 0; i < n; i++)
+            {
+                double du = (colIdx[i] - (cols - 1) / 2.0) * pitchU;
+                double dv = (rowIdx[i] - (rows - 1) / 2.0) * pitchV;
+                double idealRow = meanRow + du * uR + dv * vR;
+                double idealCol = meanCol + du * uC + dv * vC;
+                double dr = holes[i].Row - idealRow, dc = holes[i].Col - idealCol;
+                double dev = Math.Sqrt(dr * dr + dc * dc);
+                if (dev > maxDev) maxDev = dev;
+                sumSq += dev * dev;
+            }
+
+            return new GridFit
+            {
+                ColIdx = colIdx,
+                RowIdx = rowIdx,
+                PitchUPx = pitchU,
+                PitchVPx = pitchV,
+                MaxDevPx = maxDev,
+                RmsDevPx = Math.Sqrt(sumSq / n)
+            };
         }
 
         /// <summary>

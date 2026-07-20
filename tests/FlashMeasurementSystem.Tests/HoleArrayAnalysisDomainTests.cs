@@ -124,6 +124,27 @@ namespace FlashMeasurementSystem.Tests
             AssertClose(0.0, rt.MaxPositionDevMm, 1e-9, "tilted MaxPositionDev 0");
             AssertEqual(true, rt.IsPass, "tilted PASS");
 
+            // 高瘦網格（4 列 × 3 行，列距 100px > 行距 80px）→ Y 展幅(300px) > X 展幅(160px)。
+            // PCA 主軸會落在「列」方向，若直接把主軸當行方向會導致 X/Y 對調（此為回歸測試）。
+            var tallP = new HoleArrayAnalysisParameters
+            {
+                Rows = 4, Cols = 3,
+                NominalDiameterMm = 0.4, DiameterToleranceMm = 0.02,
+                NominalPitchXMm = 0.8, NominalPitchYMm = 1.0,
+                PitchToleranceMm = 0.02, PositionToleranceMm = 0.01
+            };
+            var tall = Grid(4, 3, 100, 200, 100, 80, 40);
+            var rtall = HoleArrayAnalyzer.Analyze(tall, Px, tallP);
+            AssertEqual(true, rtall.Success, "tall Success");
+            AssertEqual(12, rtall.HoleCount, "tall count 12");
+            AssertClose(0.8, rtall.PitchXMm, 1e-9, "tall PitchXMm 0.8");
+            AssertClose(1.0, rtall.PitchYMm, 1e-9, "tall PitchYMm 1.0");
+            AssertClose(0.0, rtall.MaxPositionDevMm, 1e-9, "tall MaxPositionDev 0");
+            AssertEqual(true, rtall.PitchXOk, "tall PitchXOk");
+            AssertEqual(true, rtall.PitchYOk, "tall PitchYOk");
+            AssertEqual(true, rtall.CountOk, "tall CountOk");
+            AssertEqual(true, rtall.IsPass, "tall PASS");
+
             // 單列（Rows=1）→ PitchYMm 0 且 PitchYOk 不判定為 true，其餘仍照判
             var single = new HoleArrayAnalysisParameters
             {
