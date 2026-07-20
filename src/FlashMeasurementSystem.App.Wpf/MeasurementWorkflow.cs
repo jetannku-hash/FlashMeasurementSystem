@@ -56,6 +56,11 @@ namespace FlashMeasurementSystem
         /// <param name="searchRegion">Search region for matching; null = full image.</param>
         /// <param name="matchParams">Matching parameters; null = defaults.</param>
         /// <param name="toolResults">[out] Per-tool results for UI overlay drawing.</param>
+        /// <param name="itemJudgments">
+        /// [out] Per-item judgments — exactly the rows written to the CSV. Surfaced so the UI
+        /// can build the PDF report from the same data without re-deriving it. Empty on early
+        /// failure returns (mirrors <paramref name="toolResults"/>).
+        /// </param>
         /// <returns>Overall workflow result.</returns>
         public WorkflowResult RunOnce(
             Recipe recipe,
@@ -67,7 +72,8 @@ namespace FlashMeasurementSystem
             HRegion searchRegion,
             TemplateMatchingParameters matchParams,
             bool skipImageQualityCheck,
-            out List<ToolRunResult> toolResults)
+            out List<ToolRunResult> toolResults,
+            out List<ItemJudgment> itemJudgments)
         {
             var result = new WorkflowResult
             {
@@ -76,6 +82,7 @@ namespace FlashMeasurementSystem
             };
 
             toolResults = new List<ToolRunResult>();
+            itemJudgments = new List<ItemJudgment>();
 
             if (recipe == null)
             {
@@ -185,7 +192,9 @@ namespace FlashMeasurementSystem
 
             // ── 5. Evaluating ──
             SetState(MeasurementState.Evaluating);
-            var judgments = new List<ItemJudgment>();
+            // 與 itemJudgments 同一個 list：下方沿用既有的 judgments 區域名稱不動，
+            // 但呼叫端（PDF 報表）拿到的就是寫進 CSV 的同一批列。
+            List<ItemJudgment> judgments = itemJudgments;
             foreach (ToolRunResult r in toolResults)
             {
                 if (r == null) continue;

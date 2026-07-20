@@ -119,6 +119,9 @@
     <Compile Include="PinPitchAnalysis\PinPoint.cs" />
     <Compile Include="PinPitchAnalysis\PinPitchAnalysisParameters.cs" />
     <Compile Include="PinPitchAnalysis\PinPitchAnalysisResult.cs" />
+    <Compile Include="Reporting\MeasurementReportModel.cs" />
+    <Compile Include="Reporting\MeasurementReportRow.cs" />
+    <Compile Include="Reporting\MeasurementReportBuilder.cs" />
     <Compile Include="PinPitchAnalysis\PinPitchAnalyzer.cs" />
     <Compile Include="HoleArrayAnalysis\HoleArrayPoint.cs" />
     <Compile Include="HoleArrayAnalysis\HoleArrayAnalysisParameters.cs" />

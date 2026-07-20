@@ -365,6 +365,52 @@ namespace FlashMeasurementSystem
             Redraw();
         }
 
+        /// <summary>
+        /// 把視窗目前內容（影像 + 已畫上的 overlay）原樣存成 PNG，供報表嵌圖。
+        /// 呼叫端必須先完成繪製（SetPersistentOverlayAction 內含同步 Redraw）再呼叫。
+        /// 失敗（無影像／HALCON 例外／寫檔失敗）一律回傳 null 而非丟例外——
+        /// 存圖只是報表的附加品，不可讓量測流程因此中斷。
+        /// </summary>
+        /// <returns>實際寫出的檔案路徑；失敗時 null。</returns>
+        public string DumpWindowToPng(string filePath)
+        {
+            if (CurrentImage == null || string.IsNullOrEmpty(filePath)) return null;
+
+            HObject dump = null;
+            try
+            {
+                string dir = System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(filePath));
+                if (!string.IsNullOrEmpty(dir) && !System.IO.Directory.Exists(dir))
+                    System.IO.Directory.CreateDirectory(dir);
+
+                // dump_window_image ( : Image : WindowHandle : ) —— 取視窗內容（含 overlay）為 image 物件。
+                HOperatorSet.DumpWindowImage(out dump, _window);
+                // write_image ( Image : : Format, FillColor, FileName : )
+                HOperatorSet.WriteImage(dump, "png", 0, filePath);
+
+                // HALCON 會在副檔名缺漏時自行補上，故兩種可能路徑都確認一次，回傳真正存在的那個。
+                if (System.IO.File.Exists(filePath)) return filePath;
+                string withExt = filePath + ".png";
+                return System.IO.File.Exists(withExt) ? withExt : null;
+            }
+            catch (HalconException)
+            {
+                return null;
+            }
+            catch (System.IO.IOException)
+            {
+                return null;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return null;
+            }
+            finally
+            {
+                if (dump != null) dump.Dispose();
+            }
+        }
+
         /// <summary>螢幕像素 → 影像像素（依目前縮放），用於把手大小與命中容差。</summary>
         public double ScreenPxToImage(double px)
         {
