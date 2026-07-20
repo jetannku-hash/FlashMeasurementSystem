@@ -14,7 +14,7 @@
 
 | # | Phase | 目標 | 狀態 |
 |---|-------|------|------|
-| 1 | Operator Experience | 空狀態引導、PASS/FAIL 橫幅、公差上下限即時顯示、編輯器內試測 | ✅ 完成 2026-06-30 |
+| 1 | Operator Experience | 空狀態引導、PASS/FAIL 橫幅、公差上下限即時顯示、編輯器內試測 | ✅ 完成 2026-06-30（2026-07-20 查證：N1/N2/N3/N5/A1/N7 皆已交付。**同批清單中仍未做**：N6 快捷鍵+拖放影像、A5 Undo/Redo、A4 工具列表 TreeView（選配）、A3 即時邊緣預覽僅弧形卡尺有。詳見 `docs/superpowers/plans/GUI建議優化項目計畫書.md` 狀態欄） |
 | 2 | **2D Metrology Model** | 標稱幾何上自動佈點的量測矩形 + 穩健一鍵多特徵量測（主流差異化） | ✅ 完成 2026-07-01（GUI 驗收通過，fix d08bc33） |
 | 3 | Production Robustness | fuzzy/robust 邊緣量測（B1）+ GR&R/重複性自測（B2） | ⬜ 未開始 |
 | 4 | PDF Reporting | 格式化 PDF 量測報表（超越 CSV） | ✅ **完成 2026-07-20**：純 Domain `MeasurementReportModel`+`MeasurementReportBuilder`（可全測）、MigraDoc/PdfSharp writer 隔離在 Reporting（vendored MIT DLL，見 `lib/PdfSharp.MigraDoc.1.50.5147/PROVENANCE.md`）、一鍵量測後擷取標註 overlay 嵌入、每次一份 PDF 到 `data/reports`，CSV 不變。⚠️ **字型限制**：PdfSharp 1.50 無法解析 `.ttc`（Windows 中文字型幾乎全是），只能用單檔 `.ttf` 的 **標楷體 DFKai-SB**；字型缺失會「大聲失敗」而非產出中文空白的 PDF |
