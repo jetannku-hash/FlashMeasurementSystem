@@ -76,6 +76,25 @@ namespace FlashMeasurementSystem.Tests
             }
             finally { Delete(pdf3); }
 
+            // --- 案例 4：字型未安裝必須「大聲失敗」，不可產出中文空白的 PDF ---
+            // PdfSharp 對不存在的字型名稱【不會拋例外】，會靜默代換成無中文 glyph 的字型，
+            // 結果是「看似成功、實際整份中文空白」——比直接失敗更糟（操作員可能歸檔不可用的報表）。
+            // 這個測試釘住「必須擋下來」的行為。
+            string pdf4 = TempPath("pdf");
+            try
+            {
+                var badWriter = new PdfMeasurementReportWriter("NoSuchFont-XYZ-12345");
+                bool threw = false;
+                string msg = "";
+                try { badWriter.Write(BuildModel(), pdf4); }
+                catch (InvalidOperationException ex) { threw = true; msg = ex.Message; }
+
+                Assert(threw, "案例4：字型不存在時 Write 應擲 InvalidOperationException");
+                Assert(msg.Contains("NoSuchFont-XYZ-12345"), "案例4：錯誤訊息應指出是哪個字型（實得：" + msg + "）");
+                Assert(!File.Exists(pdf4), "案例4：不應留下半成品 PDF");
+            }
+            finally { Delete(pdf4); }
+
             Console.WriteLine("PdfReportWriterTests passed");
         }
 

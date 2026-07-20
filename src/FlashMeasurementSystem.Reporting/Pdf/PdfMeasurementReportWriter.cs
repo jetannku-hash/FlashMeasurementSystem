@@ -18,16 +18,31 @@ namespace FlashMeasurementSystem.Reporting.Pdf
     /// </summary>
     public class PdfMeasurementReportWriter : IMeasurementPdfReportWriter
     {
-        private const string FontName = "DFKai-SB";
+        /// <summary>預設報表字型。見類別註解與 PROVENANCE.md 的 .ttc 限制。</summary>
+        public const string DefaultFontName = "DFKai-SB";
         private const double BaseFontSize = 10.0;
 
         /// <summary>版面可用寬度（A4 直式扣掉左右邊界後的保守值，公分）。</summary>
         private const double ContentWidthCm = 15.0;
 
+        private readonly string _fontName;
+
+        /// <param name="fontName">報表字型；預設標楷體。必須是單檔 .ttf（PdfSharp 1.50 無法解析 .ttc）。</param>
+        public PdfMeasurementReportWriter(string fontName = DefaultFontName)
+        {
+            _fontName = string.IsNullOrEmpty(fontName) ? DefaultFontName : fontName;
+        }
+
         public void Write(MeasurementReportModel model, string filePath)
         {
             if (model == null) throw new ArgumentNullException("model");
             if (string.IsNullOrEmpty(filePath)) throw new ArgumentException("filePath is required", "filePath");
+
+            // ⚠️ 必須先探測字型是否安裝。PdfSharp 對「不存在的字型名稱」【不會拋例外】——它會靜默
+            // 代換成 Microsoft Sans Serif，而該字型沒有中文 glyph，結果是「PDF 產生成功但整份中文空白」，
+            // 操作員只看到成功訊息、還可能把不可用的報表歸檔。這比直接失敗更糟，故在此擋掉。
+            // (只有 .ttc 才會讓 PdfSharp 拋 parsing 例外；不存在的名稱不會。實測驗證。)
+            EnsureFontInstalled(_fontName);
 
             string dir = Path.GetDirectoryName(Path.GetFullPath(filePath));
             if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
@@ -41,7 +56,7 @@ namespace FlashMeasurementSystem.Reporting.Pdf
             catch (Exception ex)
             {
                 throw new InvalidOperationException(
-                    "建立 PDF 報表內容失敗（字型 '" + FontName + "' 或版面設定問題）：" + ex.Message, ex);
+                    "建立 PDF 報表內容失敗（字型 '" + _fontName + "' 或版面設定問題）：" + ex.Message, ex);
             }
 
             try
@@ -57,10 +72,29 @@ namespace FlashMeasurementSystem.Reporting.Pdf
             }
         }
 
-        private static Document BuildDocument(MeasurementReportModel model)
+        /// <summary>
+        /// 確認字型已安裝於本機。GDI 的 FontFamily 建構子對找不到的字型族會拋 ArgumentException，
+        /// 這是可靠的探測方式；PdfSharp 自己不會告訴你字型被代換掉了。
+        /// </summary>
+        private static void EnsureFontInstalled(string fontName)
+        {
+            try
+            {
+                using (var probe = new System.Drawing.FontFamily(fontName)) { }
+            }
+            catch (ArgumentException)
+            {
+                throw new InvalidOperationException(
+                    "報表字型 '" + fontName + "' 未安裝於本機，PDF 內的中文會變成空白。" +
+                    "請安裝該字型（Windows：設定 → 應用程式 → 選用功能 → 繁體中文補充字型），" +
+                    "或改用其他單檔 .ttf 中文字型。");
+            }
+        }
+
+        private Document BuildDocument(MeasurementReportModel model)
         {
             var doc = new Document();
-            doc.Styles["Normal"].Font.Name = FontName;
+            doc.Styles["Normal"].Font.Name = _fontName;
             doc.Styles["Normal"].Font.Size = BaseFontSize;
 
             Section sec = doc.AddSection();
