@@ -71,6 +71,11 @@ namespace FlashMeasurementSystem
                     _objects.Add(Clone(o));
             }
 
+            // 字型須在 BuildLayout() 前設定，子控制項才會繼承。8.25pt 與原本的
+            // Microsoft Sans Serif 8.25pt 行高相同（13px）、寬度僅多 3~7%，可安全替換；
+            // 9pt 會在既有版面造成截字。下方 800x520 維持不變，故註解所述的「col1 需 ~365px」仍成立。
+            Font = new Font("Segoe UI", 8.25F);
+
             Text = "Metrology Model Editor";
             // 800 寬：右側屬性欄 col1（Percent 100%）需容納公差列的 啟用/Nominal/下限/上限 四組控制
             // （約 365px），660 寬時 col1 只剩 ~320px 會把「上限」切掉。

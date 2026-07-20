@@ -37,6 +37,11 @@ namespace FlashMeasurementSystem
             _comparer = comparer ?? throw new ArgumentNullException(nameof(comparer));
             _lease = _imageHelper.AcquireOverlay("DxfComparisonForm");
 
+            // 字型須在建立子控制項前設定，子控制項才會繼承。本表單子控制項是絕對定位
+            // （Left/Top），故只用與原字型同行高（13px）、寬度僅多 3~7% 的 8.25pt；
+            // 9pt 會把絕對座標的版面撐破。
+            Font = new System.Drawing.Font("Segoe UI", 8.25F);
+
             Text = "DXF/CAD 輪廓度比對";
             Width = 460; Height = 260;
 
