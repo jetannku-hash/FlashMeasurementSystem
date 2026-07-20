@@ -20,6 +20,7 @@ namespace FlashMeasurementSystem.Tests.Halcon
                 TemplateMatcherTests.Run,
                 MetrologyModelHalconTests.Run,
                 PinDetectorHalconTests.Run,
+                HoleArrayDetectorHalconTests.Run,
                 SyntheticMetrologyImageGenerator.Run,
                 SyntheticPinRowImageGenerator.Run,
             };

@@ -197,6 +197,40 @@ namespace FlashMeasurementSystem.Tests.Halcon
             return img;
         }
 
+        /// <summary>
+        /// Backlit hole grid: bright background (220), rows×cols dark filled circles (30).
+        /// Ground truth: hole (r,c) centre = (row0 + r*pitchY, col0 + c*pitchX), radius = holeRadius;
+        /// hole count = rows*cols; first hole centre = (row0, col0); pitches = pitchY (row) / pitchX (col).
+        /// </summary>
+        public static HImage CreateHoleGridImage(int width, int height, int row0, int col0, int pitchY, int pitchX, int rows, int cols, int holeRadius)
+        {
+            return CreateHoleGridImage(width, height, row0, col0, pitchY, pitchX, rows, cols, holeRadius, -1);
+        }
+
+        /// <summary>Backlit hole grid (bright bg 220, dark holes 30) with the hole at flat index
+        /// <paramref name="missingIndex"/> (row-major) omitted — demos the 缺孔 NG case.
+        /// missingIndex &lt; 0 draws all rows*cols holes.</summary>
+        public static HImage CreateHoleGridImage(int width, int height, int row0, int col0, int pitchY, int pitchX, int rows, int cols, int holeRadius, int missingIndex)
+        {
+            HImage img = new HImage();
+            img.GenImageConst("byte", width, height);
+            img = PaintRect(img, 0, 0, height - 1, width - 1, 220.0);   // bright backlit background
+            for (int r = 0; r < rows; r++)
+            {
+                for (int c = 0; c < cols; c++)
+                {
+                    if (r * cols + c == missingIndex) continue;
+                    HRegion circle = new HRegion();
+                    circle.GenCircle((double)(row0 + r * pitchY), (double)(col0 + c * pitchX), (double)holeRadius);
+                    HImage painted = img.PaintRegion(circle, 30.0, "fill");
+                    circle.Dispose();
+                    img.Dispose();
+                    img = painted;
+                }
+            }
+            return img;
+        }
+
         /// <summary>Image with a thin straight line for line fitting.</summary>
         public static HImage CreateLineImage(bool horizontal, int w = DefaultSize, int h = DefaultSize)
         {

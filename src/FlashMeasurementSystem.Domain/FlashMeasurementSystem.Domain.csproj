@@ -125,6 +125,7 @@
     <Compile Include="HoleArrayAnalysis\HoleArrayAnalysisResult.cs" />
     <Compile Include="HoleArrayAnalysis\HoleArrayAnalyzer.cs" />
     <Compile Include="HoleDetection\HoleDetectionResult.cs" />
+    <Compile Include="HoleArrayDetection\HoleArrayDetectionResult.cs" />
     <Compile Include="PinDetection\PinDetectionResult.cs" />
     <Compile Include="Workflow\MeasurementState.cs" />
     <Compile Include="Workflow\WorkflowResult.cs" />
