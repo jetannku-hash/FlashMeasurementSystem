@@ -30,10 +30,9 @@ namespace FlashMeasurementSystem
         private MetrologyObjectDef _selected;
         private bool _updating;
         private bool _dirty;
-        // Phase 4 groundwork：比照 RecipeEditor 的 _editorInstalledOverlay——目前編輯器尚未持有
-        // _imageHelper（仍全經由 callback 與 MainWindow 溝通），故此旗標尚未被設為 true；
-        // on-image 繪製 commit 注入 _imageHelper 後才會在裝 overlay 處設定它，並於 FormClosed 清除。
-        private bool _editorInstalledOverlay;
+        // 本編輯器對共用影像視窗的 overlay/手勢所有權（_imageHelper 可能為 null → 無租約）。
+        // 關閉時 Dispose 即收回自己的圖層與 pending 繪製手勢，不動別人的。
+        private readonly IOverlayLease _lease;
 
         private ListBox _list;
         private Button _addButton, _removeButton, _saveButton, _cancelButton, _trialButton, _drawButton;
@@ -62,6 +61,7 @@ namespace FlashMeasurementSystem
             _savedCallback = savedCallback;
             _trialCallback = trialCallback;
             _imageHelper = imageHelper;
+            _lease = imageHelper?.AcquireOverlay("MetrologyModelEditorForm");
             _imgW = imageWidth;
             _imgH = imageHeight;
 
@@ -88,16 +88,9 @@ namespace FlashMeasurementSystem
             FormClosing += OnFormClosing;
             FormClosed += (s, e) =>
             {
-                // 本 commit 只用一次性 RequestRoi（不裝 persistent overlay），但比照 RecipeEditor
-                // 保險地結束任何 rect2/弧形編輯把手（兩者皆 idempotent），並僅在本編輯器曾裝過
-                // overlay 時 ClearOverlay()——不動別的元件裝的 overlay。
-                if (_imageHelper != null)
-                {
-                    _imageHelper.EndRect2Edit();
-                    _imageHelper.EndArcEdit();
-                    if (_editorInstalledOverlay) _imageHelper.ClearOverlay();
-                }
-                _editorInstalledOverlay = false;
+                // 釋放圖層所有權：收掉本編輯器的 overlay 與尚未完成的 RequestRoi/RequestLine 手勢
+                // （關閉後那些 callback 也會因租約失效而變成 no-op），不動別的 owner 的編輯把手。
+                _lease?.Dispose();
             };
         }
 
@@ -519,12 +512,12 @@ namespace FlashMeasurementSystem
             if (_selected == null || _imageHelper == null || _imageHelper.CurrentImage == null) return;
             try
             {
-                // RequestRoi/RequestLine 內部已會 DisarmInteractiveModes，這裡再呼叫一次確保無殘留 pending 手勢。
-                _imageHelper.DisarmInteractiveModes();
+                // RequestRoi/RequestLine 內部已會 Disarm，這裡再呼叫一次確保無殘留 pending 手勢。
+                _lease.Disarm();
                 if (_selected.Shape == MetrologyObjectType.Line)
-                    _imageHelper.RequestLine(OnDrawnLine);   // 直線：兩點拖曳手勢
+                    _lease.RequestLine(OnDrawnLine);   // 直線：兩點拖曳手勢
                 else
-                    _imageHelper.RequestRoi(OnDrawnRoi);
+                    _lease.RequestRoi(OnDrawnRoi);
             }
             catch (Exception ex)
             {
