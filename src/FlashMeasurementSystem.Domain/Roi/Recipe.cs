@@ -32,7 +32,9 @@ namespace FlashMeasurementSystem.Domain.Roi
         //     純加欄位、向後相容、無遷移碼：舊檔載入 Tolerances=空清單＝不判定（IsOk=null），行為不變。
         // v12：引腳間距工具（MeasurementTool.PinPitch，加性 nullable 欄）+ ToolType="pin_pitch"。
         //     純加欄位、向後相容、無遷移碼：舊檔載入 PinPitch=null、無 pin_pitch 工具，行為不變。
-        public int SchemaVersion { get; set; } = 12;
+        // v13：孔陣列工具（MeasurementTool.HoleArray，加性 nullable 欄）+ ToolType="hole_array"。
+        //     純加欄位、向後相容、無遷移碼：舊檔載入 HoleArray=null、無 hole_array 工具，行為不變。
+        public int SchemaVersion { get; set; } = 13;
         public string RecipeId { get; set; } = "";
         public string Name { get; set; } = "";
 

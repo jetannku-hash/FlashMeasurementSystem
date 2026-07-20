@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using FlashMeasurementSystem.Domain.EdgeDetection;
 using FlashMeasurementSystem.Domain.Gdt;
 using FlashMeasurementSystem.Domain.GearAnalysis;
+using FlashMeasurementSystem.Domain.HoleArrayAnalysis;
 using FlashMeasurementSystem.Domain.PcdAnalysis;
 using FlashMeasurementSystem.Domain.PinPitchAnalysis;
 using FlashMeasurementSystem.Domain.Tolerance;
@@ -53,5 +54,9 @@ namespace FlashMeasurementSystem.Domain.Roi
         // v12：引腳間距分析參數（重用 PinPitchAnalysisParameters DTO）。null＝非 pin_pitch 工具。
         // pin_pitch 工具（ToolType="pin_pitch"）必填；量測區用 rect2 Roi。
         public PinPitchAnalysisParameters PinPitch { get; set; } = null;
+
+        // v13：孔陣列分析參數（重用 HoleArrayAnalysisParameters DTO）。null＝非 hole_array 工具。
+        // hole_array 工具（ToolType="hole_array"）必填；量測區用 rect2 Roi。
+        public HoleArrayAnalysisParameters HoleArray { get; set; } = null;
     }
 }

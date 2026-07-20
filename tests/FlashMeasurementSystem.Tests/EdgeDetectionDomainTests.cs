@@ -169,6 +169,8 @@ namespace FlashMeasurementSystem.Tests
             Console.WriteLine("PinPitchRecipeToolDomainTests passed");
             HoleArrayAnalysisDomainTests.Run();
             Console.WriteLine("HoleArrayAnalysisDomainTests passed");
+            HoleArrayRecipeToolDomainTests.Run();
+            Console.WriteLine("HoleArrayRecipeToolDomainTests passed");
             Console.WriteLine("EdgeDetectionDomainTests passed");
             return 0;
         }
