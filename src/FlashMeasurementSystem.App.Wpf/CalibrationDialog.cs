@@ -29,6 +29,11 @@ namespace FlashMeasurementSystem
 
         public CalibrationDialog(int imageWidth, int imageHeight)
         {
+            // 字型須在建立子控制項前設定，子控制項才會繼承。8.25pt 與原本的
+            // Microsoft Sans Serif 8.25pt 行高相同（13px）、寬度僅多 3~7%，可安全替換；
+            // 9pt 會在既有版面造成截字。
+            Font = new Font("Segoe UI", 8.25F);
+
             Text = "Pixel Size 校正";
             FormBorderStyle = FormBorderStyle.FixedDialog;
             StartPosition = FormStartPosition.CenterParent;

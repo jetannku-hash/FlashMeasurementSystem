@@ -417,9 +417,12 @@ namespace FlashMeasurementSystem
             // roiClearButton
             // 
             this.roiClearButton.Anchor = System.Windows.Forms.AnchorStyles.Right;
-            this.roiClearButton.Location = new System.Drawing.Point(120, 118);
+            // roiModeCheck 是 AutoSize，Segoe UI 比原本的 Microsoft Sans Serif 寬，
+            // 勾選框會延伸到 x≈130，故本按鈕右移至 140；寬度 60 原本就放不下 "Clear ROI"
+            // （一直被截成 "Clear"），一併給足寬度與符合其他按鈕的高度。
+            this.roiClearButton.Location = new System.Drawing.Point(140, 118);
             this.roiClearButton.Name = "roiClearButton";
-            this.roiClearButton.Size = new System.Drawing.Size(60, 18);
+            this.roiClearButton.Size = new System.Drawing.Size(90, 23);
             this.roiClearButton.TabIndex = 8;
             this.roiClearButton.Text = "Clear &ROI";
             this.roiClearButton.UseVisualStyleBackColor = true;
@@ -641,7 +644,9 @@ namespace FlashMeasurementSystem
             this.edgeTableLayout.Location = new System.Drawing.Point(8, 33);
             this.edgeTableLayout.Name = "edgeTableLayout";
             this.edgeTableLayout.RowCount = 20;
-            this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 44F));
+            // Algorithm 列：兩個 AutoSize RadioButton 疊放（第二顆 y=25），Segoe UI 下高度較
+            // Microsoft Sans Serif 多幾 px，44 會把下面的 EdgesSubPix 切掉，故放寬到 48。
+            this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 48F));
             this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 26F));
             this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 26F));
             this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 26F));
@@ -1048,7 +1053,7 @@ namespace FlashMeasurementSystem
             //
             this.arcMeasurePanel.SetColumnSpan(this.arcMeasureHeader, 4);
             this.arcMeasureHeader.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.arcMeasureHeader.Font = new System.Drawing.Font("Microsoft Sans Serif", 8F, System.Drawing.FontStyle.Bold);
+            this.arcMeasureHeader.Font = new System.Drawing.Font("Segoe UI", 8.25F, System.Drawing.FontStyle.Bold);
             this.arcMeasureHeader.Name = "arcMeasureHeader";
             this.arcMeasureHeader.Text = "Arc Measure: 圓周放射特徵 (齒/孔/刻度, 非圓邊界)";
             this.arcMeasureHeader.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
@@ -1126,6 +1131,9 @@ namespace FlashMeasurementSystem
             // arcAngleStartLabel
             //
             this.arcAngleStartLabel.Dock = System.Windows.Forms.DockStyle.Fill;
+            // Segoe UI 下 "Start deg" 需 54px，欄寬僅 60px 扣掉左右各 3px 預設邊界後剛好不夠，
+            // 會被截成 "Start"。清掉水平邊界換回 6px，不必從數值欄借寬度。
+            this.arcAngleStartLabel.Margin = new System.Windows.Forms.Padding(0, 3, 0, 3);
             this.arcAngleStartLabel.Name = "arcAngleStartLabel";
             this.arcAngleStartLabel.Text = "Start deg";
             this.arcAngleStartLabel.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
@@ -1756,6 +1764,13 @@ namespace FlashMeasurementSystem
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 12F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
+            // 選 8.25pt 而非慣用的 9pt：右側面板已無寬度餘裕，9pt 會造成多處截字
+            // （Pixel Size X (µm):、Start deg、EdgesSubPix 垂直被切）。Segoe UI 8.25pt 與原本的
+            // Microsoft Sans Serif 8.25pt 行高相同（13px）、寬度僅多 3~7%，是能安全替換的尺寸。
+            // 注意：上面的 AutoScaleMode.Font 不會在執行期依新字型重排版面（AutoScaleDimensions
+            // 描述的是「設計當下」的字型度量），且 MainWindow.cs 的 NormalizeTemplateMatchingLayout()
+            // 會在 OnLoad 用寫死座標重排 templateMatching 區 → 字型造成的截字只能逐點修版面。
+            this.Font = new System.Drawing.Font("Segoe UI", 8.25F);
             this.ClientSize = new System.Drawing.Size(1100, 648);
             this.Controls.Add(this.statusStrip);
             this.Controls.Add(this.mainTableLayout);
