@@ -73,7 +73,49 @@ namespace FlashMeasurementSystem.Tests.Halcon
                     "missing-hole detects " + (expectedCount - 1) + " (got " + det.Holes.Count + ")");
             }
 
+            TestDetectAnalyzeChain();
             Console.WriteLine("HoleArrayDetectorHalconTests passed");
+        }
+
+        // 整合：真合成圖 → HalconHoleArrayDetector → HoleArrayAnalyzer → 六判定（補 Domain-only 與
+        // detector-only 之間的縫；RecipeRunner 屬 App.Wpf 無法在此測，這裡驗到分析器邊界）。
+        // pixelSizeUm=100 → 1px=0.1mm：孔徑 36px=3.6mm、X 間距 120px=12.0mm、Y 間距 100px=10.0mm。
+        // 正常圖 → IsPass；缺孔圖 → 孔數不符 → CountOk/IsPass false。
+        private static void TestDetectAnalyzeChain()
+        {
+            var detector = new HalconHoleArrayDetector();
+            RoiGeometry roi = BuildRoi();
+            const double pxUm = 100.0;
+            var prm = new HoleArrayAnalysisParameters
+            {
+                Rows = Rows, Cols = Cols,
+                NominalDiameterMm = 3.6, DiameterToleranceMm = 0.3,
+                NominalPitchXMm = 12.0, NominalPitchYMm = 10.0,
+                PitchToleranceMm = 0.3, PositionToleranceMm = 0.3,
+                HoleIsDark = true
+            };
+
+            using (HImage okImg = TestImageGenerator.CreateHoleGridImage(Width, Height, Row0, Col0, PitchY, PitchX, Rows, Cols, HoleRadius))
+            {
+                HoleArrayDetectionResult det = detector.DetectHolesInRect(okImg, roi, prm);
+                Assert(det.Success && det.Holes.Count == Rows * Cols, "chain-ok detects 20 (got " + det.Holes.Count + ")");
+                HoleArrayAnalysisResult a = HoleArrayAnalyzer.Analyze(det.Holes, pxUm, prm);
+                Assert(a.Success, "chain-ok analyze Success");
+                Assert(a.HoleCount == Rows * Cols, "chain-ok HoleCount 20");
+                Assert(Math.Abs(a.MeanDiameterMm - 3.6) < 0.15, "chain-ok mean dia ~3.6mm (got " + a.MeanDiameterMm.ToString("F3") + ")");
+                Assert(Math.Abs(a.PitchXMm - 12.0) < 0.15, "chain-ok PitchX ~12.0mm (got " + a.PitchXMm.ToString("F3") + ")");
+                Assert(Math.Abs(a.PitchYMm - 10.0) < 0.15, "chain-ok PitchY ~10.0mm (got " + a.PitchYMm.ToString("F3") + ")");
+                Assert(a.IsPass, "chain-ok IsPass");
+            }
+
+            using (HImage missImg = TestImageGenerator.CreateHoleGridImage(Width, Height, Row0, Col0, PitchY, PitchX, Rows, Cols, HoleRadius, 7))
+            {
+                HoleArrayDetectionResult det = detector.DetectHolesInRect(missImg, roi, prm);
+                Assert(det.Success && det.Holes.Count == Rows * Cols - 1, "chain-missing detects 19 (got " + det.Holes.Count + ")");
+                HoleArrayAnalysisResult a = HoleArrayAnalyzer.Analyze(det.Holes, pxUm, prm);
+                Assert(!a.CountOk, "chain-missing CountOk false");
+                Assert(!a.IsPass, "chain-missing IsPass false");
+            }
         }
 
         // ROI 覆蓋整個網格：中心在網格中點，Length1 沿 col、Length2 沿 row（AngleRad=0），各加孔半徑+margin。
