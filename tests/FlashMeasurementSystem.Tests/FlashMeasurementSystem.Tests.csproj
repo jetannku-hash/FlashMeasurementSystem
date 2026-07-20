@@ -50,6 +50,8 @@
   <ItemGroup>
     <Reference Include="System" />
     <Reference Include="System.Core" />
+    <!-- PdfReportWriterTests 產生一張暫存 PNG，用來驗證報表的影像嵌入路徑。 -->
+    <Reference Include="System.Drawing" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="EdgeDetectionDomainTests.cs" />
@@ -81,6 +83,7 @@
     <Compile Include="PcdAnalysisDomainTests.cs" />
     <Compile Include="PcdRecipeToolDomainTests.cs" />
     <Compile Include="MeasurementReportBuilderTests.cs" />
+    <Compile Include="PdfReportWriterTests.cs" />
     <Compile Include="PinPitchAnalysisDomainTests.cs" />
     <Compile Include="PinPitchRecipeToolDomainTests.cs" />
     <Compile Include="HoleArrayAnalysisDomainTests.cs" />

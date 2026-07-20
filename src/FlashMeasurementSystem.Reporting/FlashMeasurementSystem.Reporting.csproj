@@ -11,6 +11,12 @@
     <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <Deterministic>true</Deterministic>
+    <!-- 本專案以 vendored DLL(HintPath) 引用 PDFsharp/MigraDoc，無 PackageReference/packages.config；
+         但 dotnet build 仍會在 obj 產生 SDK 式 restore 產物(project.assets.json)。VS 的舊版
+         Microsoft.NuGet.targets 讀到後會在 RID 驗證誤報「missing 'win' RuntimeIdentifier」而建置失敗。
+         關閉 legacy NuGet 資產解析(本專案不用 NuGet)以讓 VS 與 dotnet build 皆乾淨。
+         與 FlashMeasurementSystem.Infrastructure 同慣例。 -->
+    <ResolveNuGetPackages>false</ResolveNuGetPackages>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -50,10 +56,28 @@
   <ItemGroup>
     <Reference Include="System" />
     <Reference Include="System.Core" />
+    <!-- PdfSharp/MigraDoc 是 GDI+ build，需要 System.Drawing。 -->
+    <Reference Include="System.Drawing" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- PDFsharp + MigraDoc 1.50.5147 (GDI+ build) 以 vendored DLL + HintPath 引用
+         （與 lib\Newtonsoft.Json.13.0.3 同模式）。原因：非 SDK csproj 的 PackageReference
+         在 dotnet build 下不會注入編譯引用，vendored DLL 可同時相容 dotnet build 與 VS msbuild。
+         組件名稱本身就帶 -gdi 後綴。授權 MIT。詳見 lib\PdfSharp.MigraDoc.1.50.5147\PROVENANCE.md。 -->
+    <Reference Include="PdfSharp-gdi">
+      <HintPath>..\..\lib\PdfSharp.MigraDoc.1.50.5147\PdfSharp-gdi.dll</HintPath>
+    </Reference>
+    <Reference Include="MigraDoc.DocumentObjectModel-gdi">
+      <HintPath>..\..\lib\PdfSharp.MigraDoc.1.50.5147\MigraDoc.DocumentObjectModel-gdi.dll</HintPath>
+    </Reference>
+    <Reference Include="MigraDoc.Rendering-gdi">
+      <HintPath>..\..\lib\PdfSharp.MigraDoc.1.50.5147\MigraDoc.Rendering-gdi.dll</HintPath>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Csv\CsvMeasurementReportWriter.cs" />
+    <Compile Include="Pdf\PdfMeasurementReportWriter.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\FlashMeasurementSystem.Application\FlashMeasurementSystem.Application.csproj">

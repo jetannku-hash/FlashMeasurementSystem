@@ -173,6 +173,7 @@ namespace FlashMeasurementSystem.Tests
             Console.WriteLine("HoleArrayRecipeToolDomainTests passed");
             MeasurementReportBuilderTests.Run();
             Console.WriteLine("MeasurementReportBuilderTests passed");
+            PdfReportWriterTests.Run();   // Run() 內部自行印出 "PdfReportWriterTests passed"
             Console.WriteLine("EdgeDetectionDomainTests passed");
             return 0;
         }
