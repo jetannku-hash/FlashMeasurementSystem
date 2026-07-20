@@ -37,6 +37,10 @@ using FlashMeasurementSystem.Infrastructure.Roi;
 using FlashMeasurementSystem.Infrastructure.Tolerance;
 using FlashMeasurementSystem.Infrastructure.Calibration;
 using FlashMeasurementSystem.Reporting.Csv;
+using FlashMeasurementSystem.Reporting.Pdf;
+using FlashMeasurementSystem.Application.Reporting;
+using FlashMeasurementSystem.Domain.Reporting;
+using FlashMeasurementSystem.Domain.Tolerance;
 using FlashMeasurementSystem.Domain.Workflow;
 using HalconDotNet;
 namespace FlashMeasurementSystem
@@ -90,6 +94,8 @@ namespace FlashMeasurementSystem
         private readonly ToleranceJudger _judger = new ToleranceJudger();
         private readonly CalibrationStore _calibrationStore = new CalibrationStore();
         private readonly CsvMeasurementReportWriter _reportWriter = new CsvMeasurementReportWriter();
+        // 一鍵量測的附加輸出：PDF 報表（含視窗截圖）。CSV 行為不受影響。
+        private readonly IMeasurementPdfReportWriter _pdfReportWriter = new PdfMeasurementReportWriter();
         private RecipeRunner _recipeRunner;
         private MeasurementWorkflow _workflow;
         private CheckBox _skipIqcCheckBox;
@@ -1822,7 +1828,8 @@ namespace FlashMeasurementSystem
                     reportDir,
                     templatePath, null, null,
                     _skipIqcCheckBox != null && _skipIqcCheckBox.Checked,
-                    out System.Collections.Generic.List<ToolRunResult> results);
+                    out System.Collections.Generic.List<ToolRunResult> results,
+                    out System.Collections.Generic.List<ItemJudgment> judgments);
 
                 // 同步本次匹配狀態到 MainWindow 欄位，避免 DrawRecipeResults 畫出上一次匹配的殘留綠框。
                 // 無參考姿態的配方 HasMatch=false → 不畫匹配輪廓。
@@ -1837,13 +1844,19 @@ namespace FlashMeasurementSystem
 
                 DrawRecipeResults(results, pixelSizeSource);
 
+                // overlay 已於 DrawRecipeResults 內同步畫完（SetPersistentOverlayAction 會呼叫 Redraw），
+                // 此時視窗內容才是完整的標註影像 → 截圖 → 產 PDF。
+                string pdfInfo = WritePdfReport(wfResult, judgments, reportDir,
+                    pxUmX, pxUmY, pixelSizeSource);
+
                 string csvInfo = !string.IsNullOrEmpty(wfResult.ReportPath)
                     ? " | CSV: " + wfResult.ReportPath
                     : "";
                 measureResultLabel.Text += string.Format(CultureInfo.InvariantCulture,
-                    " | 一鍵：{0} OK {1}/NG {2}{3}{4}",
+                    " | 一鍵：{0} OK {1}/NG {2}{3}{4}{5}",
                     wfResult.AllOk ? "PASS" : "FAIL", wfResult.OkCount, wfResult.NgCount,
                     csvInfo,
+                    pdfInfo,
                     !wfResult.Success ? " (" + wfResult.Message + ")" : "");
             }
             catch (Exception ex)
@@ -1857,6 +1870,60 @@ namespace FlashMeasurementSystem
                 Cursor = Cursors.Default;
                 ClearProgress();  // 比照 RunRecipeButton：狀態列還原 Ready，不卡在「一鍵量測：…」
             }
+        }
+
+        /// <summary>
+        /// 一鍵量測的附加輸出：截下含 overlay 的視窗影像，並產生 PDF 報表。
+        /// 全程不丟例外——PDF 只是附加品，量測結果本身才是主要產出，任何失敗都只回傳
+        /// 一段附加在結果標籤上的簡短訊息，不中斷流程、不彈對話框。
+        /// </summary>
+        /// <returns>要接在結果標籤後面的字串（成功為 PDF 路徑，失敗為簡短原因）。</returns>
+        private string WritePdfReport(
+            WorkflowResult wfResult,
+            System.Collections.Generic.List<ItemJudgment> judgments,
+            string reportDir,
+            double pxUmX, double pxUmY, string pixelSizeSource)
+        {
+            try
+            {
+                string stamp = DateTime.Now.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture);
+                string recipeName = SanitizeFileName(
+                    _loadedRecipe != null && !string.IsNullOrEmpty(_loadedRecipe.Name)
+                        ? _loadedRecipe.Name : "recipe");
+
+                if (!Directory.Exists(reportDir)) Directory.CreateDirectory(reportDir);
+
+                string pngPath = Path.Combine(reportDir, recipeName + "_" + stamp + "_overlay.png");
+                string pdfPath = Path.Combine(reportDir, recipeName + "_" + stamp + ".pdf");
+
+                // 截圖失敗回 null → 報表照樣產出，只是沒有嵌圖（Build/Write 都容許空路徑）。
+                string savedPng = _imageHelper.DumpWindowToPng(pngPath) ?? "";
+
+                // pixel size 兩軸相同時只寫一個值，避免報表出現冗長的 "10.00/10.00"。
+                string pixelSizeText = Math.Abs(pxUmX - pxUmY) < 1e-9
+                    ? string.Format(CultureInfo.InvariantCulture, "{0:F2} µm ({1})", pxUmX, pixelSizeSource)
+                    : string.Format(CultureInfo.InvariantCulture, "X {0:F2} / Y {1:F2} µm ({2})",
+                        pxUmX, pxUmY, pixelSizeSource);
+
+                MeasurementReportModel model =
+                    MeasurementReportBuilder.Build(wfResult, judgments, pixelSizeText, savedPng);
+                _pdfReportWriter.Write(model, pdfPath);
+
+                return " | PDF: " + pdfPath + (string.IsNullOrEmpty(savedPng) ? "（無截圖）" : "");
+            }
+            catch (Exception ex)
+            {
+                // 揭露但不中斷：操作員看得到 PDF 沒產出的原因，量測結果與 CSV 不受影響。
+                return " | PDF 失敗：" + ex.Message;
+            }
+        }
+
+        // 配方名稱可能含使用者輸入的非法字元，直接拼進路徑會丟例外；替換成 '_'。
+        private static string SanitizeFileName(string name)
+        {
+            foreach (char c in Path.GetInvalidFileNameChars())
+                name = name.Replace(c, '_');
+            return name;
         }
 
         // 由 app base directory 往上找 .sln，定位 data/ (root of data subdirs)。
