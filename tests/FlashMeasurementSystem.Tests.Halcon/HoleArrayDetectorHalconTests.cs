@@ -115,6 +115,12 @@ namespace FlashMeasurementSystem.Tests.Halcon
                 HoleArrayAnalysisResult a = HoleArrayAnalyzer.Analyze(det.Holes, pxUm, prm);
                 Assert(!a.CountOk, "chain-missing CountOk false");
                 Assert(!a.IsPass, "chain-missing IsPass false");
+                // 缺孔提示：flat index 7 = 第 2 列(row=1)、第 3 行(col=2) → 理想節點 (250, 390)。
+                // 缺孔會讓質心原點些微偏移，故容差放寬到 ±15px（提示用，非量測值）。
+                Assert(a.MissingNodes.Count == 1, "chain-missing one MissingNode (got " + a.MissingNodes.Count + ")");
+                double mr = a.MissingNodes[0].Row, mc = a.MissingNodes[0].Col;
+                Assert(Math.Abs(mr - (Row0 + 1 * PitchY)) < 15.0 && Math.Abs(mc - (Col0 + 2 * PitchX)) < 15.0,
+                    "chain-missing MissingNode near the gap (250,390) (got " + mr.ToString("F1") + "," + mc.ToString("F1") + ")");
             }
         }
 

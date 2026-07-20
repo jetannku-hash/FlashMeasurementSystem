@@ -105,6 +105,29 @@ namespace FlashMeasurementSystem.Domain.HoleArrayAnalysis
             });
             foreach (int i in order) result.Holes.Add(holes[i]);
 
+            // 缺孔位置提示：列舉理想網格全部節點，沒有孔對應到的即為缺孔（比照 gear 缺齒 / PCD 缺孔）。
+            // 用勝出指派的兩軸重建節點座標；缺孔會讓質心原點些微偏移，故為近似提示而非量測值。
+            var occupied = new bool[p.Rows, p.Cols];
+            for (int i = 0; i < n; i++)
+            {
+                if (rowIdx[i] >= 0 && rowIdx[i] < p.Rows && colIdx[i] >= 0 && colIdx[i] < p.Cols)
+                    occupied[rowIdx[i], colIdx[i]] = true;
+            }
+            for (int j = 0; j < p.Rows; j++)
+            {
+                for (int i = 0; i < p.Cols; i++)
+                {
+                    if (occupied[j, i]) continue;
+                    double du = (i - (p.Cols - 1) / 2.0) * pitchUPx;
+                    double dv = (j - (p.Rows - 1) / 2.0) * pitchVPx;
+                    result.MissingNodes.Add(new HoleArrayPoint
+                    {
+                        Row = meanRow + du * fit.ColAxisR + dv * fit.RowAxisR,
+                        Col = meanCol + du * fit.ColAxisC + dv * fit.RowAxisC
+                    });
+                }
+            }
+
             // 判定（單行/單列時該方向孔距不判定）
             result.CountOk = n == p.Rows * p.Cols;
             result.DiameterOk = Math.Abs(result.MeanDiameterMm - p.NominalDiameterMm) <= p.DiameterToleranceMm;
@@ -153,6 +176,8 @@ namespace FlashMeasurementSystem.Domain.HoleArrayAnalysis
             public double PitchVPx; // 沿列方向軸（Y）的相鄰群心平均間距
             public double MaxDevPx;
             public double RmsDevPx;
+            // 本指派實際採用的兩軸（勝出者才知道哪個是行/列方向），供缺孔節點定位重建理想網格。
+            public double ColAxisR, ColAxisC, RowAxisR, RowAxisC;
         }
 
         /// <summary>
@@ -192,6 +217,7 @@ namespace FlashMeasurementSystem.Domain.HoleArrayAnalysis
 
             return new GridFit
             {
+                ColAxisR = uR, ColAxisC = uC, RowAxisR = vR, RowAxisC = vC,
                 ColIdx = colIdx,
                 RowIdx = rowIdx,
                 PitchUPx = pitchU,

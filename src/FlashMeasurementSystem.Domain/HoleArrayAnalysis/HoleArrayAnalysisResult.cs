@@ -18,6 +18,13 @@ namespace FlashMeasurementSystem.Domain.HoleArrayAnalysis
         public bool CountOk    { get; set; }
         public bool DiameterOk { get; set; }
         public bool DiameterMaxDevOk { get; set; }
+
+        /// <summary>
+        /// 缺孔位置提示：理想網格中沒有偵測到孔的節點座標（影像 px，DiameterPx 不使用）。
+        /// 供 overlay 以洋紅標記缺孔位置（比照 gear 缺齒 / PCD 缺孔的提示慣例）。
+        /// 註：理想網格以「已偵測到的孔」的質心為原點，缺孔會讓質心些微偏移，故提示位置為近似值。
+        /// </summary>
+        public List<HoleArrayPoint> MissingNodes { get; set; } = new List<HoleArrayPoint>();
         public bool PitchXOk   { get; set; }
         public bool PitchYOk   { get; set; }
         public bool PositionOk { get; set; }

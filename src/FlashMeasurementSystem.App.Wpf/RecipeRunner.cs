@@ -447,8 +447,11 @@ namespace FlashMeasurementSystem
                 {
                     res.Measured = true;
                     res.IsOk = analysis.IsPass;
+                    // 孔距是本工具的主量測值，摘要必須含 X/Y，否則畫面只看得到孔徑（CSV 才有六列）。
+                    // 用緊湊格式避免結果表欄寬截斷與影像上標籤過長。
                     res.ValueText = string.Format(CultureInfo.InvariantCulture,
-                        "孔數={0} 平均孔徑={1:F3}mm", analysis.HoleCount, analysis.MeanDiameterMm);
+                        "孔數={0} 孔徑={1:F3} X={2:F3} Y={3:F3}mm",
+                        analysis.HoleCount, analysis.MeanDiameterMm, analysis.PitchXMm, analysis.PitchYMm);
                 }
                 else
                 {

@@ -1647,6 +1647,13 @@ namespace FlashMeasurementSystem
                                 an.DrawCross(h.Row, h.Col, 8, holeColor);
                             }
                         }
+                        // 缺孔位置畫洋紅大十字（比照 gear 缺齒 / PCD 缺孔的提示慣例）；
+                        // 否則缺孔處只是一片留白，操作員得自己用眼睛找是哪一格少了。
+                        if (r.HoleArray.MissingNodes != null)
+                        {
+                            foreach (var m in r.HoleArray.MissingNodes)
+                                an.DrawCross(m.Row, m.Col, 18, "magenta");
+                        }
                         // 判定/數值文字錨在 ROI 中心上方一段（避開橘名稱標籤與孔本體），依判定上色。
                         if (r.Roi != null)
                             an.DrawText(r.ValueText ?? string.Empty,
