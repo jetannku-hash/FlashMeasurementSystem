@@ -12,7 +12,7 @@ namespace FlashMeasurementSystem.Tests
     {
         public static void Run()
         {
-            AssertEqual(13, Recipe.Default().SchemaVersion, "SchemaVersion is 13");
+            AssertEqual(14, Recipe.Default().SchemaVersion, "SchemaVersion is 14");
             var plain = new MeasurementTool();
             AssertEqual(null, plain.Gear, "Default Gear is null");
 

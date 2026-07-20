@@ -1487,7 +1487,7 @@ namespace FlashMeasurementSystem
                     MinPinAreaPx = src.PinPitch.MinPinAreaPx
                 },
                 // 深複製孔陣列參數——漏掉會在載入/存檔時遺失網格判定設定（比照 ArcRoi/Gdt/Gear/Pcd/PinPitch 的處理）。
-                // 必須逐欄複製 HoleArrayAnalysisParameters 全部 10 個欄位，否則存後重載會悄悄還原成預設值。
+                // 必須逐欄複製 HoleArrayAnalysisParameters 全部 11 個欄位，否則存後重載會悄悄還原成預設值。
                 HoleArray = src.HoleArray == null ? null : new HoleArrayAnalysisParameters
                 {
                     Rows = src.HoleArray.Rows,
@@ -1499,7 +1499,8 @@ namespace FlashMeasurementSystem
                     PitchToleranceMm = src.HoleArray.PitchToleranceMm,
                     PositionToleranceMm = src.HoleArray.PositionToleranceMm,
                     HoleIsDark = src.HoleArray.HoleIsDark,
-                    MinHoleAreaPx = src.HoleArray.MinHoleAreaPx
+                    MinHoleAreaPx = src.HoleArray.MinHoleAreaPx,
+                    MinCircularity = src.HoleArray.MinCircularity
                 },
                 RefToolIds = new List<string>(src.RefToolIds ?? new List<string>())
             };

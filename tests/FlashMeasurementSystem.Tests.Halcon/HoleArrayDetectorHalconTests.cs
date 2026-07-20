@@ -73,8 +73,65 @@ namespace FlashMeasurementSystem.Tests.Halcon
                     "missing-hole detects " + (expectedCount - 1) + " (got " + det.Holes.Count + ")");
             }
 
+            TestBridgedHoles();
             TestDetectAnalyzeChain();
             Console.WriteLine("HoleArrayDetectorHalconTests passed");
+        }
+
+        // 沾黏孔：兩個重疊的暗圓被 connection 併成一塊「花生形」blob。面積濾波擋不住（併塊更大不是更小），
+        // 若不濾形狀就會回報成「一個孔」且等效孔徑被灌水（~2 倍面積 → ~1.41 倍孔徑），孔數同時少 1。
+        // 修正後：該併塊必須被 circularity 濾掉、計入 RejectedByShapeCount，剩下的孔徑全部仍接近真值。
+        private static void TestBridgedHoles()
+        {
+            const double OffsetCol = 1.4 * HoleRadius;   // 25.2px < 2R=36px → 兩圓重疊
+            const int BridgeIndex = 0;                   // 網格節點 (0,0)=(150,150)
+            RoiGeometry roi = BuildRoi();
+            var detector = new HalconHoleArrayDetector();
+            double expectedDiameter = 2.0 * HoleRadius;
+
+            // 先量特徵本身的分離度（與門檻選擇脫鉤的客觀觀測）：單圓 vs 重疊雙圓的 circularity。
+            PrintCircularityMargin(OffsetCol);
+
+            using (HImage img = TestImageGenerator.CreateBridgedHoleGridImage(
+                Width, Height, Row0, Col0, PitchY, PitchX, Rows, Cols, HoleRadius, BridgeIndex, OffsetCol))
+            {
+                HoleArrayDetectionResult det = detector.DetectHolesInRect(img, roi, new HoleArrayAnalysisParameters());
+                double maxDia = det.Holes.Count == 0 ? 0.0 : det.Holes.Max(h => h.DiameterPx);
+                Console.WriteLine("  HOLE-DET bridged: count=" + det.Holes.Count
+                    + " rejectedByShape=" + det.RejectedByShapeCount
+                    + " maxDiameter=" + maxDia.ToString("F2")
+                    + " (true single-hole diameter=" + expectedDiameter.ToString("F2") + ")");
+
+                Assert(det.Success, "bridged Success (" + det.ErrorMessage + ")");
+                // 併塊必須被剔除，不可當成一個孔回報。
+                Assert(det.RejectedByShapeCount == 1,
+                    "bridged reports exactly 1 shape-rejected blob (got " + det.RejectedByShapeCount + ")");
+                Assert(det.Holes.Count == Rows * Cols - 1,
+                    "bridged returns the " + (Rows * Cols - 1) + " clean holes only (got " + det.Holes.Count + ")");
+                // 沒有任何灌水孔徑漏出來。
+                foreach (HoleArrayPoint h in det.Holes)
+                    Assert(Math.Abs(h.DiameterPx - expectedDiameter) < 2.0,
+                        "bridged hole DiameterPx ~" + expectedDiameter + " — no inflated blob leaked through (got "
+                        + h.DiameterPx.ToString("F2") + ")");
+                // 併塊所在的節點不該出現在結果中（其餘 19 個節點都要在）。
+                foreach (HoleArrayPoint h in det.Holes)
+                    Assert(!(Math.Abs(h.Row - Row0) < HoleRadius && Math.Abs(h.Col - Col0) < 2.0 * HoleRadius),
+                        "bridged merged blob is not reported as a hole near (" + Row0 + "," + Col0 + ")");
+            }
+        }
+
+        // 直接量 circularity：單一實心圓 vs 兩個中心距 offsetCol 的重疊圓聯集。
+        // 這是門檻選擇的依據（單圓≈1.0、併塊明顯偏低），印出來供人核對而非硬編期望值。
+        private static void PrintCircularityMargin(double offsetCol)
+        {
+            var single = new HRegion(); single.GenCircle(100.0, 100.0, (double)HoleRadius);
+            var other = new HRegion(); other.GenCircle(100.0, 100.0 + offsetCol, (double)HoleRadius);
+            HRegion merged = single.Union2(other);
+            HOperatorSet.Circularity(single, out HTuple cSingle);
+            HOperatorSet.Circularity(merged, out HTuple cMerged);
+            Console.WriteLine("  HOLE-DET circularity: single circle=" + cSingle.D.ToString("F4")
+                + " merged pair (offset=" + offsetCol.ToString("F1") + "px)=" + cMerged.D.ToString("F4"));
+            single.Dispose(); other.Dispose(); merged.Dispose();
         }
 
         // 整合：真合成圖 → HalconHoleArrayDetector → HoleArrayAnalyzer → 六判定（補 Domain-only 與

@@ -13,6 +13,10 @@ namespace FlashMeasurementSystem.Domain.HoleArrayAnalysis
         public double PositionToleranceMm  { get; set; } = 0.1;    // 各孔對理想網格節點的最大偏差上限
         public bool   HoleIsDark           { get; set; } = true;   // 背光＝亮背景暗孔（偵測層用；分析器忽略）
         public double MinHoleAreaPx        { get; set; } = 20.0;   // blob 最小面積濾雜訊（偵測層用；分析器忽略）
+        // 最小圓度（HALCON 'circularity'，0~1，正圓=1）。沾黏/橋接成一塊的雙孔面積更大，過得了 MinHoleAreaPx，
+        // 但圓度會明顯掉下來（實測：單圓 1.00、兩圓重疊 0.63），故以此擋掉併塊而非當成一個大孔回報。
+        // 偵測層用；分析器忽略。設 0（或負值）＝停用此濾波，回到只濾面積的舊行為（長孔/腰形孔可如此設定）。
+        public double MinCircularity       { get; set; } = 0.80;
 
         public static HoleArrayAnalysisParameters Default() => new HoleArrayAnalysisParameters();
     }

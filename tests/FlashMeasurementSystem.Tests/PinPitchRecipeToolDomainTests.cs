@@ -11,7 +11,7 @@ namespace FlashMeasurementSystem.Tests
     {
         public static void Run()
         {
-            AssertEqual(13, Recipe.Default().SchemaVersion, "SchemaVersion is 13");
+            AssertEqual(14, Recipe.Default().SchemaVersion, "SchemaVersion is 14");
             AssertEqual(null, new MeasurementTool().PinPitch, "Default PinPitch is null");
 
             var recipe = Recipe.Default();
