@@ -11,7 +11,7 @@ namespace FlashMeasurementSystem.Tests
     {
         public static void Run()
         {
-            AssertEqual(13, Recipe.Default().SchemaVersion, "SchemaVersion is 13");
+            AssertEqual(14, Recipe.Default().SchemaVersion, "SchemaVersion is 14");
             AssertEqual(null, new MeasurementTool().HoleArray, "Default HoleArray is null");
 
             var recipe = Recipe.Default();
@@ -25,7 +25,7 @@ namespace FlashMeasurementSystem.Tests
                         NominalDiameterMm = 1.2, DiameterToleranceMm = 0.06,
                         NominalPitchXMm = 2.5, NominalPitchYMm = 2.0,
                         PitchToleranceMm = 0.08, PositionToleranceMm = 0.09,
-                        HoleIsDark = false, MinHoleAreaPx = 42 }
+                        HoleIsDark = false, MinHoleAreaPx = 42, MinCircularity = 0.66 }
                 }
             };
             string path = Path.Combine(Path.GetTempPath(), "fms_holearray_" + Guid.NewGuid().ToString("N").Substring(0, 8) + ".zcp");
@@ -45,6 +45,7 @@ namespace FlashMeasurementSystem.Tests
                 AssertClose(0.09, h.PositionToleranceMm, 1e-9, "rt PositionToleranceMm");
                 AssertEqual(false, h.HoleIsDark, "rt HoleIsDark");
                 AssertClose(42, h.MinHoleAreaPx, 1e-9, "rt MinHoleAreaPx");
+                AssertClose(0.66, h.MinCircularity, 1e-9, "rt MinCircularity");
                 RoiGeometry roi = rt.Tools[0].Roi;
                 if (roi == null) throw new InvalidOperationException("rt Roi null");
                 AssertClose(500, roi.CenterRow, 1e-9, "rt Roi CenterRow");
@@ -64,6 +65,24 @@ namespace FlashMeasurementSystem.Tests
                 AssertEqual(null, old.Tools[0].HoleArray, "old HoleArray null");
             }
             finally { if (File.Exists(oldPath)) File.Delete(oldPath); }
+
+            // v14 向後相容：v13 舊檔的 hole_array 沒有 MinCircularity 欄 → 取預設 0.80（併塊濾除預設啟用），
+            // 其餘欄位照舊讀出，舊配方不需遷移即可載入。
+            AssertClose(0.80, HoleArrayAnalysisParameters.Default().MinCircularity, 1e-9, "default MinCircularity 0.80");
+            string v13Path = Path.Combine(Path.GetTempPath(), "fms_holearray_v13_" + Guid.NewGuid().ToString("N").Substring(0, 8) + ".zcp");
+            try
+            {
+                File.WriteAllText(v13Path,
+                    "{ \"SchemaVersion\": 13, \"Tools\": [ { \"Id\": \"HA1\", \"ToolType\": \"hole_array\", " +
+                    "\"HoleArray\": { \"Rows\": 2, \"Cols\": 3, \"NominalDiameterMm\": 1.0, \"MinHoleAreaPx\": 30 } } ] }");
+                Recipe v13 = new RecipeStore().Load(v13Path);
+                HoleArrayAnalysisParameters h13 = v13.Tools[0].HoleArray;
+                if (h13 == null) throw new InvalidOperationException("v13 HoleArray null");
+                AssertEqual(2, h13.Rows, "v13 Rows preserved");
+                AssertClose(30, h13.MinHoleAreaPx, 1e-9, "v13 MinHoleAreaPx preserved");
+                AssertClose(0.80, h13.MinCircularity, 1e-9, "v13 missing MinCircularity defaults to 0.80");
+            }
+            finally { if (File.Exists(v13Path)) File.Delete(v13Path); }
 
             // Validator：合法 hole_array → 0 error；缺 HoleArray / 缺 Roi / Rows<1 / Cols<1 / 標稱孔徑 ≤ 0 → error
             AssertEqual(0, Errors(ValidHoleArrayRecipe()), "valid hole_array no error");

@@ -231,6 +231,26 @@ namespace FlashMeasurementSystem.Tests.Halcon
             return img;
         }
 
+        /// <summary>
+        /// Backlit hole grid with ONE extra dark circle overlapping the hole at flat index
+        /// <paramref name="bridgeIndex"/> (row-major), offset by <paramref name="offsetCol"/> px along +col.
+        /// The two overlapping circles form a single connected "peanut" blob — the merged-blob defect:
+        /// `connection` yields rows*cols-1 regions, one of which has ~2x the area of a real hole, so its
+        /// equivalent diameter is inflated and the hole count is one short. Ground truth for the detector:
+        /// rows*cols-1 genuine holes at the grid nodes plus exactly 1 blob that must be rejected as non-circular.
+        /// </summary>
+        public static HImage CreateBridgedHoleGridImage(int width, int height, int row0, int col0, int pitchY, int pitchX, int rows, int cols, int holeRadius, int bridgeIndex, double offsetCol)
+        {
+            HImage img = CreateHoleGridImage(width, height, row0, col0, pitchY, pitchX, rows, cols, holeRadius, -1);
+            int br = bridgeIndex / cols, bc = bridgeIndex % cols;
+            HRegion extra = new HRegion();
+            extra.GenCircle(row0 + br * pitchY, col0 + bc * pitchX + offsetCol, (double)holeRadius);
+            HImage painted = img.PaintRegion(extra, 30.0, "fill");
+            extra.Dispose();
+            img.Dispose();
+            return painted;
+        }
+
         /// <summary>Image with a thin straight line for line fitting.</summary>
         public static HImage CreateLineImage(bool horizontal, int w = DefaultSize, int h = DefaultSize)
         {

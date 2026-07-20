@@ -34,7 +34,10 @@ namespace FlashMeasurementSystem.Domain.Roi
         //     純加欄位、向後相容、無遷移碼：舊檔載入 PinPitch=null、無 pin_pitch 工具，行為不變。
         // v13：孔陣列工具（MeasurementTool.HoleArray，加性 nullable 欄）+ ToolType="hole_array"。
         //     純加欄位、向後相容、無遷移碼：舊檔載入 HoleArray=null、無 hole_array 工具，行為不變。
-        public int SchemaVersion { get; set; } = 13;
+        // v14：孔陣列圓度濾波（HoleArrayAnalysisParameters.MinCircularity，加性欄，預設 0.80）。
+        //     純加欄位、向後相容、無遷移碼：舊檔載入時該欄取預設 0.80＝啟用併塊濾除。這會改變舊配方的
+        //     偵測行為（沾黏孔不再被當成一個大孔），屬「修正錯誤量測」而非破壞相容；需要舊行為者設 0 停用。
+        public int SchemaVersion { get; set; } = 14;
         public string RecipeId { get; set; } = "";
         public string Name { get; set; } = "";
 

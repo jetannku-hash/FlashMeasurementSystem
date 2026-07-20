@@ -27,14 +27,15 @@ namespace FlashMeasurementSystem
         private HObject _alignedNominal;
         private HObject _actualEdges;
 
-        // 本表單是否曾佔用共用 overlay slot。非模態、與主視窗共用同一 slot，故關閉時
-        // 只有「自己裝過 overlay」才清，否則會洗掉主視窗的量測結果 overlay（比照 RecipeEditor._editorInstalledOverlay）。
-        private bool _installedOverlay;
+        // 本表單對共用影像視窗的 overlay 所有權。畫在自己的圖層上，關閉時 Dispose 即收回，
+        // 下層（主視窗）的量測結果 overlay 會自動重新顯示——不再需要 _installedOverlay 記帳。
+        private readonly IOverlayLease _lease;
 
         public DxfComparisonForm(HWindowControlHelper imageHelper, FlashMeasurementSystem.Halcon.DxfComparison.HalconDxfContourComparer comparer)
         {
             _imageHelper = imageHelper ?? throw new ArgumentNullException(nameof(imageHelper));
             _comparer = comparer ?? throw new ArgumentNullException(nameof(comparer));
+            _lease = _imageHelper.AcquireOverlay("DxfComparisonForm");
 
             Text = "DXF/CAD 輪廓度比對";
             Width = 460; Height = 260;
@@ -101,8 +102,7 @@ namespace FlashMeasurementSystem
             {
                 HOperatorSet.GetImageSize(_imageHelper.CurrentImage, out HTuple iw, out HTuple ih);
                 var prev = _previewContour; double w = iw.D, h = ih.D;
-                _imageHelper.SetPersistentOverlayAction(() => _imageHelper.Annotator.DrawContourFitted(prev, w, h, "gray"));
-                _installedOverlay = true;
+                _lease.SetPersistentOverlay(() => _imageHelper.Annotator.DrawContourFitted(prev, w, h, "gray"));
             }
         }
 
@@ -133,7 +133,7 @@ namespace FlashMeasurementSystem
                     var aligned = _alignedNominal; var actual = _actualEdges;
                     const int maxMarks = 200;
                     int step = overRows.Length > maxMarks ? (int)Math.Ceiling(overRows.Length / (double)maxMarks) : 1;
-                    _imageHelper.SetPersistentOverlayAction(() =>
+                    _lease.SetPersistentOverlay(() =>
                     {
                         var an = _imageHelper.Annotator;
                         an.DrawContour(aligned, "blue");
@@ -141,7 +141,6 @@ namespace FlashMeasurementSystem
                         for (int i = 0; i < overRows.Length; i += step)
                             an.DrawCross(overRows[i], overCols[i], 12, "red");
                     });
-                    _installedOverlay = true;
                 }
             }
             catch (Exception ex)
@@ -154,8 +153,8 @@ namespace FlashMeasurementSystem
 
         protected override void OnFormClosed(FormClosedEventArgs e)
         {
-            // 只清自己裝過的 overlay，否則會洗掉主視窗當前的量測結果 overlay。
-            if (_installedOverlay) _imageHelper.ClearOverlay();
+            // 釋放本表單的圖層所有權：只收自己畫的，主視窗當前的量測結果 overlay 自動回來。
+            _lease.Dispose();
             DisposeIconics();
             base.OnFormClosed(e);
         }

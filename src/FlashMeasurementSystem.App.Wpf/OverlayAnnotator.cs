@@ -371,9 +371,30 @@ namespace FlashMeasurementSystem
                 // 影像座標 == 視窗像素：之後的 set_tposition / disp_rectangle1 皆以視窗像素計。
                 HOperatorSet.SetPart(_window, 0, 0, winHeight - 1, winWidth - 1);
 
-                // col2→col3 需容納最長的實測值，否則會被截斷成「…」。目前最長者為孔陣列的
-                // "孔數=20 孔徑=0.360 X=1.200 Y=1.000mm"（含全形字），故值欄留 330px、整框 600px。
-                const int lineH = 22, col1 = 14, col2 = 160, col3 = 500, boxLeft = 6, boxWidth = 600;
+                // 字型必須先設定，量測字串寬度才有意義（get_string_extents 用的是「視窗當下字型」）。
+                SetAvailableFont(12);
+
+                // 欄寬改為「依內容自適應」：先量測實際文字寬度再決定欄位位置，
+                // 而非寫死常數。寫死的下場是每加一個摘要較長的工具，值欄就被默默截成「…」，
+                // 得有人回頭手動調整（孔陣列就發生過）。量測成本是每列三次 get_string_extents，
+                // 相對每次重繪已做的繪圖工作可忽略。
+                const int lineH = 22, boxLeft = 6, padLeft = 8, gap = 16, padRight = 12;
+                int col1 = boxLeft + padLeft;
+
+                int nameW = MaxTextWidth(rows, RowField.Name, "項目");
+                int valueW = MaxTextWidth(rows, RowField.Value, "實測值");
+                int verdictW = MaxTextWidth(rows, RowField.Verdict, "判定");
+
+                // 可用寬度上限：視窗寬扣掉左右邊界。超出時壓縮「值欄」（最長且最有彈性的一欄），
+                // 由既有的 ClipToWidth 收尾，其餘欄位維持完整可讀。
+                int maxBoxWidth = Math.Max(240, winWidth.I - boxLeft * 2);
+                int naturalWidth = padLeft + nameW + gap + valueW + gap + verdictW + padRight;
+                if (naturalWidth > maxBoxWidth)
+                    valueW = Math.Max(60, valueW - (naturalWidth - maxBoxWidth));
+
+                int col2 = col1 + nameW + gap;
+                int col3 = col2 + valueW + gap;
+                int boxWidth = Math.Min(maxBoxWidth, padLeft + nameW + gap + valueW + gap + verdictW + padRight);
                 int boxBottom = 6 + (rows.Count + 1) * lineH + 6;
 
                 // 深色背景框（填滿），確保任何影像背景上文字皆可讀。
@@ -381,8 +402,6 @@ namespace FlashMeasurementSystem
                 HOperatorSet.SetDraw(_window, "fill");
                 HOperatorSet.DispRectangle1(_window, 6, boxLeft, boxBottom, boxLeft + boxWidth);
                 HOperatorSet.SetDraw(_window, "margin");
-
-                SetAvailableFont(12);
 
                 // 表頭（白字）
                 HOperatorSet.SetColor(_window, "white");
@@ -408,6 +427,38 @@ namespace FlashMeasurementSystem
                 // 還原原本 part（回到影像座標），不影響後續重繪。
                 HOperatorSet.SetPart(_window, pr1, pc1, pr2, pc2);
             }
+        }
+
+        private enum RowField { Name, Value, Verdict }
+
+        /// <summary>
+        /// 量測某一欄「所有列 + 表頭」的最大實際文字寬度（px，含全形字），供欄寬自適應。
+        /// 呼叫前字型須已設定——get_string_extents 量的是視窗當下字型。
+        /// </summary>
+        private int MaxTextWidth(System.Collections.Generic.IList<OverlayResultRow> rows, RowField field, string header)
+        {
+            int max = TextWidth(header);
+            foreach (OverlayResultRow r in rows)
+            {
+                if (r == null) continue;
+                string s;
+                switch (field)
+                {
+                    case RowField.Name: s = r.Name; break;
+                    case RowField.Value: s = r.ValueText; break;
+                    default: s = r.IsOk == null ? string.Empty : (r.IsOk.Value ? "OK" : "NG"); break;
+                }
+                int w = TextWidth(s);
+                if (w > max) max = w;
+            }
+            return max;
+        }
+
+        private int TextWidth(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return 0;
+            HOperatorSet.GetStringExtents(_window, text, out HTuple _, out HTuple _, out HTuple w, out HTuple _);
+            return (int)Math.Ceiling(w.D);
         }
 
         private void WriteAt(int row, int col, string text)

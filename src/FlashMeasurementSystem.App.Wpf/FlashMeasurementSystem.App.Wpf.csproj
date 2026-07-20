@@ -77,6 +77,7 @@
     </Compile>
     <Compile Include="Program.cs" />
     <Compile Include="DataPaths.cs" />
+    <Compile Include="ReportRetentionSweep.cs" />
     <Compile Include="OverlayAnnotator.cs" />
     <Compile Include="CalibrationDialog.cs">
       <SubType>Form</SubType>

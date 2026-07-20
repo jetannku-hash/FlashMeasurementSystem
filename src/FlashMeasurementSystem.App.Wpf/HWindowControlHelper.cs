@@ -16,7 +16,20 @@ namespace FlashMeasurementSystem
         private HWindow _window => _control.HalconWindow;
 
         public HImage CurrentImage { get; private set; }
-        public bool IsRoiMode { get; set; }
+        /// <summary>
+        /// true 期間下一次左鍵按下會開始拉矩形 ROI。設為 true 時把互動歸屬記到目前最上層的 owner
+        /// （lease），關閉該 owner 時可連同 pending 手勢一起收掉。
+        /// </summary>
+        public bool IsRoiMode
+        {
+            get => _isRoiMode;
+            set
+            {
+                _isRoiMode = value;
+                if (value) _interactionOwner = ActiveLease;
+            }
+        }
+        private bool _isRoiMode;
         /// <summary>
         /// true 期間下一次左鍵按下會開始「從圓心拖曳」建立扇形 ROI（見 RequestSector）。
         /// 設為 false 時一併清掉 pending callback——扇形手勢唯有 IsSectorMode 為真時才會在
@@ -29,7 +42,8 @@ namespace FlashMeasurementSystem
             set
             {
                 _isSectorMode = value;
-                if (!value) _sectorCallback = null;
+                if (value) _interactionOwner = ActiveLease;
+                else _sectorCallback = null;
             }
         }
         private bool _isSectorMode;
@@ -43,7 +57,8 @@ namespace FlashMeasurementSystem
             set
             {
                 _isLineMode = value;
-                if (!value) _lineCallback = null;
+                if (value) _interactionOwner = ActiveLease;
+                else _lineCallback = null;
             }
         }
         private bool _isLineMode;
@@ -63,11 +78,17 @@ namespace FlashMeasurementSystem
         private double _roiStartRow, _roiStartCol, _roiEndRow, _roiEndCol;
         private int _panStartX, _panStartY;
         private bool _isResizing;
-        private Action _persistentOverlayAction;
-        // 選取高亮疊加層：畫在 persistent overlay（量測結果）之上、編輯把手之下。
-        // 用於編輯器選取「參照型工具」（GD&T/距離/角度/構造）時高亮其參照的元素，
-        // 不覆寫量測結果 overlay。
-        private Action _selectionHighlightAction;
+        // ── overlay ownership leasing ────────────────────────────────────────
+        // 每個 caller（主視窗 + 各 modeless 編輯器）以 AcquireOverlay 取得一張自己的圖層。
+        // 圖層堆疊：_leases[0] 永遠是主視窗的 base lease，之後每 Acquire 一個編輯器就疊一層。
+        // 繪製時由上往下找第一個非 null 的 persistent/highlight → 上層清空時自動露出下層
+        // （關閉編輯器即恢復主視窗的量測結果 overlay，不必任何人記帳）。
+        private readonly System.Collections.Generic.List<OverlayLease> _leases =
+            new System.Collections.Generic.List<OverlayLease>();
+        private readonly OverlayLease _baseLease;
+        // 編輯把手/pending 手勢的歸屬 owner。滑鼠只有一個，故互動狀態全域唯一，
+        // 但「誰有權拆除它」由此欄位決定：釋放 lease 時只收掉自己武裝的互動。
+        private OverlayLease _interactionOwner;
         private Action<double, double, double, double> _roiCallback;
         private bool _editActive;
         private double _editCenterRow, _editCenterCol, _editPhi, _editLen1, _editLen2;
@@ -93,6 +114,10 @@ namespace FlashMeasurementSystem
         {
             _control = control;
             Annotator = new OverlayAnnotator(_window);
+            // base lease：主視窗的長期圖層。所有舊 API（SetPersistentOverlayAction 等）
+            // 都寫到「目前最上層」的 lease；沒有編輯器開著時最上層就是它。
+            _baseLease = new OverlayLease(this, "MainWindow");
+            _leases.Add(_baseLease);
 
             // 使用標準 WinForms 滑鼠事件（Halcon 17.12 HMouseEventArgs 相容性不穩定）
             _control.MouseDown += OnMouseDown;
@@ -106,8 +131,13 @@ namespace FlashMeasurementSystem
 
         public void DisplayImage(HImage image)
         {
-            _persistentOverlayAction = null;
-            _selectionHighlightAction = null;
+            // 換圖是全域事件（所有 owner 的 overlay 都以舊圖座標繪製），故清掉每一層而非只清最上層。
+            for (int i = 0; i < _leases.Count; i++)
+            {
+                _leases[i].Persistent = null;
+                _leases[i].Highlight = null;
+            }
+            _interactionOwner = null;
             _editActive = false;
             _editMode = Rect2Handle.None;
             _editCallback = null;
@@ -196,12 +226,13 @@ namespace FlashMeasurementSystem
                 return;
             }
 
-            _persistentOverlayAction?.Invoke();
-            _selectionHighlightAction?.Invoke();   // 疊在結果之上的選取高亮（編輯器用）
+            Action persistent = EffectivePersistent();
+            persistent?.Invoke();
+            EffectiveHighlight()?.Invoke();   // 疊在結果之上的選取高亮（編輯器用）
             // 非拖曳中、且沒有 persistent overlay、且非編輯模式時才畫 raw ROI 框。
             // persistent overlay（例如 DrawFittingLayers）有自己的 ROI 繪製邏輯，
             // 兩者同時畫會出現兩個重疊的藍色矩形；編輯模式則由下方綠色編輯框取代。
-            if (HasRoi && _persistentOverlayAction == null && !_editActive)
+            if (HasRoi && persistent == null && !_editActive)
             {
                 Annotator.DrawRoiRectangle(_roiStartRow, _roiStartCol, _roiEndRow, _roiEndCol);
             }
@@ -221,25 +252,86 @@ namespace FlashMeasurementSystem
             }
         }
 
+        // ── overlay lease：取得/釋放圖層所有權 ─────────────────────────────────
+        // 每個 modeless 視窗開啟時 AcquireOverlay，關閉時 Dispose。lease 釋放後所有寫入
+        // 都是 no-op（背景視窗的延遲 callback 再也洗不掉前景的 overlay），且釋放時只收掉
+        // 自己那一層與自己武裝的互動，下層（主視窗）的 overlay 會自動重新顯示。
+
+        /// <summary>取得一張屬於 <paramref name="ownerName"/> 的 overlay/編輯圖層。Dispose 即釋放。</summary>
+        public IOverlayLease AcquireOverlay(string ownerName)
+        {
+            var lease = new OverlayLease(this, ownerName);
+            _leases.Add(lease);
+            // 刻意不 Redraw：新圖層是空的，繪製時會自然穿透到下層，畫面在 owner 真正寫入前不變。
+            return lease;
+        }
+
+        private OverlayLease ActiveLease => _leases[_leases.Count - 1];
+
+        private Action EffectivePersistent()
+        {
+            for (int i = _leases.Count - 1; i >= 0; i--)
+                if (_leases[i].Persistent != null) return _leases[i].Persistent;
+            return null;
+        }
+
+        private Action EffectiveHighlight()
+        {
+            for (int i = _leases.Count - 1; i >= 0; i--)
+                if (_leases[i].Highlight != null) return _leases[i].Highlight;
+            return null;
+        }
+
+        private void ReleaseLease(OverlayLease lease)
+        {
+            if (ReferenceEquals(_interactionOwner, lease)) ReleaseOwnedInteractions();
+            lease.Persistent = null;
+            lease.Highlight = null;
+            if (!ReferenceEquals(lease, _baseLease)) _leases.Remove(lease);
+            Redraw();   // 上層消失 → 露出下層（主視窗量測結果 overlay 自動回來）
+        }
+
+        /// <summary>收掉目前 owner 武裝的編輯把手與 pending 手勢（不動任何 overlay 圖層）。</summary>
+        private void ReleaseOwnedInteractions()
+        {
+            _editActive = false;
+            _editMode = Rect2Handle.None;
+            _editCallback = null;
+            _arcEditActive = false;
+            _arcEditMode = ArcHandle.None;
+            _arcEditCallback = null;
+            _isRoiMode = false;
+            _isSectorMode = false;
+            _isLineMode = false;
+            _isDrawingRoi = false;
+            _isDrawingSector = false;
+            _isDrawingLine = false;
+            _roiCallback = null;
+            _sectorCallback = null;
+            _lineCallback = null;
+            _interactionOwner = null;
+        }
+
+        /// <summary>清除最上層 owner 的 overlay 圖層（相容路徑；不動編輯把手）。</summary>
         public void ClearOverlay()
         {
-            _persistentOverlayAction = null;
-            _selectionHighlightAction = null;
+            ActiveLease.Persistent = null;
+            ActiveLease.Highlight = null;
             Redraw();
         }
 
         /// <summary>設定選取高亮疊加層（畫在量測結果之上、不覆寫它）。傳 null 等同清除。</summary>
         public void SetSelectionHighlight(Action action)
         {
-            _selectionHighlightAction = action;
+            ActiveLease.Highlight = action;
             Redraw();
         }
 
         /// <summary>清除選取高亮疊加層（不影響 persistent overlay）。</summary>
         public void ClearSelectionHighlight()
         {
-            if (_selectionHighlightAction == null) return;
-            _selectionHighlightAction = null;
+            if (ActiveLease.Highlight == null) return;
+            ActiveLease.Highlight = null;
             Redraw();
         }
 
@@ -259,19 +351,7 @@ namespace FlashMeasurementSystem
             _roiStartCol = 0;
             _roiEndRow = 0;
             _roiEndCol = 0;
-            IsRoiMode = false;
-            _editActive = false;
-            _editMode = Rect2Handle.None;
-            _editCallback = null;
-            _arcEditActive = false;
-            _arcEditMode = ArcHandle.None;
-            _arcEditCallback = null;
-            IsSectorMode = false;
-            _isDrawingSector = false;
-            _sectorCallback = null;
-            IsLineMode = false;
-            _isDrawingLine = false;
-            _lineCallback = null;
+            ReleaseOwnedInteractions();
             ClearOverlay();
         }
 
@@ -282,18 +362,10 @@ namespace FlashMeasurementSystem
         /// </summary>
         public void DisarmInteractiveModes()
         {
-            IsRoiMode = false;
-            IsSectorMode = false;          // setter 會一併清 _sectorCallback
-            IsLineMode = false;            // setter 會一併清 _lineCallback
-            _isDrawingRoi = false;
-            _isDrawingSector = false;
-            _isDrawingLine = false;
-            _roiCallback = null;
-            _sectorCallback = null;
-            _lineCallback = null;
-            EndRect2Edit();
-            EndArcEdit();
-            ClearRoiCoordinates();         // 消除 fallback 藍框殘留（見既有 tab-switch 註解）
+            // 滑鼠只有一個 → 互動模式本質全域互斥，故此處無條件全清（不分 owner），
+            // 只是把「誰擁有下一個互動」的記帳一併歸零（見 ReleaseOwnedInteractions）。
+            ReleaseOwnedInteractions();
+            ClearRoiCoordinates();         // 消除 fallback 藍框殘留（見既有 tab-switch 註解）+ Redraw
         }
 
         /// <summary>
@@ -301,14 +373,18 @@ namespace FlashMeasurementSystem
         /// 不觸發現有的 RoiSelected 事件。先解除其他互動模式，確保模式互斥。
         /// </summary>
         public void RequestRoi(Action<double, double, double, double> callback)
+            => RequestRoiCore(ActiveLease, callback);
+
+        private void RequestRoiCore(OverlayLease owner, Action<double, double, double, double> callback)
         {
             DisarmInteractiveModes();
             _roiCallback = callback;
             _roiStartRow = _roiEndRow = 0;
             _roiStartCol = _roiEndCol = 0;
-            _persistentOverlayAction = null;
-            _selectionHighlightAction = null;
-            IsRoiMode = true;
+            owner.Persistent = null;
+            owner.Highlight = null;
+            _isRoiMode = true;
+            _interactionOwner = owner;
             Redraw();
         }
 
@@ -319,12 +395,16 @@ namespace FlashMeasurementSystem
         /// 先解除其他互動模式（矩形繪製/rect2/弧形編輯），確保模式互斥。
         /// </summary>
         public void RequestSector(Action<ArcMeasureRoi> callback)
+            => RequestSectorCore(ActiveLease, callback);
+
+        private void RequestSectorCore(OverlayLease owner, Action<ArcMeasureRoi> callback)
         {
             DisarmInteractiveModes();
             _sectorCallback = callback;
-            _persistentOverlayAction = null;
-            _selectionHighlightAction = null;
-            IsSectorMode = true;
+            owner.Persistent = null;
+            owner.Highlight = null;
+            _isSectorMode = true;
+            _interactionOwner = owner;
             Redraw();
         }
 
@@ -335,12 +415,16 @@ namespace FlashMeasurementSystem
         /// 先解除其他互動模式（矩形/扇形繪製/rect2/弧形編輯），確保模式互斥。
         /// </summary>
         public void RequestLine(Action<double, double, double, double> callback)
+            => RequestLineCore(ActiveLease, callback);
+
+        private void RequestLineCore(OverlayLease owner, Action<double, double, double, double> callback)
         {
             DisarmInteractiveModes();
             _lineCallback = callback;
-            _persistentOverlayAction = null;
-            _selectionHighlightAction = null;
-            IsLineMode = true;
+            owner.Persistent = null;
+            owner.Highlight = null;
+            _isLineMode = true;
+            _interactionOwner = owner;
             Redraw();
         }
 
@@ -359,9 +443,14 @@ namespace FlashMeasurementSystem
             angleStart = phi - Math.PI / 4.0;
         }
 
+        /// <summary>
+        /// 相容路徑：寫進「目前最上層」的 overlay 圖層。沒有編輯器開著時就是主視窗自己的圖層；
+        /// 有編輯器開著時（例如量測模型編輯器按「試測」回呼主視窗繪製）寫進該編輯器的圖層，
+        /// 因此關掉編輯器會連同這次繪製一起收回、露出主視窗先前的結果 overlay。
+        /// </summary>
         public void SetPersistentOverlayAction(Action action)
         {
-            _persistentOverlayAction = action;
+            ActiveLease.Persistent = action;
             Redraw();
         }
 
@@ -421,7 +510,12 @@ namespace FlashMeasurementSystem
         /// <summary>開始/取代可編輯 rect2，進入編輯模式並重繪。onChanged 為本次編輯的回呼擁有者。</summary>
         public void BeginRect2Edit(double cr, double cc, double phi, double l1, double l2,
             Action<double, double, double, double, double> onChanged)
+            => BeginRect2EditCore(ActiveLease, cr, cc, phi, l1, l2, onChanged);
+
+        private void BeginRect2EditCore(OverlayLease owner, double cr, double cc, double phi, double l1, double l2,
+            Action<double, double, double, double, double> onChanged)
         {
+            _interactionOwner = owner;
             _editCenterRow = cr;
             _editCenterCol = cc;
             _editPhi = phi;
@@ -447,7 +541,12 @@ namespace FlashMeasurementSystem
         /// <summary>開始/取代可編輯弧形，進入弧形編輯模式並重繪。與 rect2 編輯互斥。</summary>
         public void BeginArcEdit(double cr, double cc, double radius, double a0, double extent,
             double annulus, Action<double, double, double, double, double, double> onChanged)
+            => BeginArcEditCore(ActiveLease, cr, cc, radius, a0, extent, annulus, onChanged);
+
+        private void BeginArcEditCore(OverlayLease owner, double cr, double cc, double radius, double a0, double extent,
+            double annulus, Action<double, double, double, double, double, double> onChanged)
         {
+            _interactionOwner = owner;
             _editActive = false;                 // 關閉 rect2 編輯，避免兩種模式同時 active
             _editMode = Rect2Handle.None;
             _arcCr = cr; _arcCc = cc; _arcRadius = radius;
@@ -729,9 +828,177 @@ namespace FlashMeasurementSystem
 
         public void Dispose()
         {
-            _persistentOverlayAction = null;
+            for (int i = 0; i < _leases.Count; i++)
+            {
+                _leases[i].Persistent = null;
+                _leases[i].Highlight = null;
+            }
             CurrentImage?.Dispose();
         }
+
+        /// <summary>
+        /// 單一 caller 對共用影像視窗的 overlay/編輯/手勢所有權。釋放（Dispose）後所有寫入都是
+        /// no-op，且只收掉自己那一層與自己武裝的互動，下層 owner 的 overlay 會自動重新顯示。
+        /// </summary>
+        private sealed class OverlayLease : IOverlayLease
+        {
+            private readonly HWindowControlHelper _h;
+            private bool _released;
+            internal Action Persistent;
+            internal Action Highlight;
+
+            public string OwnerName { get; }
+
+            internal OverlayLease(HWindowControlHelper helper, string ownerName)
+            {
+                _h = helper;
+                OwnerName = string.IsNullOrEmpty(ownerName) ? "(anonymous)" : ownerName;
+            }
+
+            // 已釋放的 lease 一律失效：背景/已關閉視窗的延遲 callback 打進來全部靜默丟棄。
+            private bool Live => !_released;
+
+            public bool IsActive => Live && ReferenceEquals(_h.ActiveLease, this);
+            public bool IsEditingRect2 => Live && _h._editActive && ReferenceEquals(_h._interactionOwner, this);
+            public bool IsEditingArc => Live && _h._arcEditActive && ReferenceEquals(_h._interactionOwner, this);
+
+            public void SetPersistentOverlay(Action action)
+            {
+                if (!Live) return;
+                Persistent = action;
+                _h.Redraw();
+            }
+
+            public void SetSelectionHighlight(Action action)
+            {
+                if (!Live) return;
+                Highlight = action;
+                _h.Redraw();
+            }
+
+            public void ClearSelectionHighlight()
+            {
+                if (!Live || Highlight == null) return;
+                Highlight = null;
+                _h.Redraw();
+            }
+
+            public void ClearPersistentOverlay()
+            {
+                if (!Live || Persistent == null) return;
+                Persistent = null;
+                _h.Redraw();
+            }
+
+            public void BeginRect2Edit(double centerRow, double centerCol, double phi, double len1, double len2,
+                Action<double, double, double, double, double> onChanged)
+            {
+                if (!Live) return;
+                _h.BeginRect2EditCore(this, centerRow, centerCol, phi, len1, len2, onChanged);
+            }
+
+            // 只能結束「自己武裝的」編輯把手：已關閉的編輯器或別的 owner 呼叫時為 no-op，
+            // 不會拆掉前景視窗正在進行的編輯。
+            public void EndRect2Edit()
+            {
+                if (!IsEditingRect2) return;
+                _h.EndRect2Edit();
+            }
+
+            public void BeginArcEdit(double centerRow, double centerCol, double radius, double angleStart,
+                double angleExtent, double annulus,
+                Action<double, double, double, double, double, double> onChanged)
+            {
+                if (!Live) return;
+                _h.BeginArcEditCore(this, centerRow, centerCol, radius, angleStart, angleExtent, annulus, onChanged);
+            }
+
+            public void EndArcEdit()
+            {
+                if (!IsEditingArc) return;
+                _h.EndArcEdit();
+            }
+
+            public void RequestRoi(Action<double, double, double, double> callback)
+            {
+                if (!Live) return;
+                _h.RequestRoiCore(this, callback);
+            }
+
+            public void RequestSector(Action<ArcMeasureRoi> callback)
+            {
+                if (!Live) return;
+                _h.RequestSectorCore(this, callback);
+            }
+
+            public void RequestLine(Action<double, double, double, double> callback)
+            {
+                if (!Live) return;
+                _h.RequestLineCore(this, callback);
+            }
+
+            public void Disarm()
+            {
+                if (!Live) return;
+                _h.DisarmInteractiveModes();
+            }
+
+            public void Clear()
+            {
+                if (!Live) return;
+                if (ReferenceEquals(_h._interactionOwner, this)) _h.ReleaseOwnedInteractions();
+                Persistent = null;
+                Highlight = null;
+                _h.Redraw();
+            }
+
+            public void Dispose()
+            {
+                if (_released) return;
+                _released = true;
+                _h.ReleaseLease(this);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 共用影像視窗（<see cref="HWindowControlHelper"/>）的 overlay/編輯/手勢所有權租約。
+    /// 每個 modeless 視窗開啟時 AcquireOverlay 取得一份、關閉時 Dispose。
+    /// 契約：(1) 每個 owner 有自己的 overlay 圖層，彼此不覆寫；(2) 釋放後任何呼叫都是 no-op；
+    /// (3) 釋放時只收自己的圖層與自己武裝的編輯/手勢，下層 owner 的 overlay 自動重新顯示。
+    /// </summary>
+    public interface IOverlayLease : IDisposable
+    {
+        /// <summary>診斷用的擁有者名稱。</summary>
+        string OwnerName { get; }
+        /// <summary>本租約仍有效且位於圖層堆疊最上層。</summary>
+        bool IsActive { get; }
+        /// <summary>rect2 編輯把手正由「本租約」持有。</summary>
+        bool IsEditingRect2 { get; }
+        /// <summary>弧形編輯把手正由「本租約」持有。</summary>
+        bool IsEditingArc { get; }
+
+        void SetPersistentOverlay(Action action);
+        void ClearPersistentOverlay();
+        void SetSelectionHighlight(Action action);
+        void ClearSelectionHighlight();
+
+        void BeginRect2Edit(double centerRow, double centerCol, double phi, double len1, double len2,
+            Action<double, double, double, double, double> onChanged);
+        void EndRect2Edit();
+        void BeginArcEdit(double centerRow, double centerCol, double radius, double angleStart,
+            double angleExtent, double annulus,
+            Action<double, double, double, double, double, double> onChanged);
+        void EndArcEdit();
+
+        void RequestRoi(Action<double, double, double, double> callback);
+        void RequestSector(Action<ArcMeasureRoi> callback);
+        void RequestLine(Action<double, double, double, double> callback);
+
+        /// <summary>解除所有 pending 互動手勢/編輯（滑鼠全域互斥，見 DisarmInteractiveModes）。</summary>
+        void Disarm();
+        /// <summary>清掉本 owner 的 overlay 圖層與自己武裝的編輯/手勢。</summary>
+        void Clear();
     }
 
     public class RegionInfo

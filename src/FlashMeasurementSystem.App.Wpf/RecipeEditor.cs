@@ -45,8 +45,9 @@ namespace FlashMeasurementSystem
         private int _toolIdCounter;
         private bool _updatingControls;
         private bool _dirty;
-        private bool _editorOwnsEdit;  // L2：追蹤編輯把手是否為編輯器持有，關閉時只拆自己的
-        private bool _editorInstalledOverlay;  // #3：試測是否在共用 helper 裝過 persistent overlay，關閉時清掉
+        // 本編輯器對共用影像視窗的 overlay/編輯/手勢所有權。取代先前的 _editorOwnsEdit /
+        // _editorInstalledOverlay 兩個手動記帳旗標：租約本身就知道哪一層、哪個把手是自己的。
+        private readonly IOverlayLease _lease;
         private string _savePath;
 
         // ── Toolbar controls ──
@@ -146,6 +147,7 @@ namespace FlashMeasurementSystem
         private NumericUpDown _holePositionTolNumeric;
         private CheckBox _holeDarkCheck;
         private NumericUpDown _holeMinAreaNumeric;
+        private NumericUpDown _holeMinCircularityNumeric;
 
         private GroupBox _edgeGroup;
         private NumericUpDown _sigmaNumeric;
@@ -180,6 +182,7 @@ namespace FlashMeasurementSystem
             Action<Recipe, string> savedCallback, Func<MeasurementTool, ToolRunResult> trialMeasure)
         {
             _imageHelper = imageHelper ?? throw new ArgumentNullException(nameof(imageHelper));
+            _lease = _imageHelper.AcquireOverlay("RecipeEditor");
             _savePath = filePath;
             _savedCallback = savedCallback;
             _trialMeasure = trialMeasure;
@@ -196,17 +199,9 @@ namespace FlashMeasurementSystem
             FormClosing += OnFormClosing;
             this.FormClosed += (s, e) =>
             {
-                // L2：只拆除編輯器自己持有的 edit/highlight，不誤殺主視窗的。
-                if (_editorOwnsEdit)
-                {
-                    _imageHelper.EndRect2Edit();
-                    _imageHelper.EndArcEdit();   // 弧形工具的把手同樣由編輯器持有，一併拆除
-                    _editorOwnsEdit = false;
-                }
-                _imageHelper.ClearSelectionHighlight();
-                // #3：試測會把 persistent overlay 裝在共用主視窗 helper 上；只有裝過才清除，
-                // 避免殘留橘色試測 ROI + 綠擬合，也避免無試測時誤清主視窗自身的 overlay。
-                if (_editorInstalledOverlay) { _imageHelper.ClearOverlay(); _editorInstalledOverlay = false; }
+                // L2/#3：釋放租約即拆掉「編輯器自己」的編輯把手、選取高亮與試測/弧帶 overlay，
+                // 主視窗那一層完全不受影響（且會自動重新顯示）。關閉後的延遲 callback 亦成 no-op。
+                _lease.Dispose();
             };
         }
 
@@ -580,6 +575,10 @@ namespace FlashMeasurementSystem
                 Dock = DockStyle.Fill
             });
             _holeMinAreaNumeric = AddNumericRow(t, "最小孔面積(px)", ref r, 1M, 10000000M, 0, 20M, 1M);
+            // 圓度下限：擋掉兩孔沾黏被 connection 併成一顆的情形（併起來的雙孔圓度明顯偏低，
+            // 實測乾淨圓=1.00、沾黏對≈0.63，預設 0.80 落在中間）。
+            // ⚠️ 長孔/橢圓孔本來圓度就低（2:1 橢圓≈0.5）會被誤拒 → 設 0 可完全停用此過濾。
+            _holeMinCircularityNumeric = AddNumericRow(t, "圓度下限(0=停用)", ref r, 0M, 1M, 2, 0.80M, 0.05M);
 
             gb.Controls.Add(t);
         }
@@ -789,6 +788,7 @@ namespace FlashMeasurementSystem
             _holePositionTolNumeric.ValueChanged += (s, e) => WriteHoleArray();
             _holeDarkCheck.CheckedChanged += (s, e) => WriteHoleArray();
             _holeMinAreaNumeric.ValueChanged += (s, e) => WriteHoleArray();
+            _holeMinCircularityNumeric.ValueChanged += (s, e) => WriteHoleArray();
 
             _sigmaNumeric.ValueChanged += (s, e) => WriteEdgeParams();
             _thresholdNumeric.ValueChanged += (s, e) => WriteEdgeParams();
@@ -815,9 +815,9 @@ namespace FlashMeasurementSystem
             _selectedTool.Roi.Length1 = (double)_length1Numeric.Value;
             _selectedTool.Roi.Length2 = (double)_length2Numeric.Value;
             _selectedTool.Roi.AngleRad = (double)_angleRadNumeric.Value;
-            if (_imageHelper.IsEditingRect2)
+            if (_lease.IsEditingRect2)
             {
-                _imageHelper.BeginRect2Edit(_selectedTool.Roi.CenterRow, _selectedTool.Roi.CenterCol,
+                _lease.BeginRect2Edit(_selectedTool.Roi.CenterRow, _selectedTool.Roi.CenterCol,
                     _selectedTool.Roi.AngleRad, _selectedTool.Roi.Length1, _selectedTool.Roi.Length2,
                     OnToolRect2Changed);
             }
@@ -867,10 +867,10 @@ namespace FlashMeasurementSystem
             a.AnnulusRadius = (double)_arcAnnulusNumeric.Value;
             // 改數值即回到「即時弧帶/扇形」overlay（若剛試測過，靜態結果 overlay 會蓋住即時框）。
             InstallArcBandOverlay();
-            if (_imageHelper.IsEditingArc)
+            if (_lease.IsEditingArc)
             {
                 // 重下把手座標（即時預覽）；BeginArcEdit 內部會 Redraw，弧帶 persistent overlay 一併重畫。
-                _imageHelper.BeginArcEdit(a.CenterRow, a.CenterCol, a.Radius,
+                _lease.BeginArcEdit(a.CenterRow, a.CenterCol, a.Radius,
                     a.AngleStart, a.AngleExtent, a.AnnulusRadius, OnToolArcChanged);
             }
             else
@@ -936,6 +936,7 @@ namespace FlashMeasurementSystem
             h.PositionToleranceMm = (double)_holePositionTolNumeric.Value;
             h.HoleIsDark = _holeDarkCheck.Checked;
             h.MinHoleAreaPx = (double)_holeMinAreaNumeric.Value;
+            h.MinCircularity = (double)_holeMinCircularityNumeric.Value;
             MarkDirty();
         }
 
@@ -1035,7 +1036,7 @@ namespace FlashMeasurementSystem
             // v10：circle 選扇形 ROI 時比照弧形工具（借 ArcRoi/PlacedArc、不畫 rect 框）。
             bool isSectorCircle = tool.ToolType == "circle" && tool.RoiShape == "sector";
             ArcMeasureRoi arc = tool.ArcRoi;
-            _imageHelper.SetPersistentOverlayAction(() =>
+            _lease.SetPersistentOverlay(() =>
             {
                 OverlayAnnotator an = _imageHelper.Annotator;
                 if (an == null) return;
@@ -1088,7 +1089,6 @@ namespace FlashMeasurementSystem
                     an.DrawLine(result.LineRow1, result.LineCol1, result.LineRow2, result.LineCol2, "green");
                 an.DrawText(result.ValueText ?? string.Empty, (int)txtR, (int)txtC + 18, "green");
             });
-            _editorInstalledOverlay = true;  // #3：記錄已佔用共用 overlay slot，關閉編輯器時清除
         }
 
         private void WriteGdt()
@@ -1494,7 +1494,7 @@ namespace FlashMeasurementSystem
                     MinPinAreaPx = src.PinPitch.MinPinAreaPx
                 },
                 // 深複製孔陣列參數——漏掉會在載入/存檔時遺失網格判定設定（比照 ArcRoi/Gdt/Gear/Pcd/PinPitch 的處理）。
-                // 必須逐欄複製 HoleArrayAnalysisParameters 全部 10 個欄位，否則存後重載會悄悄還原成預設值。
+                // 必須逐欄複製 HoleArrayAnalysisParameters 全部 11 個欄位，否則存後重載會悄悄還原成預設值。
                 HoleArray = src.HoleArray == null ? null : new HoleArrayAnalysisParameters
                 {
                     Rows = src.HoleArray.Rows,
@@ -1506,7 +1506,8 @@ namespace FlashMeasurementSystem
                     PitchToleranceMm = src.HoleArray.PitchToleranceMm,
                     PositionToleranceMm = src.HoleArray.PositionToleranceMm,
                     HoleIsDark = src.HoleArray.HoleIsDark,
-                    MinHoleAreaPx = src.HoleArray.MinHoleAreaPx
+                    MinHoleAreaPx = src.HoleArray.MinHoleAreaPx,
+                    MinCircularity = src.HoleArray.MinCircularity
                 },
                 RefToolIds = new List<string>(src.RefToolIds ?? new List<string>())
             };
@@ -1539,10 +1540,10 @@ namespace FlashMeasurementSystem
             {
                 _selectedTool = null;
                 SetPropertyPanelEnabled(false);
-                _imageHelper.EndRect2Edit();
-                _imageHelper.EndArcEdit();
+                _lease.EndRect2Edit();
+                _lease.EndArcEdit();
                 ClearEditorOverlayIfAny();
-                _imageHelper.ClearSelectionHighlight();
+                _lease.ClearSelectionHighlight();
                 RefreshTrialButtonEnabled();
                 return;
             }
@@ -1561,11 +1562,10 @@ namespace FlashMeasurementSystem
         {
             if (_selectedTool == null)
             {
-                _imageHelper.EndRect2Edit();
-                _imageHelper.EndArcEdit();
-                _editorOwnsEdit = false;
+                _lease.EndRect2Edit();
+                _lease.EndArcEdit();
                 ClearEditorOverlayIfAny();
-                _imageHelper.ClearSelectionHighlight();
+                _lease.ClearSelectionHighlight();
                 return;
             }
 
@@ -1577,27 +1577,25 @@ namespace FlashMeasurementSystem
             bool isSectorCircle = _selectedTool.ToolType == "circle" && _selectedTool.RoiShape == "sector";
             if (_selectedTool.ToolType == "arc" || _selectedTool.ToolType == "gear" || _selectedTool.ToolType == "pcd" || isSectorCircle)
             {
-                _imageHelper.ClearSelectionHighlight();
+                _lease.ClearSelectionHighlight();
                 ArcMeasureRoi a = _selectedTool.ArcRoi;
                 // Fix 6：未載入影像時不進入弧形編輯（比照 OnCaptureArc 的守衛），
                 // 避免在沒有影像時悄悄進入 edit 狀態卻什麼都沒顯示。
                 if (a == null || _imageHelper.CurrentImage == null)
                 {
-                    _imageHelper.EndRect2Edit();
-                    _imageHelper.EndArcEdit();
-                    _editorOwnsEdit = false;
+                    _lease.EndRect2Edit();
+                    _lease.EndArcEdit();
                     ClearEditorOverlayIfAny();
                     return;
                 }
-                _imageHelper.BeginArcEdit(a.CenterRow, a.CenterCol, a.Radius,
+                _lease.BeginArcEdit(a.CenterRow, a.CenterCol, a.Radius,
                     a.AngleStart, a.AngleExtent, a.AnnulusRadius, OnToolArcChanged);
-                _editorOwnsEdit = true;
                 InstallArcBandOverlay();  // Fix 1c：弧帶 persistent overlay（把手畫在其上），與 MainWindow 一致
                 return;
             }
 
             // 離開弧形工具 → 清掉編輯器自己裝的弧帶/試測 overlay，避免殘留到 circle/line/參照工具。
-            // 只清編輯器裝的（_editorInstalledOverlay），不誤清 Run Recipe 結果 overlay。
+            // 只清編輯器自己那一層，不誤清主視窗的 Run Recipe 結果 overlay（由租約保證）。
             ClearEditorOverlayIfAny();
 
             // rect2 互動編輯：circle/line（元素）與 pin_pitch（引腳間距量測區）、hole_array（孔陣列量測區）都用 rect2 Roi。
@@ -1607,23 +1605,21 @@ namespace FlashMeasurementSystem
             {
                 // 參照型工具（GD&T/距離/角度/構造）：高亮其參照的元素 ROI（青色，疊在量測
                 // 結果之上），讓使用者一眼看出此工具作用在哪些特徵上。
-                _imageHelper.EndRect2Edit();
-                _imageHelper.EndArcEdit();
-                _editorOwnsEdit = false;
+                _lease.EndRect2Edit();
+                _lease.EndArcEdit();
                 var refs = GetReferencedElements(_selectedTool);
                 if (refs.Count > 0)
-                    _imageHelper.SetSelectionHighlight(() => DrawReferencedElements(_imageHelper.Annotator, refs));
+                    _lease.SetSelectionHighlight(() => DrawReferencedElements(_imageHelper.Annotator, refs));
                 else
-                    _imageHelper.ClearSelectionHighlight();
+                    _lease.ClearSelectionHighlight();
                 return;
             }
 
             // 元素：以編輯把手指示選取，不需 ref 高亮。
-            _imageHelper.ClearSelectionHighlight();
+            _lease.ClearSelectionHighlight();
             var roi = _selectedTool.Roi;
-            _imageHelper.BeginRect2Edit(roi.CenterRow, roi.CenterCol, roi.AngleRad,
+            _lease.BeginRect2Edit(roi.CenterRow, roi.CenterCol, roi.AngleRad,
                 roi.Length1, roi.Length2, OnToolRect2Changed);
-            _editorOwnsEdit = true;
         }
 
         // Fix 1c：弧帶 persistent overlay。裝在共用主視窗 helper 上（單一 overlay slot），
@@ -1631,7 +1627,7 @@ namespace FlashMeasurementSystem
         // 數值變更（WriteArc）或把手拖曳（BeginArcEdit）觸發 Redraw 時，band 依最新 ArcRoi 重畫。
         private void InstallArcBandOverlay()
         {
-            _imageHelper.SetPersistentOverlayAction(() =>
+            _lease.SetPersistentOverlay(() =>
             {
                 var a = _selectedTool?.ArcRoi;
                 if (a == null || !a.IsDefined) return;
@@ -1645,13 +1641,13 @@ namespace FlashMeasurementSystem
                     _imageHelper.Annotator.DrawArcBand(a.CenterRow, a.CenterCol, a.Radius,
                         a.AngleStart, a.AngleExtent, a.AnnulusRadius);
             });
-            _editorInstalledOverlay = true;  // 記錄已佔用共用 overlay slot，離開弧形工具/關閉時清除
         }
 
-        // 只清除「編輯器自己裝過」的 persistent overlay（弧帶或試測），不誤清 Run Recipe 結果 overlay。
+        // 只清除「編輯器自己那一層」的 persistent overlay（弧帶或試測）。租約保證不會誤清
+        // 主視窗的 Run Recipe 結果 overlay——清掉本層後，下層的結果會自動重新顯示。
         private void ClearEditorOverlayIfAny()
         {
-            if (_editorInstalledOverlay) { _imageHelper.ClearOverlay(); _editorInstalledOverlay = false; }
+            _lease.ClearPersistentOverlay();
         }
 
         // 取得某工具參照到的「元素」(circle/line，具 ROI)。構造工具等無 ROI 者不納入高亮。
@@ -1847,6 +1843,7 @@ namespace FlashMeasurementSystem
                 _holePositionTolNumeric.Value = ClampDecimal(h.PositionToleranceMm, _holePositionTolNumeric.Minimum, _holePositionTolNumeric.Maximum);
                 _holeDarkCheck.Checked = h.HoleIsDark;
                 _holeMinAreaNumeric.Value = ClampDecimal(h.MinHoleAreaPx, _holeMinAreaNumeric.Minimum, _holeMinAreaNumeric.Maximum);
+                _holeMinCircularityNumeric.Value = ClampDecimal(h.MinCircularity, _holeMinCircularityNumeric.Minimum, _holeMinCircularityNumeric.Maximum);
             }
             finally
             {
@@ -2093,7 +2090,7 @@ namespace FlashMeasurementSystem
 
             try
             {
-                _imageHelper.RequestRoi((startRow, startCol, endRow, endCol) =>
+                _lease.RequestRoi((startRow, startCol, endRow, endCol) =>
                 {
                     double centerRow = (startRow + endRow) / 2.0;
                     double centerCol = (startCol + endCol) / 2.0;
@@ -2147,10 +2144,9 @@ namespace FlashMeasurementSystem
             }
 
             ArcMeasureRoi a = _selectedTool.ArcRoi;
-            _imageHelper.ClearSelectionHighlight();
-            _imageHelper.BeginArcEdit(a.CenterRow, a.CenterCol, a.Radius,
+            _lease.ClearSelectionHighlight();
+            _lease.BeginArcEdit(a.CenterRow, a.CenterCol, a.Radius,
                 a.AngleStart, a.AngleExtent, a.AnnulusRadius, OnToolArcChanged);
-            _editorOwnsEdit = true;
             InstallArcBandOverlay();  // Fix 1c：明確進入弧形編輯時（也）確保弧帶 overlay 已裝上
         }
 

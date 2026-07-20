@@ -452,6 +452,9 @@ namespace FlashMeasurementSystem
                     res.ValueText = string.Format(CultureInfo.InvariantCulture,
                         "孔數={0} 孔徑={1:F3} X={2:F3} Y={3:F3}mm",
                         analysis.HoleCount, analysis.MeanDiameterMm, analysis.PitchXMm, analysis.PitchYMm);
+                    // 沾黏孔被形狀濾波剔除 → 孔數會少報。必須讓操作員分得出「真的缺孔」與「兩孔沾黏成一塊」，
+                    // 否則只看到孔數不符卻不知原因。僅補充說明，不改判定（IsOk 仍由 analysis.IsPass 決定）。
+                    AppendBridgedHoleNote(res, det.RejectedByShapeCount);
                 }
                 else
                 {
@@ -461,6 +464,7 @@ namespace FlashMeasurementSystem
                     res.IsOk = false;
                     res.ValueText = "孔陣列分析失敗";
                     res.Message = analysis.ErrorMessage;
+                    AppendBridgedHoleNote(res, det.RejectedByShapeCount);
                 }
                 results.Add(res); if (!string.IsNullOrEmpty(tool.Id)) byId[tool.Id] = res;
             }
@@ -824,6 +828,18 @@ namespace FlashMeasurementSystem
                 res.ValueText = "量測異常";
                 res.Message = ex.Message;
             }
+        }
+
+        // 孔陣列：把「因不夠圓被剔除的 blob 數」帶到操作端。ValueText 只加極短標記（結果表欄寬與影像上
+        // 標籤都會被長字串撐爆），完整說明放 Message。rejected==0 時完全不動 res。
+        private static void AppendBridgedHoleNote(ToolRunResult res, int rejectedByShapeCount)
+        {
+            if (rejectedByShapeCount <= 0) return;
+            res.ValueText = (res.ValueText ?? string.Empty) + " ⚠沾黏" + rejectedByShapeCount;
+            string note = string.Format(CultureInfo.InvariantCulture,
+                "有 {0} 個區域因圓度不足被剔除（疑似孔沾黏/髒污橋接，孔數因此少算）；確認為長孔請調低 MinCircularity。",
+                rejectedByShapeCount);
+            res.Message = string.IsNullOrEmpty(res.Message) ? note : res.Message + "；" + note;
         }
 
         // A5 構造工具：intersection（兩 line→點）、midline（兩 line→線）、projection（circle 圓心投影到 line→點）。

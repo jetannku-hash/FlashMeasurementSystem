@@ -1909,7 +1909,9 @@ namespace FlashMeasurementSystem
                     MeasurementReportBuilder.Build(wfResult, judgments, pixelSizeText, savedPng);
                 _pdfReportWriter.Write(model, pdfPath);
 
-                return " | PDF: " + pdfPath + (string.IsNullOrEmpty(savedPng) ? "（無截圖）" : "");
+                // 報表寫成功後才清理，只保留最近 N 組；失敗只會多一段訊息，不影響本次報表。
+                return " | PDF: " + pdfPath + (string.IsNullOrEmpty(savedPng) ? "（無截圖）" : "")
+                    + ReportRetentionSweep.Sweep(reportDir);
             }
             catch (Exception ex)
             {
@@ -1968,6 +1970,15 @@ namespace FlashMeasurementSystem
                     MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
+            if (!CanOpenSharedImageEditor()) return;
+
+            // 編輯器接管共用影像視窗做 ROI 編輯：先解除所有互動模式（含扇形繪製 pending callback），
+            // 再清掉主視窗殘留的偵測/擬合 overlay（Edge Detection 藍框、邊緣十字、Run Recipe 結果等），
+            // 讓編輯器從乾淨影像開始。必須在 new RecipeEditor(...) 之前——編輯器建構時就取得自己的
+            // overlay 圖層，之後這裡的 ClearOverlay 會清到編輯器那層而非主視窗那層。
+            _imageHelper.DisarmInteractiveModes();
+            if (_sectorDrawCheck != null && _sectorDrawCheck.Checked) _sectorDrawCheck.Checked = false;
+            _imageHelper.ClearOverlay();
 
             // A1：提供「單一工具試測」委派給編輯器。只跑這一個工具（暫態單工具配方），
             // 不套匹配姿態（ROI 即影像座標）、不呼叫 EnsureRecipeValid、不重跑整份配方。
@@ -1997,13 +2008,33 @@ namespace FlashMeasurementSystem
                     UpdateEmptyState();
                 },
                 trialMeasure);
-            // 編輯器接管共用影像視窗做 ROI 編輯：先解除所有互動模式（含扇形繪製 pending callback，
-            // 避免洩漏進編輯器共用的 helper），再清掉主視窗殘留的偵測/擬合 overlay
-            // （Edge Detection 藍框、邊緣十字、Run Recipe 結果等），讓編輯器從乾淨影像開始。
-            _imageHelper.DisarmInteractiveModes();
-            if (_sectorDrawCheck != null && _sectorDrawCheck.Checked) _sectorDrawCheck.Checked = false;
-            _imageHelper.ClearOverlay();
+            ClaimSharedImageEditor(editor);
             editor.Show(this);
+        }
+
+        // ── 共用影像視窗的多開閘門 ────────────────────────────────────────────
+        // RecipeEditor / MetrologyModelEditorForm / DxfComparisonForm 都是 modeless 且都在共用
+        // 影像視窗上疊自己的 overlay 圖層與互動手勢。政策為【封鎖多開】：同一時間只允許一個
+        // 這類編輯器存在（滑鼠只有一個，兩個編輯器同時武裝手勢對操作員也無從分辨）。
+        private Form _sharedImageEditor;
+
+        private bool CanOpenSharedImageEditor()
+        {
+            if (_sharedImageEditor == null || _sharedImageEditor.IsDisposed) return true;
+            MessageBox.Show(this,
+                "「" + _sharedImageEditor.Text + "」正在使用共用影像視窗，請先關閉它再開啟其他編輯器。",
+                "共用影像視窗", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            _sharedImageEditor.Activate();
+            return false;
+        }
+
+        private void ClaimSharedImageEditor(Form editor)
+        {
+            _sharedImageEditor = editor;
+            editor.FormClosed += (s, e) =>
+            {
+                if (ReferenceEquals(_sharedImageEditor, editor)) _sharedImageEditor = null;
+            };
         }
 
         // 開啟 2D 量測模型編輯器（modeless，Phase 4：與 RecipeEditor 一致，讓稍後加入的
@@ -2011,6 +2042,7 @@ namespace FlashMeasurementSystem
         // 並（若有路徑）以 RecipeStore 持久化，Run Recipe 立即經 Pass 3 套用此模型。
         private void OpenMetrologyModelEditor(object sender, EventArgs e)
         {
+            if (!CanOpenSharedImageEditor()) return;
             if (_loadedRecipe == null)
             {
                 // 純 2D 量測模型配方無需先備妥一份 1D 配方：就地建立空白配方
@@ -2102,6 +2134,7 @@ namespace FlashMeasurementSystem
                 },
                 _imageHelper,
                 metrologyTrial);
+            ClaimSharedImageEditor(editor);
             editor.Show(this);
         }
 
@@ -2109,7 +2142,9 @@ namespace FlashMeasurementSystem
         // 僅開一個獨立面板操作目前共用影像（比照 Edit Recipe / Metrology Model）。
         private void OpenDxfComparisonForm(object sender, EventArgs e)
         {
+            if (!CanOpenSharedImageEditor()) return;
             var form = new DxfComparisonForm(_imageHelper, _dxfComparer);
+            ClaimSharedImageEditor(form);
             form.Show(this);
         }
 
