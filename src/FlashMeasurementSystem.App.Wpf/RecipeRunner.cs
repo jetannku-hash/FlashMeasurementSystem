@@ -6,6 +6,7 @@ using FlashMeasurementSystem.Application.CircleFitting;
 using FlashMeasurementSystem.Application.CoordinateSystem;
 using FlashMeasurementSystem.Application.DistanceMeasurement;
 using FlashMeasurementSystem.Application.EdgeDetection;
+using FlashMeasurementSystem.Application.HoleArrayDetection;
 using FlashMeasurementSystem.Application.HoleDetection;
 using FlashMeasurementSystem.Application.LineFitting;
 using FlashMeasurementSystem.Application.MetrologyModel;
@@ -17,6 +18,8 @@ using FlashMeasurementSystem.Domain.CoordinateSystem;
 using FlashMeasurementSystem.Domain.DistanceMeasurement;
 using FlashMeasurementSystem.Domain.EdgeDetection;
 using FlashMeasurementSystem.Domain.GearAnalysis;
+using FlashMeasurementSystem.Domain.HoleArrayAnalysis;
+using FlashMeasurementSystem.Domain.HoleArrayDetection;
 using FlashMeasurementSystem.Domain.HoleDetection;
 using FlashMeasurementSystem.Domain.LineFitting;
 using FlashMeasurementSystem.Domain.MetrologyModel;
@@ -69,6 +72,8 @@ namespace FlashMeasurementSystem
         public FlashMeasurementSystem.Domain.PcdAnalysis.PcdAnalysisResult Pcd;
         // v12 引腳間距工具：分析結果（供 overlay 引腳質心/缺腳 + MeasurementWorkflow 判定）。
         public PinPitchAnalysisResult PinPitch;
+        // v13 孔陣列工具：分析結果（供 overlay 孔中心/網格 + MeasurementWorkflow 判定）。
+        public HoleArrayAnalysisResult HoleArray;
         public double DistMm;          // distance：距離 (mm)
         public double DistRow1, DistCol1, DistRow2, DistCol2;  // distance 連線兩端（供繪製）
         public double AngleDeg;         // angle：夾角 AcuteAngleDeg (0~90)
@@ -106,13 +111,16 @@ namespace FlashMeasurementSystem
         private readonly IHoleDetector<HImage> _holeDetector;
         // v12：引腳間距 rect2 blob 偵測（加性、可為 null）。null 時 pin_pitch pass 該工具量測失敗但不擋其他工具。
         private readonly IPinDetector<HImage> _pinDetector;
+        // v13：孔陣列 rect2 blob 偵測（加性、可為 null）。null 時 hole_array pass 該工具量測失敗但不擋其他工具。
+        private readonly IHoleArrayDetector<HImage> _holeArrayDetector;
 
         public RecipeRunner(IEdgeDetector<HImage> edgeDetector, ICircleFitter circleFitter,
             ILineFitter lineFitter, IDistanceMeasurer<HXLDCont> distanceMeasurer,
             IAngleMeasurer angleMeasurer, IToleranceJudger judger, ICoordinateMapper mapper,
             IMetrologyModelRunner<HImage> metrologyRunner = null,
             IHoleDetector<HImage> holeDetector = null,
-            IPinDetector<HImage> pinDetector = null)
+            IPinDetector<HImage> pinDetector = null,
+            IHoleArrayDetector<HImage> holeArrayDetector = null)
         {
             _edgeDetector = edgeDetector;
             _circleFitter = circleFitter;
@@ -124,6 +132,7 @@ namespace FlashMeasurementSystem
             _metrologyRunner = metrologyRunner;
             _holeDetector = holeDetector;
             _pinDetector = pinDetector;
+            _holeArrayDetector = holeArrayDetector;
         }
 
         public List<ToolRunResult> Run(Recipe recipe, HImage image,
@@ -386,6 +395,76 @@ namespace FlashMeasurementSystem
                 results.Add(res); if (!string.IsNullOrEmpty(tool.Id)) byId[tool.Id] = res;
             }
 
+            // ── Pass 1.47：孔陣列（rect2 blob 偵測孔質心/等效孔徑 → 純 Domain 網格擬合/四判定）──
+            // 用 rect2 Roi（與 pin_pitch 相同的座標變換），非 ArcRoi。
+            foreach (MeasurementTool tool in recipe.Tools)
+            {
+                if (tool == null || tool.ToolType != "hole_array") continue;
+                if (tool.HoleArray == null || tool.Roi == null) continue;   // Validator 已擋
+
+                RoiGeometry g = tool.Roi;
+                double row = g.CenterRow, col = g.CenterCol, ang = g.AngleRad;
+                if (transform != null)
+                {
+                    TransformedRoi tr = _mapper.TransformRoi(g.CenterRow, g.CenterCol, g.AngleRad, transform);
+                    row = tr.Row; col = tr.Col; ang = tr.AngleRad;
+                }
+                var placedRoi = new RoiGeometry
+                {
+                    CenterRow = row, CenterCol = col, AngleRad = ang,
+                    Length1 = g.Length1, Length2 = g.Length2
+                };
+
+                var res = new ToolRunResult
+                {
+                    Name = tool.Name, ToolType = tool.ToolType, Supported = true,
+                    Roi = new PlacedRoi { Row = row, Col = col, AngleRad = ang,
+                        Length1 = g.Length1, Length2 = g.Length2, Name = tool.Name }
+                };
+
+                if (_holeArrayDetector == null)
+                {
+                    res.Measured = false;
+                    res.ValueText = "孔陣列量測失敗";
+                    res.Message = "未注入孔陣列偵測器";
+                    res.IsOk = null;
+                    results.Add(res); if (!string.IsNullOrEmpty(tool.Id)) byId[tool.Id] = res; continue;
+                }
+
+                HoleArrayDetectionResult det = _holeArrayDetector.DetectHolesInRect(image, placedRoi, tool.HoleArray);
+                if (!det.Success)
+                {
+                    res.Measured = false;
+                    res.ValueText = "孔陣列量測失敗";
+                    res.Message = string.IsNullOrEmpty(det.ErrorMessage) ? "孔偵測失敗" : det.ErrorMessage;
+                    res.IsOk = null;
+                    results.Add(res); if (!string.IsNullOrEmpty(tool.Id)) byId[tool.Id] = res; continue;
+                }
+
+                HoleArrayAnalysisResult analysis = HoleArrayAnalyzer.Analyze(det.Holes, pixelSizeUm, tool.HoleArray);
+                res.HoleArray = analysis;
+                if (analysis.Success)
+                {
+                    res.Measured = true;
+                    res.IsOk = analysis.IsPass;
+                    // 孔距是本工具的主量測值，摘要必須含 X/Y，否則畫面只看得到孔徑（CSV 才有六列）。
+                    // 用緊湊格式避免結果表欄寬截斷與影像上標籤過長。
+                    res.ValueText = string.Format(CultureInfo.InvariantCulture,
+                        "孔數={0} 孔徑={1:F3} X={2:F3} Y={3:F3}mm",
+                        analysis.HoleCount, analysis.MeanDiameterMm, analysis.PitchXMm, analysis.PitchYMm);
+                }
+                else
+                {
+                    // 分析失敗（如孔數不足以擬合網格）＝量測失敗，須計 NG（Supported && !Measured 或 IsOk=false），
+                    // 不可留 Measured=true/IsOk=null 讓兩條 NG 規則都漏 → 假 PASS（audit 教訓）。
+                    res.Measured = false;
+                    res.IsOk = false;
+                    res.ValueText = "孔陣列分析失敗";
+                    res.Message = analysis.ErrorMessage;
+                }
+                results.Add(res); if (!string.IsNullOrEmpty(tool.Id)) byId[tool.Id] = res;
+            }
+
             // ── Pass 1.5：構造工具（intersection / midline / projection）──
             // 僅參照基礎元件（line/circle），不支援鏈式構造。
             foreach (MeasurementTool tool in recipe.Tools)
@@ -422,6 +501,7 @@ namespace FlashMeasurementSystem
                 if (tool.ToolType == "gear") continue;  // 已於 Pass 1.3 處理
                 if (tool.ToolType == "pcd") continue;  // 已於 Pass 1.4 處理
                 if (tool.ToolType == "pin_pitch") continue;  // 已於 Pass 1.45 處理
+                if (tool.ToolType == "hole_array") continue;  // 已於 Pass 1.47 處理
                 if (tool.ToolType == "intersection" || tool.ToolType == "midline" || tool.ToolType == "projection") continue;  // 已於 Pass 1.5 處理
                 if (IsGdtType(tool.ToolType)) continue;  // 已於 Pass 1.7 處理
 

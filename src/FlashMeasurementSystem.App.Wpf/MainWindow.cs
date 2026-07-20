@@ -28,7 +28,9 @@ using FlashMeasurementSystem.Domain.MetrologyModel;
 using FlashMeasurementSystem.Halcon.CoordinateSystem;
 using FlashMeasurementSystem.Halcon.MetrologyModel;
 using FlashMeasurementSystem.Application.HoleDetection;
+using FlashMeasurementSystem.Application.HoleArrayDetection;
 using FlashMeasurementSystem.Application.PinDetection;
+using FlashMeasurementSystem.Halcon.HoleArrayDetection;
 using FlashMeasurementSystem.Halcon.HoleDetection;
 using FlashMeasurementSystem.Halcon.PinDetection;
 using FlashMeasurementSystem.Infrastructure.Roi;
@@ -57,6 +59,7 @@ namespace FlashMeasurementSystem
         private readonly HalconMetrologyModelRunner _metrologyRunner = new HalconMetrologyModelRunner();
         private readonly IHoleDetector<HImage> _holeDetector = new HalconHoleDetector();
         private readonly IPinDetector<HImage> _pinDetector = new HalconPinDetector();
+        private readonly IHoleArrayDetector<HImage> _holeArrayDetector = new HalconHoleArrayDetector();
         private EdgeDetectionRoi _latestEdgeRoi;
         private double _editCenterRow, _editCenterCol;
         private EdgeResult _latestEdgeResult;
@@ -112,7 +115,7 @@ namespace FlashMeasurementSystem
             _imageHelper.RoiSelected += OnImageRoiSelected;
 
             // 配方執行引擎：以既有 adapters 注入（邊緣 + 圓/線擬合 + 公差 + 座標映射）。
-            _recipeRunner = new RecipeRunner(_edgeDetector, _circleFitter, _lineFitter, _distanceMeasurer, _angleMeasurer, _judger, _coordinateMapper, _metrologyRunner, _holeDetector, _pinDetector);
+            _recipeRunner = new RecipeRunner(_edgeDetector, _circleFitter, _lineFitter, _distanceMeasurer, _angleMeasurer, _judger, _coordinateMapper, _metrologyRunner, _holeDetector, _pinDetector, _holeArrayDetector);
             _workflow = new MeasurementWorkflow(_iqc, _templateMatcher, _recipeRunner, _judger, _reportWriter);
             // 一鍵量測逐階段進度：StateChanged 在 UI 執行緒同步觸發，於 status bar 即時顯示。
             _workflow.StateChanged += OnWorkflowStateChanged;
@@ -1623,6 +1626,38 @@ namespace FlashMeasurementSystem
                         if (r.Roi != null)
                             an.DrawText(r.ValueText ?? string.Empty,
                                 (int)r.Roi.Row - 24, (int)r.Roi.Col, pinColor);
+                    }
+                    else if (r.ToolType == "hole_array" && r.HoleArray != null)
+                    {
+                        // 孔陣列：rect2 ROI 橘框 + 橘名稱已由上方通用 r.Roi 分支畫（同 pin_pitch 慣例）。
+                        // 此處補畫每孔「量測到的孔徑圓」（半徑 = DiameterPx/2）與孔心十字，讓孔徑大小
+                        // 直接可視化（此工具重點），再加判定/數值文字。Holes 為影像座標。
+                        // 孔數少（網格）故原則上全畫，仍守 MaxOverlayCrosses 上限做防呆抽樣。
+                        string holeColor = r.IsOk == true ? "green" : (r.IsOk == false ? "red" : "yellow");
+                        var holes = r.HoleArray.Holes;
+                        if (holes != null && holes.Count > 0)
+                        {
+                            int hStep = holes.Count <= MaxOverlayCrosses
+                                ? 1 : (int)Math.Ceiling((double)holes.Count / MaxOverlayCrosses);
+                            for (int hi = 0; hi < holes.Count; hi += hStep)
+                            {
+                                var h = holes[hi];
+                                if (h.DiameterPx > 0)
+                                    an.DrawCircle(h.Row, h.Col, h.DiameterPx / 2.0, holeColor);
+                                an.DrawCross(h.Row, h.Col, 8, holeColor);
+                            }
+                        }
+                        // 缺孔位置畫洋紅大十字（比照 gear 缺齒 / PCD 缺孔的提示慣例）；
+                        // 否則缺孔處只是一片留白，操作員得自己用眼睛找是哪一格少了。
+                        if (r.HoleArray.MissingNodes != null)
+                        {
+                            foreach (var m in r.HoleArray.MissingNodes)
+                                an.DrawCross(m.Row, m.Col, 18, "magenta");
+                        }
+                        // 判定/數值文字錨在 ROI 中心上方一段（避開橘名稱標籤與孔本體），依判定上色。
+                        if (r.Roi != null)
+                            an.DrawText(r.ValueText ?? string.Empty,
+                                (int)r.Roi.Row - 24, (int)r.Roi.Col, holeColor);
                     }
 
                     // 結果表值欄由 DrawResultTable 統一裁到欄寬（過長截斷加「…」），任何工具皆不溢到判定欄。

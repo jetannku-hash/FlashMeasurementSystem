@@ -20,7 +20,7 @@ namespace FlashMeasurementSystem.Domain.Roi
         // 已知型別；未列入者執行時會被略過，故視為 Warning。
         private static readonly HashSet<string> KnownTypes = new HashSet<string>
         {
-            "circle", "line", "edge", "arc", "gear", "pcd", "pin_pitch",
+            "circle", "line", "edge", "arc", "gear", "pcd", "pin_pitch", "hole_array",
             "intersection", "midline", "projection",
             "roundness", "straightness", "parallelism", "perpendicularity", "concentricity",
             "distance", "angle"
@@ -158,6 +158,19 @@ namespace FlashMeasurementSystem.Domain.Roi
                         issues.Add(new RecipeIssue(RecipeIssueSeverity.Error, tool.Id, tool.Name, "引腳間距參數無效（標稱間距需 > 0、公差需 ≥ 0）"));
                     if (tool.Roi == null)
                         issues.Add(new RecipeIssue(RecipeIssueSeverity.Error, tool.Id, tool.Name, "引腳間距工具缺少量測 ROI（rect2）"));
+                }
+
+                if (tool.ToolType == "hole_array")
+                {
+                    if (tool.HoleArray == null)
+                        issues.Add(new RecipeIssue(RecipeIssueSeverity.Error, tool.Id, tool.Name, "孔陣列工具缺少孔陣列參數（HoleArray）"));
+                    else if (tool.HoleArray.Rows < 1 || tool.HoleArray.Cols < 1
+                             || tool.HoleArray.NominalDiameterMm <= 0
+                             || tool.HoleArray.DiameterToleranceMm < 0 || tool.HoleArray.PitchToleranceMm < 0
+                             || tool.HoleArray.PositionToleranceMm < 0)
+                        issues.Add(new RecipeIssue(RecipeIssueSeverity.Error, tool.Id, tool.Name, "孔陣列參數無效（列數/行數需 ≥ 1、標稱孔徑需 > 0、公差需 ≥ 0）"));
+                    if (tool.Roi == null)
+                        issues.Add(new RecipeIssue(RecipeIssueSeverity.Error, tool.Id, tool.Name, "孔陣列工具缺少量測 ROI（rect2）"));
                 }
 
                 // 公差反向：只檢查真正消費雙邊 Tolerance 的型別。GD&T（用 Gdt）、gear（三判定）、

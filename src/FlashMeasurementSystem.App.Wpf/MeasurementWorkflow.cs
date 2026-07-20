@@ -429,6 +429,113 @@ namespace FlashMeasurementSystem
                         });
                     }
                 }
+                else if (tool != null && tool.HoleArray != null)
+                {
+                    // 孔陣列為六判定（孔數/平均孔徑/X 間距/Y 間距/位置偏差/孔徑最大偏差），不走單值雙邊判定器（會用 MeasuredValue=0 誤判）。
+                    // 比照 pin_pitch：hole_array 工具的「所有」報表列都由本分支發出，成功發六列、失敗發一列，
+                    // 兩種情況都不落入下方雙邊 Tolerance 分支（Tolerance 為預設 [0,0]，0∈[0,0] 會被誤判為 OK＝假 PASS）。
+                    string haBaseName = tool.Name ?? r.Name;
+                    if (r.HoleArray != null && r.HoleArray.Success)
+                    {
+                        var g = r.HoleArray;
+                        int nominalCount = tool.HoleArray.Rows * tool.HoleArray.Cols;
+                        judgments.Add(new ItemJudgment
+                        {
+                            ToolId = tool.Id ?? "",
+                            ToolName = haBaseName + "-孔數",
+                            MeasuredValue = g.HoleCount,
+                            Nominal = nominalCount,
+                            LowerLimit = nominalCount,
+                            UpperLimit = nominalCount,
+                            Unit = "count",
+                            Deviation = g.HoleCount - nominalCount,
+                            IsOk = g.CountOk,
+                            Message = "孔數"
+                        });
+                        judgments.Add(new ItemJudgment
+                        {
+                            ToolId = tool.Id ?? "",
+                            ToolName = haBaseName + "-平均孔徑",
+                            MeasuredValue = g.MeanDiameterMm,
+                            Nominal = tool.HoleArray.NominalDiameterMm,
+                            LowerLimit = tool.HoleArray.NominalDiameterMm - tool.HoleArray.DiameterToleranceMm,
+                            UpperLimit = tool.HoleArray.NominalDiameterMm + tool.HoleArray.DiameterToleranceMm,
+                            Unit = "mm",
+                            Deviation = g.MeanDiameterMm - tool.HoleArray.NominalDiameterMm,
+                            IsOk = g.DiameterOk,
+                            Message = "平均孔徑"
+                        });
+                        // X/Y 間距：Cols ≤ 1 / Rows ≤ 1 代表不判定（分析器已令 PitchXOk / PitchYOk = true）；
+                        // 仍發一列，直接採用分析器的旗標（比照引腳數 NominalPinCount ≤ 0 的處理）。
+                        judgments.Add(new ItemJudgment
+                        {
+                            ToolId = tool.Id ?? "",
+                            ToolName = haBaseName + "-X間距",
+                            MeasuredValue = g.PitchXMm,
+                            Nominal = tool.HoleArray.NominalPitchXMm,
+                            LowerLimit = tool.HoleArray.NominalPitchXMm - tool.HoleArray.PitchToleranceMm,
+                            UpperLimit = tool.HoleArray.NominalPitchXMm + tool.HoleArray.PitchToleranceMm,
+                            Unit = "mm",
+                            Deviation = g.PitchXMm - tool.HoleArray.NominalPitchXMm,
+                            IsOk = g.PitchXOk,
+                            // 單行(Cols≤1)無 X 間距可量，分析器令 PitchXOk=true。明講「未判定」，
+                            // 否則報表上的 0.000mm/OK 會被誤讀成真的量到 0。
+                            Message = tool.HoleArray.Cols <= 1 ? "X 方向孔距（單行，未判定）" : "X 方向孔距"
+                        });
+                        judgments.Add(new ItemJudgment
+                        {
+                            ToolId = tool.Id ?? "",
+                            ToolName = haBaseName + "-Y間距",
+                            MeasuredValue = g.PitchYMm,
+                            Nominal = tool.HoleArray.NominalPitchYMm,
+                            LowerLimit = tool.HoleArray.NominalPitchYMm - tool.HoleArray.PitchToleranceMm,
+                            UpperLimit = tool.HoleArray.NominalPitchYMm + tool.HoleArray.PitchToleranceMm,
+                            Unit = "mm",
+                            Deviation = g.PitchYMm - tool.HoleArray.NominalPitchYMm,
+                            IsOk = g.PitchYOk,
+                            Message = tool.HoleArray.Rows <= 1 ? "Y 方向孔距（單列，未判定）" : "Y 方向孔距"
+                        });
+                        judgments.Add(new ItemJudgment
+                        {
+                            ToolId = tool.Id ?? "",
+                            ToolName = haBaseName + "-位置偏差",
+                            MeasuredValue = g.MaxPositionDevMm,
+                            Nominal = 0,
+                            LowerLimit = 0,
+                            UpperLimit = tool.HoleArray.PositionToleranceMm,
+                            Unit = "mm",
+                            Deviation = g.MaxPositionDevMm,
+                            IsOk = g.PositionOk,
+                            Message = "位置最大偏差"
+                        });
+                        // 平均孔徑會把單顆嚴重超規的孔平均掉，故另發一列逐孔最大偏差（對標稱孔徑）。
+                        judgments.Add(new ItemJudgment
+                        {
+                            ToolId = tool.Id ?? "",
+                            ToolName = haBaseName + "-孔徑最大偏差",
+                            MeasuredValue = g.DiameterMaxDevMm,
+                            Nominal = 0,
+                            LowerLimit = 0,
+                            UpperLimit = tool.HoleArray.DiameterToleranceMm,
+                            Unit = "mm",
+                            Deviation = g.DiameterMaxDevMm,
+                            IsOk = g.DiameterMaxDevOk,
+                            Message = "孔徑最大偏差"
+                        });
+                    }
+                    else
+                    {
+                        // 量測失敗：發一列失敗訊息（比照 pin_pitch 分支的失敗 else 列），不做雙邊重判。
+                        judgments.Add(new ItemJudgment
+                        {
+                            ToolId = tool.Id ?? "",
+                            ToolName = haBaseName + " 孔陣列",
+                            MeasuredValue = 0,
+                            IsOk = r.IsOk ?? false,
+                            Message = string.IsNullOrEmpty(r.ValueText) ? (r.HoleArray != null ? r.HoleArray.ErrorMessage : (r.Message ?? "")) : r.ValueText
+                        });
+                    }
+                }
                 else if (tool != null && tool.Tolerance != null)
                 {
                     double measuredValue = GetMeasuredValue(r, tool);
