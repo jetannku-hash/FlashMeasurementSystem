@@ -82,6 +82,7 @@
     <Compile Include="PcdRecipeToolDomainTests.cs" />
     <Compile Include="PinPitchAnalysisDomainTests.cs" />
     <Compile Include="PinPitchRecipeToolDomainTests.cs" />
+    <Compile Include="HoleArrayAnalysisDomainTests.cs" />
     <Compile Include="MetrologyJudgerTests.cs" />
   </ItemGroup>
   <ItemGroup>
