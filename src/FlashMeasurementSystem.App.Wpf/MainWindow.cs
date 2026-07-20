@@ -1627,6 +1627,31 @@ namespace FlashMeasurementSystem
                             an.DrawText(r.ValueText ?? string.Empty,
                                 (int)r.Roi.Row - 24, (int)r.Roi.Col, pinColor);
                     }
+                    else if (r.ToolType == "hole_array" && r.HoleArray != null)
+                    {
+                        // 孔陣列：rect2 ROI 橘框 + 橘名稱已由上方通用 r.Roi 分支畫（同 pin_pitch 慣例）。
+                        // 此處補畫每孔「量測到的孔徑圓」（半徑 = DiameterPx/2）與孔心十字，讓孔徑大小
+                        // 直接可視化（此工具重點），再加判定/數值文字。Holes 為影像座標。
+                        // 孔數少（網格）故原則上全畫，仍守 MaxOverlayCrosses 上限做防呆抽樣。
+                        string holeColor = r.IsOk == true ? "green" : (r.IsOk == false ? "red" : "yellow");
+                        var holes = r.HoleArray.Holes;
+                        if (holes != null && holes.Count > 0)
+                        {
+                            int hStep = holes.Count <= MaxOverlayCrosses
+                                ? 1 : (int)Math.Ceiling((double)holes.Count / MaxOverlayCrosses);
+                            for (int hi = 0; hi < holes.Count; hi += hStep)
+                            {
+                                var h = holes[hi];
+                                if (h.DiameterPx > 0)
+                                    an.DrawCircle(h.Row, h.Col, h.DiameterPx / 2.0, holeColor);
+                                an.DrawCross(h.Row, h.Col, 8, holeColor);
+                            }
+                        }
+                        // 判定/數值文字錨在 ROI 中心上方一段（避開橘名稱標籤與孔本體），依判定上色。
+                        if (r.Roi != null)
+                            an.DrawText(r.ValueText ?? string.Empty,
+                                (int)r.Roi.Row - 24, (int)r.Roi.Col, holeColor);
+                    }
 
                     // 結果表值欄由 DrawResultTable 統一裁到欄寬（過長截斷加「…」），任何工具皆不溢到判定欄。
                     rows.Add(new OverlayResultRow { Name = r.Name, ValueText = r.ValueText, IsOk = r.IsOk });

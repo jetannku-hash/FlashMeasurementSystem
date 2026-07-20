@@ -72,6 +72,7 @@
     <Compile Include="PinDetectorHalconTests.cs" />
     <Compile Include="SyntheticMetrologyImageGenerator.cs" />
     <Compile Include="SyntheticPinRowImageGenerator.cs" />
+    <Compile Include="SyntheticHoleGridImageGenerator.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\FlashMeasurementSystem.Domain\FlashMeasurementSystem.Domain.csproj">

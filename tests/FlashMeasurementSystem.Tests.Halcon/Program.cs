@@ -23,6 +23,7 @@ namespace FlashMeasurementSystem.Tests.Halcon
                 HoleArrayDetectorHalconTests.Run,
                 SyntheticMetrologyImageGenerator.Run,
                 SyntheticPinRowImageGenerator.Run,
+                SyntheticHoleGridImageGenerator.Run,
             };
 
             int passed = 0, failed = 0;
