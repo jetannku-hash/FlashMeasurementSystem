@@ -75,10 +75,6 @@
             this.edgeButtonPanel = new System.Windows.Forms.TableLayoutPanel();
             this._runEdgeDetectionButton = new System.Windows.Forms.Button();
             this._clearEdgeDetectionButton = new System.Windows.Forms.Button();
-            this.fitLineButton = new System.Windows.Forms.Button();
-            this.fitCircleButton = new System.Windows.Forms.Button();
-            this.fitEllipseButton = new System.Windows.Forms.Button();
-            this.fitRectangleButton = new System.Windows.Forms.Button();
             this.arcMeasurePanel = new System.Windows.Forms.TableLayoutPanel();
             this.arcMeasureHeader = new System.Windows.Forms.Label();
             this.arcCenterRowLabel = new System.Windows.Forms.Label();
@@ -97,7 +93,6 @@
             this._arcEditCheck = new System.Windows.Forms.CheckBox();
             this._sectorDrawCheck = new System.Windows.Forms.CheckBox();
             this._edgeStatusLabel = new System.Windows.Forms.Label();
-            this.fittingResultLabel = new System.Windows.Forms.Label();
             this._edgeResultsGrid = new System.Windows.Forms.DataGridView();
             this.edgeIndexColumn = new System.Windows.Forms.DataGridViewTextBoxColumn();
             this.edgeRowColumn = new System.Windows.Forms.DataGridViewTextBoxColumn();
@@ -107,26 +102,10 @@
             this.measurementTabPage = new System.Windows.Forms.TabPage();
             this.measurementBox = new System.Windows.Forms.GroupBox();
             this.measurementTableLayout = new System.Windows.Forms.TableLayoutPanel();
-            this.measurementTypeLabel = new System.Windows.Forms.Label();
-            this.measurementTypeCombo = new System.Windows.Forms.ComboBox();
             this.measurementPixelXLabel = new System.Windows.Forms.Label();
             this.measurementPixelSizeXNumeric = new System.Windows.Forms.NumericUpDown();
             this.measurementPixelYLabel = new System.Windows.Forms.Label();
             this.measurementPixelSizeYNumeric = new System.Windows.Forms.NumericUpDown();
-            this.measurementContourModeLabel = new System.Windows.Forms.Label();
-            this.contourModeCombo = new System.Windows.Forms.ComboBox();
-            this.measurementCoordInputLabel = new System.Windows.Forms.Label();
-            this.measurementCoordInput = new System.Windows.Forms.TextBox();
-            this.appendButtonPanel = new System.Windows.Forms.TableLayoutPanel();
-            this.appendLineButton = new System.Windows.Forms.Button();
-            this.appendCircleButton = new System.Windows.Forms.Button();
-            this.appendContourButton = new System.Windows.Forms.Button();
-            this.appendEllipseButton = new System.Windows.Forms.Button();
-            this.appendRectButton = new System.Windows.Forms.Button();
-            this.measureDistanceButton = new System.Windows.Forms.Button();
-            this.angleModeLabel = new System.Windows.Forms.Label();
-            this.angleModeCombo = new System.Windows.Forms.ComboBox();
-            this.measureAngleButton = new System.Windows.Forms.Button();
             this.measureResultLabel = new System.Windows.Forms.Label();
             this.imageHostPanel = new System.Windows.Forms.Panel();
             this.resultBannerPanel = new System.Windows.Forms.Panel();
@@ -172,7 +151,6 @@
             this.measurementTableLayout.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.measurementPixelSizeXNumeric)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.measurementPixelSizeYNumeric)).BeginInit();
-            this.appendButtonPanel.SuspendLayout();
             this.statusStrip.SuspendLayout();
             this.SuspendLayout();
             // 
@@ -638,12 +616,11 @@
             this.edgeTableLayout.Controls.Add(this.arcMeasurePanel, 0, 12);
             this.edgeTableLayout.Controls.Add(this.edgeButtonPanel, 0, 13);
             this.edgeTableLayout.Controls.Add(this._edgeStatusLabel, 0, 14);
-            this.edgeTableLayout.Controls.Add(this.fittingResultLabel, 0, 15);
-            this.edgeTableLayout.Controls.Add(this._edgeResultsGrid, 0, 16);
+            this.edgeTableLayout.Controls.Add(this._edgeResultsGrid, 0, 15);
             this.edgeTableLayout.Dock = System.Windows.Forms.DockStyle.Fill;
             this.edgeTableLayout.Location = new System.Drawing.Point(8, 33);
             this.edgeTableLayout.Name = "edgeTableLayout";
-            this.edgeTableLayout.RowCount = 17;
+            this.edgeTableLayout.RowCount = 16;
             // Algorithm 列：兩個 AutoSize RadioButton 疊放（第二顆 y=25），Segoe UI 下高度較
             // Microsoft Sans Serif 多幾 px，44 會把下面的 EdgesSubPix 切掉，故放寬到 48。
             this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 48F));
@@ -663,9 +640,9 @@
             // （同列的 NumericUpDown 因為 chrome 較薄，17px 仍看得到字，所以只有按鈕出問題）。
             // 174 → 每列 29px → 按鈕 23px，足夠容納 Segoe UI 8.25 的文字與按鈕外框。
             this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 174F));
-            this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 84F));
+            // Detect / Clear 按鈕列：Dock=Fill 扣掉上下 Margin 後需 ~28px 才容得下文字與按鈕外框。
+            this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 36F));
             this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 22F));
-            this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 48F));
             this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 100F));
             this.edgeTableLayout.Size = new System.Drawing.Size(231, 561);
             this.edgeTableLayout.TabIndex = 0;
@@ -1201,17 +1178,12 @@
             this.edgeButtonPanel.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 50F));
             this.edgeButtonPanel.Controls.Add(this._runEdgeDetectionButton, 0, 0);
             this.edgeButtonPanel.Controls.Add(this._clearEdgeDetectionButton, 1, 0);
-            this.edgeButtonPanel.Controls.Add(this.fitLineButton, 0, 1);
-            this.edgeButtonPanel.Controls.Add(this.fitCircleButton, 1, 1);
-            this.edgeButtonPanel.Controls.Add(this.fitEllipseButton, 0, 2);
-            this.edgeButtonPanel.Controls.Add(this.fitRectangleButton, 1, 2);
             this.edgeButtonPanel.Dock = System.Windows.Forms.DockStyle.Fill;
             this.edgeButtonPanel.Location = new System.Drawing.Point(3, 333);
             this.edgeButtonPanel.Name = "edgeButtonPanel";
-            this.edgeButtonPanel.RowCount = 3;
-            this.edgeButtonPanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 33.34F));
-            this.edgeButtonPanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 33.33F));
-            this.edgeButtonPanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 33.33F));
+            // 刪除 Fit×4 後只剩 Detect / Clear 一列。
+            this.edgeButtonPanel.RowCount = 1;
+            this.edgeButtonPanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 100F));
             this.edgeButtonPanel.Size = new System.Drawing.Size(225, 84);
             this.edgeButtonPanel.TabIndex = 23;
             // 
@@ -1236,50 +1208,6 @@
             this._clearEdgeDetectionButton.Text = "C&lear";
             this._clearEdgeDetectionButton.UseVisualStyleBackColor = true;
             this._clearEdgeDetectionButton.Click += new System.EventHandler(this.ClearEdgeDetectionButton_Click);
-            // 
-            // fitLineButton
-            // 
-            this.fitLineButton.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.fitLineButton.Location = new System.Drawing.Point(3, 29);
-            this.fitLineButton.Name = "fitLineButton";
-            this.fitLineButton.Size = new System.Drawing.Size(106, 20);
-            this.fitLineButton.TabIndex = 2;
-            this.fitLineButton.Text = "Fit &Line";
-            this.fitLineButton.UseVisualStyleBackColor = true;
-            this.fitLineButton.Click += new System.EventHandler(this.FitLineButton_Click);
-            // 
-            // fitCircleButton
-            // 
-            this.fitCircleButton.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.fitCircleButton.Location = new System.Drawing.Point(115, 29);
-            this.fitCircleButton.Name = "fitCircleButton";
-            this.fitCircleButton.Size = new System.Drawing.Size(107, 20);
-            this.fitCircleButton.TabIndex = 3;
-            this.fitCircleButton.Text = "Fit &Circle";
-            this.fitCircleButton.UseVisualStyleBackColor = true;
-            this.fitCircleButton.Click += new System.EventHandler(this.FitCircleButton_Click);
-            //
-            // fitEllipseButton
-            //
-            this.fitEllipseButton.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.fitEllipseButton.Location = new System.Drawing.Point(3, 55);
-            this.fitEllipseButton.Name = "fitEllipseButton";
-            this.fitEllipseButton.Size = new System.Drawing.Size(219, 20);
-            this.fitEllipseButton.TabIndex = 4;
-            this.fitEllipseButton.Text = "Fit &Ellipse";
-            this.fitEllipseButton.UseVisualStyleBackColor = true;
-            this.fitEllipseButton.Click += new System.EventHandler(this.FitEllipseButton_Click);
-            //
-            // fitRectangleButton
-            //
-            this.fitRectangleButton.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.fitRectangleButton.Location = new System.Drawing.Point(3, 81);
-            this.fitRectangleButton.Name = "fitRectangleButton";
-            this.fitRectangleButton.Size = new System.Drawing.Size(219, 20);
-            this.fitRectangleButton.TabIndex = 5;
-            this.fitRectangleButton.Text = "Fit Rect&angle";
-            this.fitRectangleButton.UseVisualStyleBackColor = true;
-            this.fitRectangleButton.Click += new System.EventHandler(this.FitRectangleButton_Click);
             //
             // _edgeStatusLabel
             //
@@ -1291,17 +1219,6 @@
             this._edgeStatusLabel.TabIndex = 24;
             this._edgeStatusLabel.Text = "Draw ROI, then Detect";
             this._edgeStatusLabel.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
-            // 
-            // fittingResultLabel
-            // 
-            this.edgeTableLayout.SetColumnSpan(this.fittingResultLabel, 3);
-            this.fittingResultLabel.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.fittingResultLabel.Location = new System.Drawing.Point(3, 410);
-            this.fittingResultLabel.Name = "fittingResultLabel";
-            this.fittingResultLabel.Size = new System.Drawing.Size(225, 48);
-            this.fittingResultLabel.TabIndex = 25;
-            this.fittingResultLabel.Text = "擬合結果: 尚未執行";
-            this.fittingResultLabel.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
             //
             // _edgeResultsGrid
             //
@@ -1375,73 +1292,30 @@
             this.measurementBox.Size = new System.Drawing.Size(247, 602);
             this.measurementBox.TabIndex = 0;
             this.measurementBox.TabStop = false;
-            this.measurementBox.Text = "Distance Measurement";
+            this.measurementBox.Text = "量測設定與結果";
             // 
             // measurementTableLayout
             // 
             this.measurementTableLayout.ColumnCount = 2;
             this.measurementTableLayout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 42F));
             this.measurementTableLayout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 58F));
-            this.measurementTableLayout.Controls.Add(this.measurementTypeLabel, 0, 0);
-            this.measurementTableLayout.Controls.Add(this.measurementTypeCombo, 1, 0);
-            this.measurementTableLayout.Controls.Add(this.measurementPixelXLabel, 0, 1);
-            this.measurementTableLayout.Controls.Add(this.measurementPixelSizeXNumeric, 1, 1);
-            this.measurementTableLayout.Controls.Add(this.measurementPixelYLabel, 0, 2);
-            this.measurementTableLayout.Controls.Add(this.measurementPixelSizeYNumeric, 1, 2);
-            this.measurementTableLayout.Controls.Add(this.measurementContourModeLabel, 0, 3);
-            this.measurementTableLayout.Controls.Add(this.contourModeCombo, 1, 3);
-            this.measurementTableLayout.Controls.Add(this.measurementCoordInputLabel, 0, 4);
-            this.measurementTableLayout.Controls.Add(this.measurementCoordInput, 0, 5);
-            this.measurementTableLayout.Controls.Add(this.appendButtonPanel, 0, 6);
-            this.measurementTableLayout.Controls.Add(this.measureDistanceButton, 0, 7);
-            this.measurementTableLayout.Controls.Add(this.angleModeLabel, 0, 8);
-            this.measurementTableLayout.Controls.Add(this.angleModeCombo, 1, 8);
-            this.measurementTableLayout.Controls.Add(this.measureAngleButton, 0, 9);
-            this.measurementTableLayout.Controls.Add(this.measureResultLabel, 0, 10);
+            this.measurementTableLayout.Controls.Add(this.measurementPixelXLabel, 0, 0);
+            this.measurementTableLayout.Controls.Add(this.measurementPixelSizeXNumeric, 1, 0);
+            this.measurementTableLayout.Controls.Add(this.measurementPixelYLabel, 0, 1);
+            this.measurementTableLayout.Controls.Add(this.measurementPixelSizeYNumeric, 1, 1);
+            this.measurementTableLayout.Controls.Add(this.measureResultLabel, 0, 2);
             this.measurementTableLayout.Dock = System.Windows.Forms.DockStyle.Fill;
             this.measurementTableLayout.Location = new System.Drawing.Point(8, 33);
             this.measurementTableLayout.Name = "measurementTableLayout";
-            this.measurementTableLayout.RowCount = 11;
+            // 刪除 Distance/Angle 獨立量測後只剩三列：pixel size X / Y 與結果訊息。
+            // pixel size 不屬於「距離量測」功能，它是所有量測在配方未指定校正檔時的
+            // 後備來源（ResolvePixelSize），故隨群組保留。
+            this.measurementTableLayout.RowCount = 3;
             this.measurementTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 26F));
             this.measurementTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 26F));
-            this.measurementTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 26F));
-            this.measurementTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 26F));
-            this.measurementTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 26F));
-            this.measurementTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 130F));
-            this.measurementTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 56F));
-            this.measurementTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 36F));
-            this.measurementTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 26F));
-            this.measurementTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 36F));
             this.measurementTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 100F));
             this.measurementTableLayout.Size = new System.Drawing.Size(231, 561);
             this.measurementTableLayout.TabIndex = 0;
-            // 
-            // measurementTypeLabel
-            // 
-            this.measurementTypeLabel.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.measurementTypeLabel.Location = new System.Drawing.Point(3, 0);
-            this.measurementTypeLabel.Name = "measurementTypeLabel";
-            this.measurementTypeLabel.Size = new System.Drawing.Size(91, 26);
-            this.measurementTypeLabel.TabIndex = 0;
-            this.measurementTypeLabel.Text = "Type:";
-            this.measurementTypeLabel.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
-            // 
-            // measurementTypeCombo
-            // 
-            this.measurementTypeCombo.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.measurementTypeCombo.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
-            this.measurementTypeCombo.FormattingEnabled = true;
-            this.measurementTypeCombo.Items.AddRange(new object[] {
-            "PointToPoint",
-            "PointToLine",
-            "LineToLine",
-            "CircleToCircle",
-            "ContourMaxMin"});
-            this.measurementTypeCombo.Location = new System.Drawing.Point(100, 3);
-            this.measurementTypeCombo.Name = "measurementTypeCombo";
-            this.measurementTypeCombo.Size = new System.Drawing.Size(128, 20);
-            this.measurementTypeCombo.TabIndex = 1;
-            this.measurementTypeCombo.SelectedIndexChanged += new System.EventHandler(this.MeasurementTypeCombo_SelectedIndexChanged);
             // 
             // measurementPixelXLabel
             // 
@@ -1510,183 +1384,6 @@
             0,
             0,
             0});
-            // 
-            // measurementContourModeLabel
-            // 
-            this.measurementContourModeLabel.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.measurementContourModeLabel.Location = new System.Drawing.Point(3, 78);
-            this.measurementContourModeLabel.Name = "measurementContourModeLabel";
-            this.measurementContourModeLabel.Size = new System.Drawing.Size(91, 26);
-            this.measurementContourModeLabel.TabIndex = 6;
-            this.measurementContourModeLabel.Text = "Contour Mode:";
-            this.measurementContourModeLabel.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
-            // 
-            // contourModeCombo
-            // 
-            this.contourModeCombo.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.contourModeCombo.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
-            this.contourModeCombo.Enabled = false;
-            this.contourModeCombo.FormattingEnabled = true;
-            this.contourModeCombo.Items.AddRange(new object[] {
-            "point_to_point",
-            "point_to_segment"});
-            this.contourModeCombo.Location = new System.Drawing.Point(100, 81);
-            this.contourModeCombo.Name = "contourModeCombo";
-            this.contourModeCombo.Size = new System.Drawing.Size(128, 20);
-            this.contourModeCombo.TabIndex = 7;
-            // 
-            // measurementCoordInputLabel
-            // 
-            this.measurementCoordInputLabel.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.measurementCoordInputLabel.Location = new System.Drawing.Point(3, 104);
-            this.measurementCoordInputLabel.Name = "measurementCoordInputLabel";
-            this.measurementCoordInputLabel.Size = new System.Drawing.Size(91, 26);
-            this.measurementCoordInputLabel.TabIndex = 8;
-            this.measurementCoordInputLabel.Text = "Coordinates:";
-            this.measurementCoordInputLabel.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
-            // 
-            // measurementCoordInput
-            // 
-            this.measurementCoordInput.AcceptsReturn = true;
-            this.measurementTableLayout.SetColumnSpan(this.measurementCoordInput, 2);
-            this.measurementCoordInput.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.measurementCoordInput.Font = new System.Drawing.Font("Consolas", 9.5F);
-            this.measurementCoordInput.Location = new System.Drawing.Point(3, 133);
-            this.measurementCoordInput.Multiline = true;
-            this.measurementCoordInput.Name = "measurementCoordInput";
-            this.measurementCoordInput.ScrollBars = System.Windows.Forms.ScrollBars.Vertical;
-            this.measurementCoordInput.Size = new System.Drawing.Size(225, 124);
-            this.measurementCoordInput.TabIndex = 9;
-            this.measurementCoordInput.WordWrap = false;
-            // 
-            // appendButtonPanel
-            // 
-            this.appendButtonPanel.ColumnCount = 3;
-            this.measurementTableLayout.SetColumnSpan(this.appendButtonPanel, 2);
-            this.appendButtonPanel.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 33.34F));
-            this.appendButtonPanel.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 33.33F));
-            this.appendButtonPanel.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 33.33F));
-            this.appendButtonPanel.Controls.Add(this.appendLineButton, 0, 0);
-            this.appendButtonPanel.Controls.Add(this.appendCircleButton, 1, 0);
-            this.appendButtonPanel.Controls.Add(this.appendContourButton, 2, 0);
-            this.appendButtonPanel.Controls.Add(this.appendEllipseButton, 0, 1);
-            this.appendButtonPanel.Controls.Add(this.appendRectButton, 1, 1);
-            this.appendButtonPanel.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.appendButtonPanel.Location = new System.Drawing.Point(0, 260);
-            this.appendButtonPanel.Margin = new System.Windows.Forms.Padding(0);
-            this.appendButtonPanel.Name = "appendButtonPanel";
-            this.appendButtonPanel.RowCount = 2;
-            this.appendButtonPanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 50F));
-            this.appendButtonPanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 50F));
-            this.appendButtonPanel.Size = new System.Drawing.Size(231, 56);
-            this.appendButtonPanel.TabIndex = 12;
-            // 
-            // appendLineButton
-            // 
-            this.appendLineButton.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.appendLineButton.Location = new System.Drawing.Point(0, 2);
-            this.appendLineButton.Margin = new System.Windows.Forms.Padding(0, 2, 2, 2);
-            this.appendLineButton.Name = "appendLineButton";
-            this.appendLineButton.Size = new System.Drawing.Size(75, 24);
-            this.appendLineButton.TabIndex = 0;
-            this.appendLineButton.Text = "+ &Line";
-            this.appendLineButton.UseVisualStyleBackColor = true;
-            this.appendLineButton.Click += new System.EventHandler(this.AppendLineButton_Click);
-            // 
-            // appendCircleButton
-            // 
-            this.appendCircleButton.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.appendCircleButton.Location = new System.Drawing.Point(79, 2);
-            this.appendCircleButton.Margin = new System.Windows.Forms.Padding(2);
-            this.appendCircleButton.Name = "appendCircleButton";
-            this.appendCircleButton.Size = new System.Drawing.Size(72, 24);
-            this.appendCircleButton.TabIndex = 1;
-            this.appendCircleButton.Text = "+ C&ircle";
-            this.appendCircleButton.UseVisualStyleBackColor = true;
-            this.appendCircleButton.Click += new System.EventHandler(this.AppendCircleButton_Click);
-            // 
-            // appendContourButton
-            // 
-            this.appendContourButton.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.appendContourButton.Location = new System.Drawing.Point(155, 2);
-            this.appendContourButton.Margin = new System.Windows.Forms.Padding(2, 2, 0, 2);
-            this.appendContourButton.Name = "appendContourButton";
-            this.appendContourButton.Size = new System.Drawing.Size(76, 24);
-            this.appendContourButton.TabIndex = 2;
-            this.appendContourButton.Text = "+ Con&tour";
-            this.appendContourButton.UseVisualStyleBackColor = true;
-            this.appendContourButton.Click += new System.EventHandler(this.AppendContourButton_Click);
-            //
-            // appendEllipseButton
-            //
-            this.appendEllipseButton.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.appendEllipseButton.Margin = new System.Windows.Forms.Padding(0, 2, 2, 2);
-            this.appendEllipseButton.Name = "appendEllipseButton";
-            this.appendEllipseButton.TabIndex = 3;
-            this.appendEllipseButton.Text = "+ &Ellipse";
-            this.appendEllipseButton.UseVisualStyleBackColor = true;
-            this.appendEllipseButton.Click += new System.EventHandler(this.AppendEllipseButton_Click);
-            //
-            // appendRectButton
-            //
-            this.appendRectButton.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.appendRectButton.Margin = new System.Windows.Forms.Padding(2);
-            this.appendRectButton.Name = "appendRectButton";
-            this.appendRectButton.TabIndex = 4;
-            this.appendRectButton.Text = "+ &Rect";
-            this.appendRectButton.UseVisualStyleBackColor = true;
-            this.appendRectButton.Click += new System.EventHandler(this.AppendRectButton_Click);
-            // 
-            // measureDistanceButton
-            // 
-            this.measurementTableLayout.SetColumnSpan(this.measureDistanceButton, 2);
-            this.measureDistanceButton.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.measureDistanceButton.Location = new System.Drawing.Point(0, 292);
-            this.measureDistanceButton.Margin = new System.Windows.Forms.Padding(0, 4, 0, 4);
-            this.measureDistanceButton.Name = "measureDistanceButton";
-            this.measureDistanceButton.Size = new System.Drawing.Size(231, 28);
-            this.measureDistanceButton.TabIndex = 10;
-            this.measureDistanceButton.Text = "Measure &Distance";
-            this.measureDistanceButton.UseVisualStyleBackColor = true;
-            this.measureDistanceButton.Click += new System.EventHandler(this.MeasureDistanceButton_Click);
-            // 
-            // angleModeLabel
-            // 
-            this.angleModeLabel.AutoSize = true;
-            this.angleModeLabel.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.angleModeLabel.Location = new System.Drawing.Point(3, 324);
-            this.angleModeLabel.Name = "angleModeLabel";
-            this.angleModeLabel.Size = new System.Drawing.Size(91, 26);
-            this.angleModeLabel.TabIndex = 12;
-            this.angleModeLabel.Text = "Angle mode";
-            this.angleModeLabel.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
-            // 
-            // angleModeCombo
-            // 
-            this.angleModeCombo.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.angleModeCombo.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
-            this.angleModeCombo.FormattingEnabled = true;
-            this.angleModeCombo.Items.AddRange(new object[] {
-            "line_to_line",
-            "line_to_horizontal",
-            "line_to_vertical"});
-            this.angleModeCombo.Location = new System.Drawing.Point(100, 327);
-            this.angleModeCombo.Name = "angleModeCombo";
-            this.angleModeCombo.Size = new System.Drawing.Size(128, 20);
-            this.angleModeCombo.TabIndex = 13;
-            // 
-            // measureAngleButton
-            // 
-            this.measurementTableLayout.SetColumnSpan(this.measureAngleButton, 2);
-            this.measureAngleButton.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.measureAngleButton.Location = new System.Drawing.Point(0, 354);
-            this.measureAngleButton.Margin = new System.Windows.Forms.Padding(0, 4, 0, 4);
-            this.measureAngleButton.Name = "measureAngleButton";
-            this.measureAngleButton.Size = new System.Drawing.Size(231, 28);
-            this.measureAngleButton.TabIndex = 14;
-            this.measureAngleButton.Text = "Measure &Angle";
-            this.measureAngleButton.UseVisualStyleBackColor = true;
-            this.measureAngleButton.Click += new System.EventHandler(this.MeasureAngleButton_Click);
             // 
             // measureResultLabel
             // 
@@ -1785,7 +1482,6 @@
             this.measurementTableLayout.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)(this.measurementPixelSizeXNumeric)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.measurementPixelSizeYNumeric)).EndInit();
-            this.appendButtonPanel.ResumeLayout(false);
             this.statusStrip.ResumeLayout(false);
             this.statusStrip.PerformLayout();
             this.ResumeLayout(false);
@@ -1804,32 +1500,16 @@
         private System.Windows.Forms.GroupBox imageQualityBox;
         private System.Windows.Forms.TabPage measurementTabPage;
         private System.Windows.Forms.GroupBox measurementBox;
-        private System.Windows.Forms.ComboBox measurementTypeCombo;
-        private System.Windows.Forms.TextBox measurementCoordInput;
         private System.Windows.Forms.NumericUpDown measurementPixelSizeXNumeric;
         private System.Windows.Forms.NumericUpDown measurementPixelSizeYNumeric;
-        private System.Windows.Forms.TableLayoutPanel appendButtonPanel;
-        private System.Windows.Forms.Button appendLineButton;
-        private System.Windows.Forms.Button appendCircleButton;
-        private System.Windows.Forms.Button appendContourButton;
-        private System.Windows.Forms.Button appendEllipseButton;
-        private System.Windows.Forms.Button appendRectButton;
-        private System.Windows.Forms.Button measureDistanceButton;
         private System.Windows.Forms.Label measureResultLabel;
         private System.Windows.Forms.Panel imageHostPanel;
         private System.Windows.Forms.Panel resultBannerPanel;
         private System.Windows.Forms.Label resultBannerLabel;
         private System.Windows.Forms.Label emptyStateGuideLabel;
-        private System.Windows.Forms.Label angleModeLabel;
-        private System.Windows.Forms.ComboBox angleModeCombo;
-        private System.Windows.Forms.Button measureAngleButton;
-        private System.Windows.Forms.ComboBox contourModeCombo;
         private System.Windows.Forms.TableLayoutPanel measurementTableLayout;
-        private System.Windows.Forms.Label measurementTypeLabel;
         private System.Windows.Forms.Label measurementPixelXLabel;
         private System.Windows.Forms.Label measurementPixelYLabel;
-        private System.Windows.Forms.Label measurementContourModeLabel;
-        private System.Windows.Forms.Label measurementCoordInputLabel;
         private System.Windows.Forms.Button runIqcButton;
         private System.Windows.Forms.GroupBox _edgeDetectionBox;
         private System.Windows.Forms.TableLayoutPanel edgeTableLayout;
@@ -1861,10 +1541,6 @@
         private System.Windows.Forms.TableLayoutPanel edgeButtonPanel;
         private System.Windows.Forms.Button _runEdgeDetectionButton;
         private System.Windows.Forms.Button _clearEdgeDetectionButton;
-        private System.Windows.Forms.Button fitLineButton;
-        private System.Windows.Forms.Button fitCircleButton;
-        private System.Windows.Forms.Button fitEllipseButton;
-        private System.Windows.Forms.Button fitRectangleButton;
         private System.Windows.Forms.TableLayoutPanel arcMeasurePanel;
         private System.Windows.Forms.Label arcMeasureHeader;
         private System.Windows.Forms.Label arcCenterRowLabel;
@@ -1883,7 +1559,6 @@
         private System.Windows.Forms.CheckBox _arcEditCheck;
         private System.Windows.Forms.CheckBox _sectorDrawCheck;
         private System.Windows.Forms.Label _edgeStatusLabel;
-        private System.Windows.Forms.Label fittingResultLabel;
         private System.Windows.Forms.DataGridView _edgeResultsGrid;
         private System.Windows.Forms.DataGridViewTextBoxColumn edgeIndexColumn;
         private System.Windows.Forms.DataGridViewTextBoxColumn edgeRowColumn;
