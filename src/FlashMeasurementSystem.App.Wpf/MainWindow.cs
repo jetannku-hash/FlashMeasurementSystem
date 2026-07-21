@@ -116,8 +116,9 @@ namespace FlashMeasurementSystem
             NormalizeTemplateMatchingLayout();
             SetupToolTips();
 
-            // 操作員／工程師模式切換選單（見 MainWindow.ViewMode.cs）。
+            // 操作員／工程師模式切換選單與操作員面板（見 MainWindow.ViewMode.cs）。
             BuildViewModeMenu();
+            BuildOperatorPanel();
             ApplyViewMode();
 
             _imageHelper = new HWindowControlHelper(hWindowControl);
@@ -488,9 +489,10 @@ namespace FlashMeasurementSystem
             matchResultTextBox.Text = string.Empty;
             iqcResultLabel.Text = "Not tested";
             iqcResultLabel.ForeColor = Color.Black;
-            measureResultLabel.Text = string.Empty;
             // 重置顏色：否則上一次配方 NG(紅)/OK(綠) 會殘留並染色後續無關文字。
-            measureResultLabel.ForeColor = SystemColors.ControlText;
+            // 走 SetMeasurementResult 一併清掉操作員結果面，否則換圖後操作員畫面
+            // 仍留著上一張影像的 OK/NG 文字（正是本方法要防的誤判）。
+            SetMeasurementResult(string.Empty, SystemColors.ControlText);
 
             // 換圖必須清掉匹配姿態，否則 Run Recipe 守門（HasReferencePose && !_hasMatch）
             // 會放行，並用前一張影像的 _lastMatch* 對新影像做 ROI 變換，畫出錯誤的 OK/NG。
@@ -1382,10 +1384,11 @@ namespace FlashMeasurementSystem
             {
                 _loadedRecipe = _recipeStore.Load(_openRecipeDialog.FileName);
                 _loadedRecipePath = _openRecipeDialog.FileName;
-                measureResultLabel.Text = string.Format(CultureInfo.InvariantCulture,
+                SetMeasurementResult(string.Format(CultureInfo.InvariantCulture,
                     "已載入配方 '{0}'（{1} 工具，SchemaVer {2}{3}）",
                     _loadedRecipe.Name, _loadedRecipe.Tools.Count, _loadedRecipe.SchemaVersion,
-                    _loadedRecipe.HasReferencePose ? "，含參考姿態" : "，無參考姿態（需 Set Ref）");
+                    _loadedRecipe.HasReferencePose ? "，含參考姿態" : "，無參考姿態（需 Set Ref）"),
+                    SystemColors.ControlText);
             }
             catch (Exception ex)
             {
@@ -1414,13 +1417,14 @@ namespace FlashMeasurementSystem
                 {
                     _recipeStore.Save(_loadedRecipe, _loadedRecipePath);
                 }
-                measureResultLabel.Text = string.Format(CultureInfo.InvariantCulture,
+                SetMeasurementResult(string.Format(CultureInfo.InvariantCulture,
                     "參考姿態已設定並存檔：Row={0:F2} Col={1:F2} Angle={2:F2}°",
-                    _loadedRecipe.RefRow, _loadedRecipe.RefCol, _lastMatchAngleDeg);
+                    _loadedRecipe.RefRow, _loadedRecipe.RefCol, _lastMatchAngleDeg),
+                    SystemColors.ControlText);
             }
             catch (Exception ex)
             {
-                measureResultLabel.Text = "參考姿態存檔失敗: " + ex.Message;
+                SetMeasurementResult("參考姿態存檔失敗: " + ex.Message, SystemColors.ControlText);
             }
         }
 
@@ -1766,11 +1770,11 @@ namespace FlashMeasurementSystem
                 if (r.IsOk == true) okCount++;
                 else if (r.IsOk == false) ngCount++;
             }
-            measureResultLabel.Text = string.Format(CultureInfo.InvariantCulture,
+            SetMeasurementResult(string.Format(CultureInfo.InvariantCulture,
                 "配方 '{0}'：{1} 工具，OK {2} / NG {3}（pixel size：{4}）",
-                _loadedRecipe != null ? _loadedRecipe.Name : "", results.Count, okCount, ngCount, pixelSizeSource);
-            measureResultLabel.ForeColor = ngCount > 0 ? System.Drawing.Color.DarkRed
-                : (okCount > 0 ? System.Drawing.Color.DarkGreen : System.Drawing.SystemColors.ControlText);
+                _loadedRecipe != null ? _loadedRecipe.Name : "", results.Count, okCount, ngCount, pixelSizeSource),
+                ngCount > 0 ? System.Drawing.Color.DarkRed
+                    : (okCount > 0 ? System.Drawing.Color.DarkGreen : System.Drawing.SystemColors.ControlText));
             SetResultBanner(okCount, ngCount, true);
         }
 
@@ -1858,12 +1862,12 @@ namespace FlashMeasurementSystem
                 string csvInfo = !string.IsNullOrEmpty(wfResult.ReportPath)
                     ? " | CSV: " + wfResult.ReportPath
                     : "";
-                measureResultLabel.Text += string.Format(CultureInfo.InvariantCulture,
+                AppendMeasurementResult(string.Format(CultureInfo.InvariantCulture,
                     " | 一鍵：{0} OK {1}/NG {2}{3}{4}{5}",
                     wfResult.AllOk ? "PASS" : "FAIL", wfResult.OkCount, wfResult.NgCount,
                     csvInfo,
                     pdfInfo,
-                    !wfResult.Success ? " (" + wfResult.Message + ")" : "");
+                    !wfResult.Success ? " (" + wfResult.Message + ")" : ""));
             }
             catch (Exception ex)
             {

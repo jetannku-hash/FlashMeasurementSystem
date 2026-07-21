@@ -1,4 +1,5 @@
 using System;
+using System.Drawing;
 using System.Windows.Forms;
 
 namespace FlashMeasurementSystem
@@ -36,6 +37,13 @@ namespace FlashMeasurementSystem
         // （見 SetBaseWindowTitle 的呼叫端），模式後綴由本檔負責，兩者互不覆寫。
         private string _baseWindowTitle = "Flash Measurement System - Template Matching";
 
+        // 右欄容器：工程分頁（rightPanel）與操作員面板共用 mainTableLayout 的 (1,1) 格。
+        // TableLayoutPanel 單一儲存格不支援兩個控制項（直接放會把第二個擠到別格，
+        // 見 Designer 內 imageHostPanel 的同款註解），故以一個普通 Panel 承載兩者並切換 Visible。
+        private Panel _rightHostPanel;
+        private Panel _operatorPanel;
+        private Label _operatorResultLabel;
+
         /// <summary>
         /// 建立模式切換選單。比照既有 topToolbar 的做法以程式碼建構，不動 Designer.cs
         /// （該檔會被 VS 設計器自動重生，手改易被覆蓋）。
@@ -66,6 +74,76 @@ namespace FlashMeasurementSystem
             _viewModeMenuStrip.BringToFront();
         }
 
+        /// <summary>
+        /// 建立操作員面板，並讓它與工程分頁共用 mainTableLayout 的右欄格子。
+        ///
+        /// Phase 2a 只放結果顯示；操作動作（載入影像／一鍵量測／重新載入配方等）於 Phase 2b 加入，
+        /// 因此此階段的操作員模式**刻意尚不可用**，僅供驗證結果訊息分流是否正確。
+        /// </summary>
+        private void BuildOperatorPanel()
+        {
+            _operatorResultLabel = new Label
+            {
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.TopLeft,
+                Padding = new Padding(4),
+                AutoEllipsis = true,
+                Text = string.Empty
+            };
+
+            _operatorPanel = new Panel
+            {
+                Dock = DockStyle.Fill,
+                Padding = new Padding(4),
+                AutoScroll = true,
+                Visible = false
+            };
+            _operatorPanel.Controls.Add(_operatorResultLabel);
+
+            // 把既有的 rightPanel 從 TableLayoutPanel 取出，改掛到共用容器下。
+            // 只換父層，不動它自身的 Dock/Padding/AutoScroll 設定。
+            mainTableLayout.Controls.Remove(rightPanel);
+
+            _rightHostPanel = new Panel
+            {
+                Dock = DockStyle.Fill,
+                Margin = new Padding(0)
+            };
+            _rightHostPanel.Controls.Add(rightPanel);
+            _rightHostPanel.Controls.Add(_operatorPanel);
+
+            mainTableLayout.Controls.Add(_rightHostPanel, 1, 1);
+        }
+
+        /// <summary>
+        /// 設定「操作員也需要看到」的量測結果訊息。
+        ///
+        /// 刻意同時寫入兩個結果面而非只寫其中一個：`measureResultLabel` 實體位於 Measurement
+        /// 分頁內（工程模式的結果面），若把配方/一鍵的結果只導到操作員面板，工程模式下跑
+        /// Run Recipe 就再也看不到結果。兩個面同一時間只有一個可見，鏡像寫入不會造成混淆。
+        ///
+        /// 純工程用途的訊息（Fit 結果帶入提示、Distance/Angle 量測結果）**不走本方法**，
+        /// 直接寫 measureResultLabel 即可——操作員不需要、也不該看到那些。
+        /// </summary>
+        private void SetMeasurementResult(string text, Color color)
+        {
+            measureResultLabel.Text = text;
+            measureResultLabel.ForeColor = color;
+
+            if (_operatorResultLabel != null)
+            {
+                _operatorResultLabel.Text = text;
+                _operatorResultLabel.ForeColor = color;
+            }
+        }
+
+        /// <summary>附加到目前的量測結果訊息後方（一鍵量測會接在配方結果之後）。</summary>
+        private void AppendMeasurementResult(string text)
+        {
+            measureResultLabel.Text += text;
+            if (_operatorResultLabel != null) _operatorResultLabel.Text += text;
+        }
+
         private void OnEngineeringModeMenuItemCheckedChanged(object sender, EventArgs e)
         {
             SetViewMode(_engineeringModeMenuItem.Checked ? ViewMode.Engineering : ViewMode.Operator);
@@ -90,6 +168,9 @@ namespace FlashMeasurementSystem
 
             if (_engineeringModeMenuItem != null && _engineeringModeMenuItem.Checked != engineering)
                 _engineeringModeMenuItem.Checked = engineering;
+
+            if (rightPanel != null) rightPanel.Visible = engineering;
+            if (_operatorPanel != null) _operatorPanel.Visible = !engineering;
 
             ApplyWindowTitle();
         }
