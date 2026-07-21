@@ -145,11 +145,28 @@ namespace FlashMeasurementSystem.Tests
             AssertHasError(RecipeValidator.Validate(selfRef, W, H), "self reference → error");
 
             // 未知型別 → Warning（非 Error）
+            // 不支援的型別 → Error（原為 Warning）。該工具不會被執行，量測結果因此不完整，
+            // 而未執行的工具在 OK/NG 兩邊都不計 → 整份配方顯示 PASS。一份「有工具沒跑」的配方
+            // 不可能給出可信的合格判定，故直接擋下，不讓操作員在警告框按「是」放行。
             var unknown = new Recipe();
             var u = Circle("x1", 100, 100, 30, 30);
             u.ToolType = "frobnicate";
             unknown.Tools.Add(u);
-            AssertCount(RecipeValidator.Validate(unknown, W, H), 0, 1, "unknown type → warning");
+            AssertCount(RecipeValidator.Validate(unknown, W, H), 1, 0, "unknown type → error");
+
+            // 缺 ToolType 同樣是 Error：MeasurementTool.ToolType 的 C# 預設值是 "edge"，
+            // 而 RecipeRunner 沒有 edge 分支。過去 "edge" 被列在 KnownTypes 中，於是任何
+            // 缺 toolType 欄位的 .zcp 都能通過驗證卻完全不量測，最後顯示 PASS。
+            var missingType = new Recipe();
+            missingType.Tools.Add(Circle("x2", 100, 100, 30, 30));
+            missingType.Tools[0].ToolType = null;
+            AssertHasError(RecipeValidator.Validate(missingType, W, H), "missing tool type → error");
+
+            var defaultType = new Recipe();
+            var d = Circle("x3", 100, 100, 30, 30);
+            d.ToolType = "edge";
+            defaultType.Tools.Add(d);
+            AssertHasError(RecipeValidator.Validate(defaultType, W, H), "phantom 'edge' type → error");
 
             // HasReferencePose 但姿態全 0 → Warning
             // TemplateModelId 一併給值，讓本案例只驗「姿態全 0」這一件事；v16 起

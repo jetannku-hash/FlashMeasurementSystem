@@ -545,7 +545,15 @@ namespace FlashMeasurementSystem
                         });
                     }
                 }
-                else if (tool != null && tool.Tolerance != null)
+                // 只有真的量得出單一純量的型別才走雙邊公差判定（共用 Domain 的定義，避免與
+                // RecipeValidator 的同一份知識漂移）。原本這裡是 catch-all：構造工具
+                // （intersection/midline/projection）沒有可判定的量，GetMeasuredValue 對它們回傳 0，
+                // 而 RecipeEditor 一律給預設公差 [0,0]，於是 0 落在 [0,0] 內 → 每次量測都在
+                // CSV/PDF 產生一列偽造的「OK（偏差 0.0000）」，構造失敗時也照樣寫 OK。
+                // ItemJudgment.IsOk 是 bool 沒有「未判定」狀態，故這類工具改為不產生判定列——
+                // 它們的幾何結果仍在畫面 overlay 與結果表上，只是不進合格與否的報表。
+                else if (tool != null && tool.Tolerance != null
+                         && ToolTypes.IsDoubleSidedTolerance(r.ToolType))
                 {
                     double measuredValue = GetMeasuredValue(r, tool);
                     var input = new ToleranceItemInput

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using FlashMeasurementSystem.Domain.Tolerance;
 
@@ -15,24 +15,20 @@ namespace FlashMeasurementSystem.Domain.Roi
     {
         // 以 ROI 直接量測的元素型別（需檢查 ROI 幾何）。
         private static readonly HashSet<string> RoiElementTypes =
-            new HashSet<string> { "circle", "line", "edge" };
+            new HashSet<string> { "circle", "line" };
 
-        // 已知型別；未列入者執行時會被略過，故視為 Warning。
+        // RecipeRunner 真正能執行的型別。此集合必須與 RecipeRunner 的分支一致——
+        // 曾經多列了一個 "edge"：RecipeRunner 沒有該分支，工具會落到 Supported=false 被靜默略過，
+        // 而 MeasurementTool.ToolType 的 C# 預設值又剛好是 "edge"，於是任何缺 toolType 欄位的
+        // .zcp（手改過或早期 schema）都能通過驗證卻完全不量測，最後顯示 PASS。
         private static readonly HashSet<string> KnownTypes = new HashSet<string>
         {
-            "circle", "line", "edge", "arc", "gear", "pcd", "pin_pitch", "hole_array",
+            "circle", "line", "arc", "gear", "pcd", "pin_pitch", "hole_array",
             "intersection", "midline", "projection",
             "roundness", "straightness", "parallelism", "perpendicularity", "concentricity",
             "distance", "angle"
         };
 
-        // 執行時真正以雙邊 Tolerance [Nominal+Lower, Nominal+Upper] 判定 OK/NG 的型別。
-        // 其餘型別的 Tolerance 欄未被消費（GD&T→Gdt、gear→三判定、construction→不判定），
-        // 故反向公差檢查只套用此集合（audit #10）。
-        private static readonly HashSet<string> DoubleSidedToleranceTypes = new HashSet<string>
-        {
-            "circle", "line", "edge", "distance", "angle", "arc"
-        };
 
         public static List<RecipeIssue> Validate(Recipe recipe, int imageWidth, int imageHeight)
         {
@@ -92,8 +88,14 @@ namespace FlashMeasurementSystem.Domain.Roi
 
                 if (!KnownTypes.Contains(type))
                 {
-                    issues.Add(new RecipeIssue(RecipeIssueSeverity.Warning, tool.Id, tool.Name,
-                        "未支援的工具型別 '" + type + "'，執行時將被略過"));
+                    // Error 而非 Warning：這個工具不會執行，量測結果因此不完整。
+                    // 未執行的工具在 OK/NG 兩邊都不計（見 MeasurementOutcome），整份配方會顯示
+                    // PASS——一份「有工具沒跑」的配方不可能給出可信的合格判定，故直接擋下，
+                    // 不讓操作員在警告對話框按「是」就放行。
+                    issues.Add(new RecipeIssue(RecipeIssueSeverity.Error, tool.Id, tool.Name,
+                        string.IsNullOrEmpty(type)
+                            ? "工具未指定型別，執行時不會被量測"
+                            : "不支援的工具型別 '" + type + "'，執行時不會被量測"));
                     continue;
                 }
 
@@ -176,7 +178,7 @@ namespace FlashMeasurementSystem.Domain.Roi
                 // 公差反向：只檢查真正消費雙邊 Tolerance 的型別。GD&T（用 Gdt）、gear（三判定）、
                 // construction（不判定）的 Tolerance 欄未使用，其反向值不該擋下有效配方（audit #10）。
                 ToleranceSpec tol = tool.Tolerance;
-                if (tol != null && DoubleSidedToleranceTypes.Contains(tool.ToolType)
+                if (tol != null && ToolTypes.IsDoubleSidedTolerance(tool.ToolType)
                     && tol.UpperTolerance < tol.LowerTolerance)
                 {
                     issues.Add(new RecipeIssue(RecipeIssueSeverity.Error, tool.Id, tool.Name,

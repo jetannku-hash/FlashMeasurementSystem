@@ -567,6 +567,30 @@ namespace FlashMeasurementSystem
                         results.Add(res);
                         if (!string.IsNullOrEmpty(o.Id)) byId[o.Id] = res;
                     }
+
+                    // apply_metrology_model 整批拋例外時（例如量測區落到影像外），adapter 只把訊息
+                    // 記進 mResult.ErrorMessage 就返回，Objects 會少於 def 數量甚至完全是空的。
+                    // 少掉的物件若不補結果，就等於從判定中「消失」——OK/NG 都不計，AllOk 仍為 true
+                    // → 顯示 PASS 且報表完全沒有這些量測項目的列。純 2D 配方更極端：一列結果都沒有
+                    // 卻顯示 PASS。故為每個沒拿到結果的 def 補一筆量測失敗，讓它照常被算成 NG。
+                    int produced = mResult.Objects.Count;
+                    int expected = appliedDefs != null ? appliedDefs.Count : 0;
+                    for (int i = produced; i < expected; i++)
+                    {
+                        MetrologyObjectDef def = appliedDefs[i];
+                        var missing = new ToolRunResult
+                        {
+                            Name = def != null && !string.IsNullOrEmpty(def.Name) ? def.Name : ("metrology_" + i),
+                            ToolType = "metrology",
+                            Supported = true,
+                            Measured = false,
+                            IsOk = null,
+                            Message = string.IsNullOrEmpty(mResult.ErrorMessage)
+                                ? "量測模型未產生此物件的結果"
+                                : "量測模型套用失敗：" + mResult.ErrorMessage
+                        };
+                        results.Add(missing);
+                    }
                 }
             }
 
