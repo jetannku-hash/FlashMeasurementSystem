@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Windows.Forms;
 using FlashMeasurementSystem.Domain.EdgeDetection;
 using FlashMeasurementSystem.Domain.Roi;
@@ -26,7 +26,7 @@ namespace FlashMeasurementSystem
             set
             {
                 _isRoiMode = value;
-                if (value) _interactionOwner = ActiveLease;
+                if (value) _interactionOwner = _baseLease;
             }
         }
         private bool _isRoiMode;
@@ -42,7 +42,7 @@ namespace FlashMeasurementSystem
             set
             {
                 _isSectorMode = value;
-                if (value) _interactionOwner = ActiveLease;
+                if (value) _interactionOwner = _baseLease;
                 else _sectorCallback = null;
             }
         }
@@ -57,7 +57,7 @@ namespace FlashMeasurementSystem
             set
             {
                 _isLineMode = value;
-                if (value) _interactionOwner = ActiveLease;
+                if (value) _interactionOwner = _baseLease;
                 else _lineCallback = null;
             }
         }
@@ -273,6 +273,11 @@ namespace FlashMeasurementSystem
             return lease;
         }
 
+        // 僅供「誰在最上層」的查詢（OverlayLease.IsActive）。
+        // helper 層的公開方法一律作用在 _baseLease——那些方法只有 MainWindow 呼叫，
+        // 編輯器一律走 _lease.*。原本它們指向 ActiveLease，於是只要任一編輯器開著，
+        // 主視窗的繪製與武裝就全部記到編輯器那一層：關閉編輯器時主視窗的 overlay 憑空消失、
+        // checkbox 與實際狀態不同步、主視窗的 End*Edit 還會拆掉編輯器正在用的把手。
         private OverlayLease ActiveLease => _leases[_leases.Count - 1];
 
         private Action EffectivePersistent()
@@ -319,26 +324,26 @@ namespace FlashMeasurementSystem
             _interactionOwner = null;
         }
 
-        /// <summary>清除最上層 owner 的 overlay 圖層（相容路徑；不動編輯把手）。</summary>
+        /// <summary>清除主視窗自己那一層的 overlay（不動編輯把手，也不動編輯器的圖層）。</summary>
         public void ClearOverlay()
         {
-            ActiveLease.Persistent = null;
-            ActiveLease.Highlight = null;
+            _baseLease.Persistent = null;
+            _baseLease.Highlight = null;
             Redraw();
         }
 
         /// <summary>設定選取高亮疊加層（畫在量測結果之上、不覆寫它）。傳 null 等同清除。</summary>
         public void SetSelectionHighlight(Action action)
         {
-            ActiveLease.Highlight = action;
+            _baseLease.Highlight = action;
             Redraw();
         }
 
         /// <summary>清除選取高亮疊加層（不影響 persistent overlay）。</summary>
         public void ClearSelectionHighlight()
         {
-            if (ActiveLease.Highlight == null) return;
-            ActiveLease.Highlight = null;
+            if (_baseLease.Highlight == null) return;
+            _baseLease.Highlight = null;
             Redraw();
         }
 
@@ -380,7 +385,7 @@ namespace FlashMeasurementSystem
         /// 不觸發現有的 RoiSelected 事件。先解除其他互動模式，確保模式互斥。
         /// </summary>
         public void RequestRoi(Action<double, double, double, double> callback)
-            => RequestRoiCore(ActiveLease, callback);
+            => RequestRoiCore(_baseLease, callback);
 
         private void RequestRoiCore(OverlayLease owner, Action<double, double, double, double> callback)
         {
@@ -402,7 +407,7 @@ namespace FlashMeasurementSystem
         /// 先解除其他互動模式（矩形繪製/rect2/弧形編輯），確保模式互斥。
         /// </summary>
         public void RequestSector(Action<ArcMeasureRoi> callback)
-            => RequestSectorCore(ActiveLease, callback);
+            => RequestSectorCore(_baseLease, callback);
 
         private void RequestSectorCore(OverlayLease owner, Action<ArcMeasureRoi> callback)
         {
@@ -422,7 +427,7 @@ namespace FlashMeasurementSystem
         /// 先解除其他互動模式（矩形/扇形繪製/rect2/弧形編輯），確保模式互斥。
         /// </summary>
         public void RequestLine(Action<double, double, double, double> callback)
-            => RequestLineCore(ActiveLease, callback);
+            => RequestLineCore(_baseLease, callback);
 
         private void RequestLineCore(OverlayLease owner, Action<double, double, double, double> callback)
         {
@@ -457,7 +462,7 @@ namespace FlashMeasurementSystem
         /// </summary>
         public void SetPersistentOverlayAction(Action action)
         {
-            ActiveLease.Persistent = action;
+            _baseLease.Persistent = action;
             Redraw();
         }
 
@@ -517,7 +522,7 @@ namespace FlashMeasurementSystem
         /// <summary>開始/取代可編輯 rect2，進入編輯模式並重繪。onChanged 為本次編輯的回呼擁有者。</summary>
         public void BeginRect2Edit(double cr, double cc, double phi, double l1, double l2,
             Action<double, double, double, double, double> onChanged)
-            => BeginRect2EditCore(ActiveLease, cr, cc, phi, l1, l2, onChanged);
+            => BeginRect2EditCore(_baseLease, cr, cc, phi, l1, l2, onChanged);
 
         private void BeginRect2EditCore(OverlayLease owner, double cr, double cc, double phi, double l1, double l2,
             Action<double, double, double, double, double> onChanged)
@@ -539,6 +544,15 @@ namespace FlashMeasurementSystem
         /// <summary>結束編輯模式（隱藏把手），清回呼並重繪。</summary>
         public void EndRect2Edit()
         {
+            // 只結束「主視窗自己武裝的」把手。原本是無條件全清，於是主視窗任何一次
+            // Run Recipe / 換圖都會把編輯器正在進行的 rect2 編輯把手當場拆掉，
+            // 而編輯器毫不知情（仍顯示該工具被選取）。
+            if (!ReferenceEquals(_interactionOwner, _baseLease)) return;
+            EndRect2EditCore();
+        }
+
+        private void EndRect2EditCore()
+        {
             _editActive = false;
             _editMode = Rect2Handle.None;
             _editCallback = null;
@@ -548,7 +562,7 @@ namespace FlashMeasurementSystem
         /// <summary>開始/取代可編輯弧形，進入弧形編輯模式並重繪。與 rect2 編輯互斥。</summary>
         public void BeginArcEdit(double cr, double cc, double radius, double a0, double extent,
             double annulus, Action<double, double, double, double, double, double> onChanged)
-            => BeginArcEditCore(ActiveLease, cr, cc, radius, a0, extent, annulus, onChanged);
+            => BeginArcEditCore(_baseLease, cr, cc, radius, a0, extent, annulus, onChanged);
 
         private void BeginArcEditCore(OverlayLease owner, double cr, double cc, double radius, double a0, double extent,
             double annulus, Action<double, double, double, double, double, double> onChanged)
@@ -567,6 +581,13 @@ namespace FlashMeasurementSystem
 
         /// <summary>結束弧形編輯模式（隱藏把手），清回呼並重繪。</summary>
         public void EndArcEdit()
+        {
+            // 同 EndRect2Edit：只結束主視窗自己武裝的弧形把手。
+            if (!ReferenceEquals(_interactionOwner, _baseLease)) return;
+            EndArcEditCore();
+        }
+
+        private void EndArcEditCore()
         {
             _arcEditActive = false;
             _arcEditMode = ArcHandle.None;
@@ -909,7 +930,7 @@ namespace FlashMeasurementSystem
             public void EndRect2Edit()
             {
                 if (!IsEditingRect2) return;
-                _h.EndRect2Edit();
+                _h.EndRect2EditCore();
             }
 
             public void BeginArcEdit(double centerRow, double centerCol, double radius, double angleStart,
@@ -923,7 +944,7 @@ namespace FlashMeasurementSystem
             public void EndArcEdit()
             {
                 if (!IsEditingArc) return;
-                _h.EndArcEdit();
+                _h.EndArcEditCore();
             }
 
             public void RequestRoi(Action<double, double, double, double> callback)

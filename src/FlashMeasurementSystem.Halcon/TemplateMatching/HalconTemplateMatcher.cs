@@ -25,7 +25,6 @@ namespace FlashMeasurementSystem.Halcon.TemplateMatching
 
             DisposeModel();
             HOperatorSet.ReadShapeModel(modelFilePath, out _modelID);
-            _loadedModelPath = modelFilePath;
 
             HOperatorSet.GetShapeModelParams(_modelID,
                 out HTuple _,
@@ -41,6 +40,12 @@ namespace FlashMeasurementSystem.Halcon.TemplateMatching
 
             _modelAngleStartRad = angleStart.D;
             _modelAngleExtentRad = angleExtent.D;
+
+            // 快取路徑「最後」才記錄。原本在 ReadShapeModel 之後、GetShapeModelParams 之前就指派，
+            // 若讀取參數擲例外，角度範圍會停在 0，而路徑已被記下——之後重試同一個模板會被開頭的
+            // 快取判斷直接 return，靜默沿用「不容許旋轉」的搜尋範圍，工件一旋轉就匹配不到，
+            // 且沒有任何跡象指向真正的原因。放到最後，例外時快取不成立，重試會真的重載。
+            _loadedModelPath = modelFilePath;
         }
 
         public TemplateMatchResult FindMatches(HImage image, HRegion searchRegion, TemplateMatchingParameters parameters)

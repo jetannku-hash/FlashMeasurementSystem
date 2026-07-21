@@ -1004,13 +1004,10 @@ namespace FlashMeasurementSystem
         // 正在進行的 ROI draw 在換頁後會讓操作困惑（還有 pending RequestRoi callback 風險）。
         private void FeatureTabControl_SelectedIndexChanged(object sender, EventArgs e)
         {
-            if (_imageHelper == null) return;
             // 一次解除所有互動模式（含扇形繪製的 pending callback），關閉先前已知的
-            // tab-switch stale-callback 缺口。
-            _imageHelper.DisarmInteractiveModes();
-            if (_edgeDrawRoiCheck != null && _edgeDrawRoiCheck.Checked) _edgeDrawRoiCheck.Checked = false;
-            if (roiModeCheck != null && roiModeCheck.Checked) roiModeCheck.Checked = false;
-            if (_sectorDrawCheck != null && _sectorDrawCheck.Checked) _sectorDrawCheck.Checked = false;
+            // tab-switch stale-callback 缺口。與模式切換共用同一份實作——這兩處原本各寫一份，
+            // 模式切換那份根本沒寫，操作員畫面因此會殘留可拖曳的編輯把手。
+            DisarmDrawingModes();
         }
 
         // 切換 subpix/measure_pos 演算法後，前一次偵測的格線/十字/狀態已不適用 → 清除並刷新，
@@ -2027,6 +2024,11 @@ namespace FlashMeasurementSystem
         private void OpenDxfComparisonForm(object sender, EventArgs e)
         {
             if (!CanOpenSharedImageEditor()) return;
+            // 與另外兩個共用影像編輯器對齊：接管前先解除主視窗殘留的互動模式，
+            // 否則例如「勾了扇形 ROI 卻沒拖曳就開 DXF 面板」，之後的拖曳會被主視窗的扇形流程
+            // 吃掉，並把弧形把手畫進 DXF 面板那一層。
+            _imageHelper.DisarmInteractiveModes();
+            if (_sectorDrawCheck != null && _sectorDrawCheck.Checked) _sectorDrawCheck.Checked = false;
             var form = new DxfComparisonForm(_imageHelper, _dxfComparer);
             ClaimSharedImageEditor(form);
             form.Show(this);
