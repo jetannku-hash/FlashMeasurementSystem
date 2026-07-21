@@ -15,6 +15,13 @@ namespace FlashMeasurementSystem.Infrastructure.Roi
     {
         public void Save(Recipe recipe, string filePath)
         {
+            // 存檔時蓋上「目前」的 schema 版號。反序列化會讓舊檔的版號留在物件上（例如載入 v12 檔
+            // 後物件的 SchemaVersion 就是 12），存回去就寫回 12——但寫出的內容其實是目前的類別形狀，
+            // 含所有新欄位。實際案例：Set Ref 寫入了 v16 的 TemplateModelId，檔案卻仍標 v12，
+            // 日後任何依版號判斷的遷移邏輯都會誤判這個檔。
+            // 各欄位皆為加性且向後相容，記憶體中的物件永遠是最新類別，因此存檔即等於升級到目前版號。
+            if (recipe != null) recipe.SchemaVersion = new Recipe().SchemaVersion;
+
             string json = JsonConvert.SerializeObject(recipe, Formatting.Indented);
             string dir = Path.GetDirectoryName(filePath);
             if (!string.IsNullOrEmpty(dir))

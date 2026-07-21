@@ -1871,6 +1871,14 @@ namespace FlashMeasurementSystem
                     _lastMatchRow = wfResult.MatchRow;
                     _lastMatchCol = wfResult.MatchCol;
                     _lastMatchAngleDeg = wfResult.MatchAngleDeg;
+                    // v16：一鍵是用上面解析出的 templatePath 去匹配的，記錄它才能與 _lastMatch* 一致。
+                    // 漏掉會留下前一次 Run Matching 的舊值，讓後續 Run Recipe 的模板比對誤報不一致。
+                    _lastMatchTemplateId = string.IsNullOrEmpty(templatePath)
+                        ? null : Path.GetFileName(templatePath);
+                }
+                else
+                {
+                    _lastMatchTemplateId = null;
                 }
                 RefreshMatchContour(); // 依本次匹配姿態更新快取輪廓（無匹配則清空）
 

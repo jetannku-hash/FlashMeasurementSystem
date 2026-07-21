@@ -26,6 +26,7 @@ namespace FlashMeasurementSystem.Tests
             WarnsWhenPoseHasNoTemplate();
             NoWarningWhenTemplateRecorded();
             NoWarningWithoutReferencePose();
+            SaveStampsCurrentSchemaVersion();
 
             Console.WriteLine("TemplateReferenceRecipeTests passed");
         }
@@ -107,6 +108,38 @@ namespace FlashMeasurementSystem.Tests
             AssertNoTemplateWarning(RecipeValidator.Validate(r, W, H), "no reference pose → no warning");
         }
 
+        // 載入舊檔 → 改內容 → 存檔，檔案必須標成目前版號。
+        // 實際踩到的情況：Set Ref 把 v16 的 TemplateModelId 寫進一個 v12 的檔，版號卻仍留 12，
+        // 產生「內容是新的、標籤是舊的」的檔案，日後任何依版號的遷移都會誤判它。
+        private static void SaveStampsCurrentSchemaVersion()
+        {
+            string path = Path.Combine(Path.GetTempPath(),
+                "fms_ver_" + Guid.NewGuid().ToString("N").Substring(0, 8) + ".zcp");
+            try
+            {
+                File.WriteAllText(path,
+                    "{ \"SchemaVersion\": 12, \"Name\": \"old\", \"HasReferencePose\": true, " +
+                    "\"Tools\": [ { \"Id\": \"C1\", \"ToolType\": \"circle\" } ] }");
+
+                IRecipeStore store = new RecipeStore();
+                Recipe loaded = store.Load(path);
+                AssertEqInt(loaded.SchemaVersion, 12, "loading preserves the file's version");
+
+                // 模擬 Set Ref：寫入 v16 欄位後存回原檔。
+                loaded.TemplateModelId = "t.shm";
+                store.Save(loaded, path);
+
+                Recipe reloaded = store.Load(path);
+                AssertEqInt(reloaded.SchemaVersion, new Recipe().SchemaVersion,
+                    "saving must stamp the current schema version");
+                AssertEq(reloaded.TemplateModelId, "t.shm", "saved template id survives");
+            }
+            finally
+            {
+                if (File.Exists(path)) File.Delete(path);
+            }
+        }
+
         private static Recipe ValidRecipe()
         {
             var r = new Recipe();
@@ -143,6 +176,15 @@ namespace FlashMeasurementSystem.Tests
         private static void Assert(bool condition, string message)
         {
             if (!condition) throw new InvalidOperationException("TemplateReference " + message);
+        }
+
+        private static void AssertEqInt(int actual, int expected, string message)
+        {
+            if (actual != expected)
+            {
+                throw new InvalidOperationException(string.Format(
+                    "TemplateReference {0}: expected {1}, actual {2}", message, expected, actual));
+            }
         }
 
         private static void AssertEq(string actual, string expected, string message)
