@@ -73,9 +73,10 @@ namespace FlashMeasurementSystem
 
             Controls.Add(_viewModeMenuStrip);
             MainMenuStrip = _viewModeMenuStrip;
-            // 讓選單佔據視窗最頂端：mainTableLayout 是 Dock=Fill，若選單 z-order 在其之後
-            // 會被 Fill 區塊蓋掉，故明確提到最前面。
-            _viewModeMenuStrip.BringToFront();
+            // 不要對選單呼叫 BringToFront()：那會讓它「疊」在 mainTableLayout(Dock=Fill) 之上
+            // 而不是把頂端空間讓出來，結果是 PASS/FAIL 橫幅上緣被選單遮掉 ~21px。
+            // WinForms 的 dock 依 z-order 決定誰先取得空間，此處保持 Add 後的預設順序即可。
+            _viewModeMenuStrip.SendToBack();
         }
 
         /// <summary>

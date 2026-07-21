@@ -658,7 +658,11 @@ namespace FlashMeasurementSystem
             this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 26F));
             this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 26F));
             this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 26F));
-            this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 144F));
+            // 弧量測面板（arcMeasurePanel）列：內部 6 列均分，144 時每列僅 23px，
+            // 扣掉上下 Margin 後 Dock=Fill 的 detectArcButton 只剩 17px，按鈕文字會被切掉
+            // （同列的 NumericUpDown 因為 chrome 較薄，17px 仍看得到字，所以只有按鈕出問題）。
+            // 174 → 每列 29px → 按鈕 23px，足夠容納 Segoe UI 8.25 的文字與按鈕外框。
+            this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 174F));
             this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 84F));
             this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 22F));
             this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 48F));
