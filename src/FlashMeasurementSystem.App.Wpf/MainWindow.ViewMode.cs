@@ -3,6 +3,7 @@ using System.Drawing;
 using System.Globalization;
 using System.IO;
 using System.Windows.Forms;
+using FlashMeasurementSystem.Domain.Roi;
 
 namespace FlashMeasurementSystem
 {
@@ -180,6 +181,103 @@ namespace FlashMeasurementSystem
         }
 
         /// <summary>
+        /// 解析本次量測要用的模板 .shm 完整路徑（v16）。
+        ///
+        /// 優先用配方記錄的模板，因為配方的參考姿態就是那個模板量出來的；換一個模板，
+        /// 姿態的意義就變了，ROI 會被搬到錯的位置而且不會報錯。
+        /// 配方未記錄（v16 之前的舊配方）才退回畫面上選取的模板，維持既有行為。
+        /// </summary>
+        /// <param name="error">回傳 null 時的原因；成功時為 null。</param>
+        private string ResolveTemplatePath(Recipe recipe, out string error)
+        {
+            error = null;
+
+            if (recipe != null && !string.IsNullOrEmpty(recipe.TemplateModelId))
+            {
+                string dir = DataPaths.TemplatesDirOrNull();
+                if (string.IsNullOrEmpty(dir))
+                {
+                    error = "找不到 data/templates 目錄，無法解析配方指定的模板 '" + recipe.TemplateModelId + "'。";
+                    return null;
+                }
+
+                string path = Path.Combine(dir, recipe.TemplateModelId);
+                if (!File.Exists(path))
+                {
+                    // 明確報錯而非默默退回選單：退回等於用「別的模板」跑，正是要防的錯誤量測。
+                    error = "配方指定的模板不存在：" + recipe.TemplateModelId +
+                            "（預期位於 data/templates）。請重新建立模板並執行 Set Ref。";
+                    return null;
+                }
+                return path;
+            }
+
+            // 舊配方：沿用畫面上選取的模板。
+            var selected = templateFileCombo.SelectedItem as FileItemWrapper;
+            return selected != null && selected.IsRealFile ? selected.FullPath : null;
+        }
+
+        /// <summary>
+        /// 把 Inspection 分頁的模板下拉選單切到配方指定的模板。
+        ///
+        /// 載入配方時呼叫，讓畫面反映配方的真相。少了這一步，使用者會看到一個與配方無關的
+        /// 模板被選著，以為那就是會被使用的模板——但一鍵量測其實是用配方指定的那個，
+        /// 兩者不一致時畫面等於在說謊。
+        /// 找不到對應項目時不動選取（例如模板檔已被刪除），由 ResolveTemplatePath 負責報錯。
+        /// </summary>
+        private void SelectTemplateInCombo(string templateModelId)
+        {
+            if (string.IsNullOrEmpty(templateModelId)) return;
+            if (templateFileCombo == null) return;
+
+            for (int i = 0; i < templateFileCombo.Items.Count; i++)
+            {
+                var item = templateFileCombo.Items[i] as FileItemWrapper;
+                if (item == null || !item.IsRealFile) continue;
+                if (string.Equals(Path.GetFileName(item.FullPath), templateModelId,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    templateFileCombo.SelectedIndex = i;
+                    return;
+                }
+            }
+        }
+
+        /// <summary>
+        /// 目前下拉選單選取的模板檔名；未選或不是實體檔時回 null。
+        /// </summary>
+        private string SelectedTemplateIdOrNull()
+        {
+            var item = templateFileCombo?.SelectedItem as FileItemWrapper;
+            return item != null && item.IsRealFile ? Path.GetFileName(item.FullPath) : null;
+        }
+
+        /// <summary>
+        /// Layer 2 防護：確認目前的匹配姿態是用配方指定的模板量出來的。
+        ///
+        /// 工程模式下可以「用模板 A 做 Set Ref → 之後用模板 B 按 Run Matching → 再按 Run Recipe」，
+        /// 此時參考姿態來自 A、當前姿態來自 B，兩者不可比較，變換出來的 ROI 位置是錯的。
+        /// 一鍵量測不會有這個問題（它自己用配方的模板做匹配），但 Run Recipe 吃的是既有的
+        /// _lastMatch*，必須在這裡把關。
+        /// </summary>
+        private bool EnsureMatchTemplateMatchesRecipe()
+        {
+            if (_loadedRecipe == null || !_loadedRecipe.HasReferencePose) return true;
+            if (string.IsNullOrEmpty(_loadedRecipe.TemplateModelId)) return true;  // 舊配方，無從比對
+            if (!_hasMatch) return true;                                            // 另有守門負責
+            if (string.Equals(_lastMatchTemplateId, _loadedRecipe.TemplateModelId,
+                    StringComparison.OrdinalIgnoreCase)) return true;
+
+            MessageBox.Show(this,
+                "目前的匹配姿態不是用本配方的模板量出來的，量測位置會錯。\r\n\r\n" +
+                "配方模板：" + _loadedRecipe.TemplateModelId + "\r\n" +
+                "目前匹配所用：" + (string.IsNullOrEmpty(_lastMatchTemplateId) ? "未知" : _lastMatchTemplateId) + "\r\n\r\n" +
+                "請在 Inspection 分頁改選配方的模板後重新執行 Run Matching。",
+                "模板不一致", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return false;
+        }
+
+        /// <summary>
         /// 記住上次使用配方的位置。放在 data/ 下與其他執行期資料一致，
         /// 且該路徑已列入 .gitignore（機器相關狀態不進版控）。
         /// </summary>
@@ -209,6 +307,8 @@ namespace FlashMeasurementSystem
                     SystemColors.ControlText);
                 // 操作員面板的「配方：」欄需同步，否則換配方後仍顯示舊料號。
                 UpdateOperatorRecipeInfo();
+                // 讓畫面上的模板選取反映配方指定的模板，避免「選著 A、實際跑 B」。
+                SelectTemplateInCombo(_loadedRecipe.TemplateModelId);
 
                 if (rememberAsLast) TryRememberLastRecipe(path);
                 return true;
@@ -272,9 +372,18 @@ namespace FlashMeasurementSystem
                 _operatorRecipeLabel.Text = "配方：（尚未載入）";
                 _operatorRecipeLabel.ForeColor = Color.DarkRed;
             }
+            else if (_loadedRecipe.HasReferencePose && string.IsNullOrEmpty(_loadedRecipe.TemplateModelId))
+            {
+                // 有參考姿態卻沒記錄模板：執行時會用畫面上選取的模板，可能與當初 Set Ref 用的不同，
+                // 量測位置會錯且不報錯。操作員看不到那個下拉選單，所以必須在這裡把風險說出來。
+                _operatorRecipeLabel.Text = "配方：" + _loadedRecipe.Name + "（⚠ 未記錄模板）";
+                _operatorRecipeLabel.ForeColor = Color.DarkRed;
+            }
             else
             {
-                _operatorRecipeLabel.Text = "配方：" + _loadedRecipe.Name;
+                _operatorRecipeLabel.Text = _loadedRecipe.HasReferencePose
+                    ? "配方：" + _loadedRecipe.Name + "\r\n模板：" + _loadedRecipe.TemplateModelId
+                    : "配方：" + _loadedRecipe.Name;
                 _operatorRecipeLabel.ForeColor = SystemColors.ControlText;
             }
 

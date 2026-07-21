@@ -87,6 +87,9 @@ namespace FlashMeasurementSystem
         private OpenFileDialog _openRecipeDialog;
         private double _lastMatchRow, _lastMatchCol, _lastMatchAngleDeg;
         private bool _hasMatch;
+        // v16：產生 _lastMatch* 的模板檔名。姿態只有在同一個 .shm 下才可與配方的參考姿態
+        // 相比較，故必須隨姿態一起記住並在 Run Recipe 前比對（見 EnsureMatchTemplateMatchesRecipe）。
+        private string _lastMatchTemplateId;
         // 匹配輪廓快取：匹配姿態變更時算一次（transform_shape_model_contours），之後每次
         // pan/zoom/redraw 直接 DispObj，避免每個 redraw 都重算造成卡頓。生命週期由 RefreshMatchContour 管理。
         private HObject _matchContour;
@@ -503,6 +506,7 @@ namespace FlashMeasurementSystem
             _lastMatchRow = 0;
             _lastMatchCol = 0;
             _lastMatchAngleDeg = 0;
+            _lastMatchTemplateId = null;
             RefreshMatchContour(); // _hasMatch=false → 釋放並清空快取輪廓
 
             // 換圖重置：橫幅回灰「—」、重新評估空狀態引導（此時已載入影像→引導隱藏）。
@@ -718,6 +722,9 @@ namespace FlashMeasurementSystem
                     _lastMatchRow = result.Row;
                     _lastMatchCol = result.Column;
                     _lastMatchAngleDeg = result.AngleDeg;
+                    // v16：一併記住是哪個模板量出這個姿態。姿態只有在同一個 .shm 下才可與
+                    // 配方的參考姿態相比較，Run Recipe 會用這個值把關（見 EnsureMatchTemplateMatchesRecipe）。
+                    _lastMatchTemplateId = Path.GetFileName(templateFile.FullPath);
                     _hasMatch = true;
                     RefreshMatchContour(); // 算一次快取輪廓，overlay action 每次 redraw 直接用
 
@@ -744,7 +751,13 @@ namespace FlashMeasurementSystem
                     // 會放行，並用前一次成功的 _lastMatch* 對現影像做 ROI 變換，畫出錯誤的 OK/NG。
                     ResetMatchPose();
                     _imageHelper.ClearOverlay();
-                    matchResultTextBox.Text = result.Message;
+                    // 這裡是匹配失敗最先被看到的地方，直接點出最常見的原因（模板選錯），
+                    // 否則使用者往下走會在 Run Recipe/Set Ref 得到「請先執行模板匹配」而更困惑。
+                    matchResultTextBox.Text = result.Message
+                        + "\r\n找不到工件：請確認所選模板與目前影像的工件相符。"
+                        + (_loadedRecipe != null && !string.IsNullOrEmpty(_loadedRecipe.TemplateModelId)
+                            ? "\r\n本配方指定的模板：" + _loadedRecipe.TemplateModelId
+                            : "");
                 }
             }
             catch (Exception ex)
@@ -769,6 +782,7 @@ namespace FlashMeasurementSystem
             _lastMatchRow = 0;
             _lastMatchCol = 0;
             _lastMatchAngleDeg = 0;
+            _lastMatchTemplateId = null;
             RefreshMatchContour();
         }
 
@@ -1406,12 +1420,23 @@ namespace FlashMeasurementSystem
         private void SetRefPoseButton_Click(object sender, EventArgs e)
         {
             if (_loadedRecipe == null) { MessageBox.Show("請先載入配方 (.zcp)。", "Info"); return; }
-            if (!_hasMatch) { MessageBox.Show("請先在參考影像上執行模板匹配。", "Info"); return; }
+            if (!_hasMatch)
+            {
+                // 同 Run Recipe：匹配失敗後這裡看到的也是「沒有姿態」，訊息須點出這個可能。
+                MessageBox.Show(
+                    "請先在參考影像上執行模板匹配（Inspection 分頁的 Run Matching）。\r\n\r\n" +
+                    "若剛才已執行過，代表匹配失敗——最常見的原因是所選模板與目前工件不符。",
+                    "需要模板匹配", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
 
             _loadedRecipe.RefRow = _lastMatchRow;
             _loadedRecipe.RefCol = _lastMatchCol;
             _loadedRecipe.RefAngleRad = _lastMatchAngleDeg * Math.PI / 180.0;
             _loadedRecipe.HasReferencePose = true;
+            // v16：參考姿態是「某個模板」量出來的，模板必須跟姿態一起存。這裡是唯一正確的
+            // 寫入點——按下 Set Ref 的當下，剛剛才用某個模板匹配成功。
+            _loadedRecipe.TemplateModelId = _lastMatchTemplateId ?? "";
 
             try
             {
@@ -1420,9 +1445,11 @@ namespace FlashMeasurementSystem
                     _recipeStore.Save(_loadedRecipe, _loadedRecipePath);
                 }
                 SetMeasurementResult(string.Format(CultureInfo.InvariantCulture,
-                    "參考姿態已設定並存檔：Row={0:F2} Col={1:F2} Angle={2:F2}°",
-                    _loadedRecipe.RefRow, _loadedRecipe.RefCol, _lastMatchAngleDeg),
+                    "參考姿態已設定並存檔：Row={0:F2} Col={1:F2} Angle={2:F2}°（模板：{3}）",
+                    _loadedRecipe.RefRow, _loadedRecipe.RefCol, _lastMatchAngleDeg,
+                    string.IsNullOrEmpty(_loadedRecipe.TemplateModelId) ? "未記錄" : _loadedRecipe.TemplateModelId),
                     SystemColors.ControlText);
+                UpdateOperatorRecipeInfo();
             }
             catch (Exception ex)
             {
@@ -1483,9 +1510,21 @@ namespace FlashMeasurementSystem
             // 不需匹配：未匹配時其標稱幾何以絕對影像座標量測（Pass 3 不套 reference_system/align）。
             if (_loadedRecipe.HasReferencePose && !_hasMatch && _loadedRecipe.Tools.Count > 0)
             {
-                MessageBox.Show("此配方含參考姿態且有 1D 量測工具，請先對目前影像執行模板匹配以取得當前工件姿態。", "Info");
+                // 訊息要指向真正的原因。使用者常常「剛按過 Run Matching」才走到這裡——
+                // 匹配失敗會 ResetMatchPose()，於是這裡看到的仍是「沒有姿態」。
+                // 只講「請先執行模板匹配」會讓人以為自己沒按，往錯的方向找問題。
+                MessageBox.Show(
+                    "此配方含參考姿態且有 1D 量測工具，需要目前影像的工件姿態才能搬動 ROI。\r\n\r\n" +
+                    "請在 Inspection 分頁執行 Run Matching。若剛才已執行過，代表匹配失敗——" +
+                    "最常見的原因是所選模板與目前工件不符" +
+                    (_loadedRecipe != null && !string.IsNullOrEmpty(_loadedRecipe.TemplateModelId)
+                        ? "。本配方指定的模板是：" + _loadedRecipe.TemplateModelId
+                        : "。"),
+                    "需要模板匹配", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
+            // v16：目前姿態必須是用配方的模板量出來的，否則變換出的 ROI 位置是錯的。
+            if (!EnsureMatchTemplateMatchesRecipe()) return;
             if (!EnsureRecipeValid()) return;
 
             // pixel size 來源（決策 A）：配方 CalibrationProfileId 有設且檔案存在 → 用校正檔；
@@ -1826,11 +1865,26 @@ namespace FlashMeasurementSystem
 
                 ResolvePixelSize(out double pxUmX, out double pxUmY, out string pixelSizeSource);
 
-                // 模板模型路徑：從下拉選單取目前選取檔案
-                string templatePath = null;
-                var templateFile = templateFileCombo.SelectedItem as FileItemWrapper;
-                if (templateFile != null && templateFile.IsRealFile)
-                    templatePath = templateFile.FullPath;
+                // v16：模板優先取自配方（參考姿態就是它量出來的）；舊配方才退回下拉選單。
+                string templatePath = ResolveTemplatePath(_loadedRecipe, out string templateError);
+                if (templateError != null)
+                {
+                    MessageBox.Show(this, templateError, "模板", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                // 覆蓋了畫面上的選取就要說出來。默默改用另一個模板即使結果是對的，
+                // 使用者仍會以為跑的是他選的那個——選錯模板卻一路 PASS，最容易讓人誤以為系統壞了。
+                string usedTemplateId = string.IsNullOrEmpty(templatePath) ? null : Path.GetFileName(templatePath);
+                string selectedTemplateId = SelectedTemplateIdOrNull();
+                string templateNote = "";
+                if (usedTemplateId != null && selectedTemplateId != null
+                    && !string.Equals(usedTemplateId, selectedTemplateId, StringComparison.OrdinalIgnoreCase))
+                {
+                    templateNote = string.Format(CultureInfo.InvariantCulture,
+                        " | 模板：已用配方指定的 {0}（畫面選取為 {1}，已忽略）",
+                        usedTemplateId, selectedTemplateId);
+                }
 
                 string reportDir = Path.Combine(ResolveDataDir(), "reports");
 
@@ -1854,6 +1908,14 @@ namespace FlashMeasurementSystem
                     _lastMatchRow = wfResult.MatchRow;
                     _lastMatchCol = wfResult.MatchCol;
                     _lastMatchAngleDeg = wfResult.MatchAngleDeg;
+                    // v16：一鍵是用上面解析出的 templatePath 去匹配的，記錄它才能與 _lastMatch* 一致。
+                    // 漏掉會留下前一次 Run Matching 的舊值，讓後續 Run Recipe 的模板比對誤報不一致。
+                    _lastMatchTemplateId = string.IsNullOrEmpty(templatePath)
+                        ? null : Path.GetFileName(templatePath);
+                }
+                else
+                {
+                    _lastMatchTemplateId = null;
                 }
                 RefreshMatchContour(); // 依本次匹配姿態更新快取輪廓（無匹配則清空）
 
@@ -1868,11 +1930,12 @@ namespace FlashMeasurementSystem
                     ? " | CSV: " + wfResult.ReportPath
                     : "";
                 AppendMeasurementResult(string.Format(CultureInfo.InvariantCulture,
-                    " | 一鍵：{0} OK {1}/NG {2}{3}{4}{5}",
+                    " | 一鍵：{0} OK {1}/NG {2}{3}{4}{5}{6}",
                     wfResult.AllOk ? "PASS" : "FAIL", wfResult.OkCount, wfResult.NgCount,
                     csvInfo,
                     pdfInfo,
-                    !wfResult.Success ? " (" + wfResult.Message + ")" : ""));
+                    !wfResult.Success ? " (" + wfResult.Message + ")" : "",
+                    templateNote));
             }
             catch (Exception ex)
             {
