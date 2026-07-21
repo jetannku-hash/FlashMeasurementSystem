@@ -21,6 +21,8 @@ data/logs/
 data/images/
 data/reports/
 data/templates/*.shm
+# DXF 標稱輪廓為現場/料號專屬的來料檔（比照 images），不納入版控。
+data/dxf/
 # 校正/配方為機台專屬的執行期資料，不納入版控（保留資料夾的 .gitkeep）。
 data/calibrations/*.json
 data/recipes/*.zcp
