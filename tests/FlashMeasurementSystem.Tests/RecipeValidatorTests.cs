@@ -152,7 +152,9 @@ namespace FlashMeasurementSystem.Tests
             AssertCount(RecipeValidator.Validate(unknown, W, H), 0, 1, "unknown type → warning");
 
             // HasReferencePose 但姿態全 0 → Warning
-            var noPose = new Recipe { HasReferencePose = true };
+            // TemplateModelId 一併給值，讓本案例只驗「姿態全 0」這一件事；v16 起
+            // 「有姿態卻沒記錄模板」是另一條獨立警告，由 TemplateReferenceRecipeTests 負責。
+            var noPose = new Recipe { HasReferencePose = true, TemplateModelId = "t.shm" };
             noPose.Tools.Add(Circle("c1", 300, 320, 60, 50));
             AssertCount(RecipeValidator.Validate(noPose, W, H), 0, 1, "pose enabled but zero → warning");
         }

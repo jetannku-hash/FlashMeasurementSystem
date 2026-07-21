@@ -187,8 +187,25 @@ namespace FlashMeasurementSystem.Domain.Roi
             }
 
             ValidateIqcThresholds(issues, recipe);
+            ValidateTemplateReference(issues, recipe);
 
             return issues;
+        }
+
+        /// <summary>
+        /// 模板參照檢查（v16）。宣告跟隨工件（HasReferencePose）卻沒記錄模板時提出警告：
+        /// 執行期會退回 UI 當下選取的模板，一旦與當初 Set Ref 用的不是同一個，
+        /// ROI 會被搬到錯的位置，而工具仍會照常量測、照常判定 OK/NG，不會有任何錯誤。
+        /// 只給 Warning 不給 Error：v16 之前存的配方全部會命中，擋下它們並不合理。
+        /// </summary>
+        private static void ValidateTemplateReference(List<RecipeIssue> issues, Recipe recipe)
+        {
+            if (!recipe.HasReferencePose) return;
+            if (!string.IsNullOrEmpty(recipe.TemplateModelId)) return;
+
+            issues.Add(new RecipeIssue(RecipeIssueSeverity.Warning, "", "",
+                "此配方有參考姿態但未記錄模板：執行時會使用畫面上選取的模板，" +
+                "若與設定參考姿態時所用的不同，量測位置會錯且不會報錯。請重新執行 Set Ref 以記錄模板。"));
         }
 
         /// <summary>

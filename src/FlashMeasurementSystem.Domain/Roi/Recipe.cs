@@ -42,7 +42,13 @@ namespace FlashMeasurementSystem.Domain.Roi
         //     舊檔載入時 IqcThresholds=null → EffectiveIqcThresholds() 回退到既有的全域預設，行為不變。
         //     動機：正確的亮度/銳利度門檻取決於工件、鏡頭與打光，單一全域值不可能對所有料號都對；
         //     門檻寫死時，一旦不適用當前設定，操作員除了請工程師勾「略過IQC」之外毫無出路。
-        public int SchemaVersion { get; set; } = 15;
+        // v16：模板參照（TemplateModelId，加性欄，預設空字串＝未指定）。純加欄位、向後相容、無遷移碼。
+        //     動機是一條會**靜默產生錯誤量測**的路徑：RecipeRunner 以「參考姿態 vs 當前匹配姿態」
+        //     算剛體變換來搬 ROI，而這兩個姿態只有在來自同一個 .shm 時才可比較——shape model 的
+        //     原點與方向由模型自己定義，換一個模板，「姿態」的意義就變了。過去參考姿態存在配方裡、
+        //     模板卻由 UI 下拉選單決定，兩者可以不一致且無人檢查：ROI 全部落在錯位置、工具照樣量、
+        //     照樣判定，不會有任何錯誤訊息。參考姿態既然是某個模板量出來的，模板就該跟它一起存。
+        public int SchemaVersion { get; set; } = 16;
         public string RecipeId { get; set; } = "";
         public string Name { get; set; } = "";
 
@@ -56,6 +62,12 @@ namespace FlashMeasurementSystem.Domain.Roi
         public double RefCol { get; set; }
         public double RefAngleRad { get; set; }
         public bool HasReferencePose { get; set; }
+
+        // v16：產生上述參考姿態的模板檔名（例如 "template_20260618_181432.shm"），
+        // 相對於 data/templates。刻意存**檔名而非完整路徑**，配方才能跨機器搬。
+        // 空字串 = 未指定（v16 之前的舊配方）：此時執行期退回 UI 選取的模板，行為與過去相同，
+        // 但 RecipeValidator 會提出警告，因為那正是會悄悄量錯的情境。
+        public string TemplateModelId { get; set; } = "";
 
         public List<MeasurementTool> Tools { get; set; } = new List<MeasurementTool>();
 
