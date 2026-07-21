@@ -1607,11 +1607,15 @@ namespace FlashMeasurementSystem
                 an.DrawResultTable(rows);
             });
 
+            // 計數規則走 Domain 的單一來源。這裡原本自己寫了一份，且少了「量測失敗也算 NG」
+            // 那一條——一鍵量測會在 workflow 算完後呼叫本方法，用少一條規則的計數覆蓋橫幅，
+            // 造成工具量測失敗時大橫幅仍顯示綠色 PASS。
             int okCount = 0, ngCount = 0;
             foreach (ToolRunResult r in results)
             {
-                if (r.IsOk == true) okCount++;
-                else if (r.IsOk == false) ngCount++;
+                if (r == null) continue;
+                if (MeasurementOutcome.CountsAsOk(r.IsOk)) okCount++;
+                else if (MeasurementOutcome.CountsAsNg(r.IsOk, r.Supported, r.Measured)) ngCount++;
             }
             SetMeasurementResult(string.Format(CultureInfo.InvariantCulture,
                 "配方 '{0}'：{1} 工具，OK {2} / NG {3}（pixel size：{4}）",

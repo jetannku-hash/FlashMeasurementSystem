@@ -145,6 +145,13 @@ namespace FlashMeasurementSystem
             _arcEditActive = false;
             _arcEditMode = ArcHandle.None;
             _arcEditCallback = null;
+            // 對稱清除矩形 ROI 擷取狀態——這一組原本被漏掉，後果比另外兩組嚴重：
+            // 換圖同時把 _interactionOwner 清成 null，而 ReleaseLease 只在 owner 相符時才解除
+            // 手勢，於是編輯器關閉時不會收回自己的 _roiCallback；之後在影像上拖曳，callback
+            // 會打進已 Dispose 的編輯器表單 → ObjectDisposedException（由 MouseUp 同步拋出）。
+            IsRoiMode = false;
+            _isDrawingRoi = false;
+            _roiCallback = null;
             // 對稱清除扇形拖曳建立狀態——否則換新圖後 pending RequestSector 仍以舊圖座標觸發。
             IsSectorMode = false;
             _isDrawingSector = false;

@@ -200,12 +200,10 @@ namespace FlashMeasurementSystem
             foreach (ToolRunResult r in toolResults)
             {
                 if (r == null) continue;
-                if (r.IsOk == true) result.OkCount++;
-                else if (r.IsOk == false) result.NgCount++;
-                // 硬量測失敗（支援該型別但未量測成功，IsOk 停在 null）也算 NG，否則 AllOk=NgCount==0
-                // 會顯示整體 PASS，卻與下方失敗分支寫出的 IsOk=false 報表列（CSV NG）矛盾＝假 PASS 放行壞件。
-                // 「成功但不判定」的元素/構建工具 Measured=true，不會落入此分支。
-                else if (r.Supported && !r.Measured) result.NgCount++;
+                // 計數規則走 Domain 的單一來源（MeasurementOutcome）。規則的理由與三態語意
+                // 記在該類別上；此處若再寫一份，就會重演「UI 那份少一條規則→假 PASS」。
+                if (MeasurementOutcome.CountsAsOk(r.IsOk)) result.OkCount++;
+                else if (MeasurementOutcome.CountsAsNg(r.IsOk, r.Supported, r.Measured)) result.NgCount++;
 
                 // Build ItemJudgment for reporting: look up the recipe tool by name
                 // to get tolerance spec, then re-judge to produce full judgment data.
@@ -547,7 +545,15 @@ namespace FlashMeasurementSystem
                         });
                     }
                 }
-                else if (tool != null && tool.Tolerance != null)
+                // 只有真的量得出單一純量的型別才走雙邊公差判定（共用 Domain 的定義，避免與
+                // RecipeValidator 的同一份知識漂移）。原本這裡是 catch-all：構造工具
+                // （intersection/midline/projection）沒有可判定的量，GetMeasuredValue 對它們回傳 0，
+                // 而 RecipeEditor 一律給預設公差 [0,0]，於是 0 落在 [0,0] 內 → 每次量測都在
+                // CSV/PDF 產生一列偽造的「OK（偏差 0.0000）」，構造失敗時也照樣寫 OK。
+                // ItemJudgment.IsOk 是 bool 沒有「未判定」狀態，故這類工具改為不產生判定列——
+                // 它們的幾何結果仍在畫面 overlay 與結果表上，只是不進合格與否的報表。
+                else if (tool != null && tool.Tolerance != null
+                         && ToolTypes.IsDoubleSidedTolerance(r.ToolType))
                 {
                     double measuredValue = GetMeasuredValue(r, tool);
                     var input = new ToleranceItemInput

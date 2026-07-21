@@ -82,6 +82,12 @@ namespace FlashMeasurementSystem
 
         private void DisposeIconics()
         {
+            // 先解除 overlay，再釋放物件。安裝在租約上的 closure 捕捉了這些 iconic，
+            // 只釋放不解除會留下懸空引用：OnBrowse 讀檔失敗、或 OnRun 回傳 FAILED／拋例外時
+            // 都不會安裝新 overlay，於是上一輪的 closure 原封不動留著，下一次平移/縮放
+            // 觸發 Redraw 就會對已 Dispose 的物件呼叫 HALCON → 未處理例外對話框。
+            // （租約已 Dispose 時本呼叫為 no-op，故 OnFormClosed 的順序不受影響。）
+            _lease.ClearPersistentOverlay();
             _previewContour?.Dispose(); _previewContour = null;
             _alignedNominal?.Dispose(); _alignedNominal = null;
             _actualEdges?.Dispose(); _actualEdges = null;
