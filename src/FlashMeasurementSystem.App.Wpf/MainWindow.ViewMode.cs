@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Windows.Forms;
 using FlashMeasurementSystem.Domain.Roi;
+using FlashMeasurementSystem.Domain.TemplateMatching;
 
 namespace FlashMeasurementSystem
 {
@@ -253,28 +254,75 @@ namespace FlashMeasurementSystem
         }
 
         /// <summary>
-        /// Layer 2 防護：確認目前的匹配姿態是用配方指定的模板量出來的。
+        /// 確保有一個「可用於本配方」的當前工件姿態；沒有就自己做一次模板匹配。
         ///
-        /// 工程模式下可以「用模板 A 做 Set Ref → 之後用模板 B 按 Run Matching → 再按 Run Recipe」，
-        /// 此時參考姿態來自 A、當前姿態來自 B，兩者不可比較，變換出來的 ROI 位置是錯的。
-        /// 一鍵量測不會有這個問題（它自己用配方的模板做匹配），但 Run Recipe 吃的是既有的
-        /// _lastMatch*，必須在這裡把關。
+        /// Run Recipe 原本只讀既有的 _lastMatch*，沒有姿態就叫使用者去 Inspection 分頁按
+        /// Run Matching。但 Run Recipe 手上其實什麼都有了——配方指定了模板（v16）、影像也載入了
+        /// ——那個前置步驟是早期全手動流程留下的產物，沒有理由存在。它還造成一個看不出來的落差：
+        /// 一鍵量測自給自足，Run Recipe 不行，而兩者在介面上長得一樣。
+        ///
+        /// 姿態沿用規則：既有姿態必須是「用本配方的模板」量出來的才可沿用——姿態只有在同一個
+        /// .shm 下才可與配方的參考姿態相比較。沿用而非一律重匹配，是為了保留工程師在 Inspection
+        /// 分頁調過 Min Score 後手動匹配的結果。
+        ///
+        /// 自動匹配時用預設參數，與一鍵量測同一組；minScoreNumeric 仍只服務 Run Matching 這個
+        /// 診斷工具，兩條量測路徑才不會因為一個看不見的欄位而給出不同結果。
         /// </summary>
-        private bool EnsureMatchTemplateMatchesRecipe()
+        private bool EnsureMatchPoseForRecipe()
         {
-            if (_loadedRecipe == null || !_loadedRecipe.HasReferencePose) return true;
-            if (string.IsNullOrEmpty(_loadedRecipe.TemplateModelId)) return true;  // 舊配方，無從比對
-            if (!_hasMatch) return true;                                            // 另有守門負責
-            if (string.Equals(_lastMatchTemplateId, _loadedRecipe.TemplateModelId,
-                    StringComparison.OrdinalIgnoreCase)) return true;
+            bool poseUsable = _hasMatch
+                && (string.IsNullOrEmpty(_loadedRecipe.TemplateModelId)   // 舊配方：無從比對，只能沿用
+                    || string.Equals(_lastMatchTemplateId, _loadedRecipe.TemplateModelId,
+                                     StringComparison.OrdinalIgnoreCase));
+            if (poseUsable) return true;
 
-            MessageBox.Show(this,
-                "目前的匹配姿態不是用本配方的模板量出來的，量測位置會錯。\r\n\r\n" +
-                "配方模板：" + _loadedRecipe.TemplateModelId + "\r\n" +
-                "目前匹配所用：" + (string.IsNullOrEmpty(_lastMatchTemplateId) ? "未知" : _lastMatchTemplateId) + "\r\n\r\n" +
-                "請在 Inspection 分頁改選配方的模板後重新執行 Run Matching。",
-                "模板不一致", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            return false;
+            string templatePath = ResolveTemplatePath(_loadedRecipe, out string templateError);
+            if (templateError != null)
+            {
+                MessageBox.Show(this, templateError, "模板", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return false;
+            }
+            if (string.IsNullOrEmpty(templatePath))
+            {
+                MessageBox.Show(this,
+                    "此配方需要工件姿態才能搬動 ROI，但找不到可用的模板。\r\n\r\n" +
+                    "請在 Inspection 分頁建立或選取模板，並執行 Set Ref 讓配方記住它。",
+                    "需要模板", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return false;
+            }
+
+            try
+            {
+                _templateMatcher.LoadModel(templatePath);
+                TemplateMatchResult match = _templateMatcher.FindMatches(
+                    _imageHelper.CurrentImage, null, TemplateMatchingParameters.Default());
+
+                if (match == null || !match.Found)
+                {
+                    ResetMatchPose();
+                    MessageBox.Show(this,
+                        "在目前影像上找不到工件，無法取得姿態。\r\n\r\n" +
+                        "最常見的原因是本配方的模板與這張影像的工件不符。\r\n" +
+                        "配方指定的模板：" + Path.GetFileName(templatePath),
+                        "模板匹配失敗", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return false;
+                }
+
+                _lastMatchRow = match.Row;
+                _lastMatchCol = match.Column;
+                _lastMatchAngleDeg = match.AngleDeg;
+                _lastMatchTemplateId = Path.GetFileName(templatePath);
+                _hasMatch = true;
+                RefreshMatchContour();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                ResetMatchPose();
+                MessageBox.Show(this, "模板匹配失敗：" + ex.Message,
+                    "模板匹配失敗", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return false;
+            }
         }
 
         /// <summary>

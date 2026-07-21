@@ -6,19 +6,12 @@ using System.Linq;
 using System.Windows.Forms;
 using FlashMeasurementSystem.Domain.EdgeDetection;
 using FlashMeasurementSystem.Domain.ImageQuality;
-using FlashMeasurementSystem.Domain.LineFitting;
 using FlashMeasurementSystem.Domain.TemplateMatching;
 using FlashMeasurementSystem.Halcon.EdgeDetection;
 using FlashMeasurementSystem.Halcon.ImageQuality;
 using FlashMeasurementSystem.Halcon.LineFitting;
 using FlashMeasurementSystem.Halcon.TemplateMatching;
-using FlashMeasurementSystem.Domain.CircleFitting;
 using FlashMeasurementSystem.Halcon.CircleFitting;
-using FlashMeasurementSystem.Domain.EllipseFitting;
-using FlashMeasurementSystem.Halcon.EllipseFitting;
-using FlashMeasurementSystem.Domain.RectangleFitting;
-using FlashMeasurementSystem.Halcon.RectangleFitting;
-using FlashMeasurementSystem.Domain.DistanceMeasurement;
 using FlashMeasurementSystem.Halcon.DistanceMeasurement;
 using FlashMeasurementSystem.Domain.AngleMeasurement;
 using FlashMeasurementSystem.Halcon.AngleMeasurement;
@@ -56,8 +49,6 @@ namespace FlashMeasurementSystem
         private readonly HalconEdgeDetector _edgeDetector = new HalconEdgeDetector();
         private readonly HalconLineFitter _lineFitter = new HalconLineFitter();
         private readonly HalconCircleFitter _circleFitter = new HalconCircleFitter();
-        private readonly HalconEllipseFitter _ellipseFitter = new HalconEllipseFitter();
-        private readonly HalconRectangleFitter _rectangleFitter = new HalconRectangleFitter();
         private readonly HalconDistanceMeasurer _distanceMeasurer = new HalconDistanceMeasurer();
         private readonly HalconAngleMeasurer _angleMeasurer = new HalconAngleMeasurer();
         private readonly HalconMetrologyModelRunner _metrologyRunner = new HalconMetrologyModelRunner();
@@ -67,10 +58,6 @@ namespace FlashMeasurementSystem
         private EdgeDetectionRoi _latestEdgeRoi;
         private double _editCenterRow, _editCenterCol;
         private EdgeResult _latestEdgeResult;
-        private LineFittingResult _latestLineFittingResult;
-        private CircleFittingResult _latestCircleFittingResult;
-        private EllipseFittingResult _latestEllipseFittingResult;
-        private RectangleFittingResult _latestRectangleFittingResult;
         private ArcMeasureRoi _latestArcRoi;
         private bool _updatingEdgeRoiControls;
         private bool _updatingArcControls;
@@ -156,13 +143,6 @@ namespace FlashMeasurementSystem
 
             // 結果表空狀態提示（第五組 #11）：無資料列時於表格中央繪製引導文字。
             _edgeResultsGrid.Paint += EdgeResultsGrid_Paint;
-
-            // Distance Measurement 的兩個下拉同樣沒設預設選取。contourModeCombo 尤其關鍵：
-            // MeasureDistanceButton_Click 會無條件讀 contourModeCombo.SelectedItem.ToString()，
-            // 若為空白則任何 Measure 都會 NullReferenceException。
-            EnsureComboDefault(measurementTypeCombo);      // 預設 "PointToPoint"
-            EnsureComboDefault(contourModeCombo);          // 預設 "point_to_point"
-            EnsureComboDefault(angleModeCombo);            // 預設 "line_to_line"
 
             // 校正 + 配方按鈕（M3b/M3c）：程式碼動態加在 Measurement 分頁頂端的工具列，不動 Designer.cs。
             // measurementBox 為 Dock=Fill 且先加入，故此 Top 工具列置前後可佔頂端、GroupBox 填其餘。
@@ -359,26 +339,13 @@ namespace FlashMeasurementSystem
             _toolTip.SetToolTip(_edgeInterpolationCombo, "Interpolation method for measure_pos");
             _toolTip.SetToolTip(_runEdgeDetectionButton, "Run edge detection on the current ROI");
             _toolTip.SetToolTip(_clearEdgeDetectionButton, "Clear edge detection results");
-            _toolTip.SetToolTip(fitLineButton, "Fit a straight line to the detected edge points");
-            _toolTip.SetToolTip(fitCircleButton, "Fit a circle to the detected edge points");
-            _toolTip.SetToolTip(fitEllipseButton, "Fit an ellipse to the detected edge points");
-            _toolTip.SetToolTip(fitRectangleButton, "Fit a rectangle to the detected edge points");
             _toolTip.SetToolTip(_sectorDrawCheck, "勾選後從圓心往外拖拉出扇形量測區，放開後自動進入把手微調");
             _toolTip.SetToolTip(_edgeResultsGrid, "Detected edge points (Row, Col, Amplitude, Distance)");
             _toolTip.SetToolTip(_edgeStatusLabel, "Edge detection status — PASS (green) or FAIL (red)");
-            _toolTip.SetToolTip(fittingResultLabel, "最後一次擬合（直線/圓/橢圓/矩形）的結果");
 
             // ── Measurement ──
             _toolTip.SetToolTip(measurementPixelSizeXNumeric, "Pixel size in X direction (µm/pixel)");
             _toolTip.SetToolTip(measurementPixelSizeYNumeric, "Pixel size in Y direction (µm/pixel)");
-            _toolTip.SetToolTip(measurementCoordInput, "Enter coordinates, one pair per line: row,col");
-            _toolTip.SetToolTip(appendLineButton, "Append the last fitted line endpoints to the coordinate input");
-            _toolTip.SetToolTip(appendCircleButton, "Append the last fitted circle/arc center to the coordinate input");
-            _toolTip.SetToolTip(appendEllipseButton, "Append the last fitted ellipse center to the coordinate input");
-            _toolTip.SetToolTip(appendRectButton, "Append the last fitted rectangle center to the coordinate input");
-            _toolTip.SetToolTip(appendContourButton, "Append detected edge points to the coordinate input");
-            _toolTip.SetToolTip(measureDistanceButton, "Measure distance using coordinates above");
-            _toolTip.SetToolTip(measureAngleButton, "Measure angle using coordinates above");
             _toolTip.SetToolTip(measureResultLabel, "Measurement result — OK (green) / NG (red). Or run '[Run Recipe]' or '[一鍵量測]' to execute a recipe");
         }
 
@@ -837,14 +804,6 @@ namespace FlashMeasurementSystem
                     // 比照 DetectArcButton_Click：確保沒有殘留的矩形 ROI 藍框跟扇形帶同時畫出。
                     _latestEdgeRoi = null;
                     _latestEdgeResult = sectorResult;
-                    _latestLineFittingResult = null;
-                    _latestCircleFittingResult = null;
-                    _latestEllipseFittingResult = null;
-                    _latestRectangleFittingResult = null;
-                    UpdateLineFittingResult(null);
-                    UpdateCircleFittingResult(null);
-                    UpdateEllipseFittingResult(null);
-                    UpdateRectangleFittingResult(null);
 
                     RestoreDefaultEdgeGridColumns();
                     BindEdgeResult(sectorResult);
@@ -900,14 +859,6 @@ namespace FlashMeasurementSystem
                 }
                 _latestEdgeRoi = roi;
                 _latestEdgeResult = result;
-                _latestLineFittingResult = null;
-                _latestCircleFittingResult = null;
-                _latestEllipseFittingResult = null;
-                _latestRectangleFittingResult = null;
-                UpdateLineFittingResult(null);
-                UpdateCircleFittingResult(null);
-                UpdateEllipseFittingResult(null);
-                UpdateRectangleFittingResult(null);
                 ShowFittingOverlay();
             }
             catch (HalconException ex)
@@ -992,14 +943,6 @@ namespace FlashMeasurementSystem
                 _latestEdgeRoi = null;
                 _imageHelper.EndRect2Edit();   // 結束殘留的邊緣 rect2 編輯把手（M5），避免與弧帶並存
                 _latestEdgeResult = result;
-                _latestLineFittingResult = null;
-                _latestCircleFittingResult = null;
-                _latestEllipseFittingResult = null;
-                _latestRectangleFittingResult = null;
-                UpdateLineFittingResult(null);
-                UpdateCircleFittingResult(null);
-                UpdateEllipseFittingResult(null);
-                UpdateRectangleFittingResult(null);
 
                 RestoreDefaultEdgeGridColumns();
                 BindEdgeResult(result);
@@ -1033,140 +976,6 @@ namespace FlashMeasurementSystem
             _edgeStatusLabel.Text = "Draw ROI, then Detect";
             _edgeStatusLabel.ForeColor = Color.Black;
             ClearFittingState();
-        }
-
-        private void FitLineButton_Click(object sender, EventArgs e)
-        {
-            // 先清前次結果：失敗（早退/例外）時不殘留舊擬合線於 overlay 與結果表，
-            // 避免「label 顯示失敗、畫面卻仍是舊成功結果」的矛盾。結尾一律 ShowFittingOverlay 刷新。
-            _latestLineFittingResult = null;
-            if (_latestEdgeResult == null || _latestEdgeResult.EdgePoints == null)
-            {
-                UpdateLineFittingResult(new LineFittingResult { ErrorMessage = "請先執行邊緣檢測" });
-                ShowFittingOverlay();
-                return;
-            }
-
-            try
-            {
-                LineFittingResult result = _lineFitter.FitLine(_latestEdgeResult.EdgePoints, LineFittingParameters.Default());
-                _latestLineFittingResult = result;
-                UpdateLineFittingResult(result);
-            }
-            catch (HalconException ex)
-            {
-                UpdateLineFittingResult(new LineFittingResult
-                {
-                    ErrorMessage = "直線擬合失敗 [Halcon " + ex.GetErrorCode() + "]: " + ex.Message
-                });
-            }
-            catch (Exception ex)
-            {
-                UpdateLineFittingResult(new LineFittingResult
-                {
-                    ErrorMessage = "直線擬合失敗 (unexpected " + ex.GetType().Name + "): " + ex.Message
-                });
-            }
-            ShowFittingOverlay();
-        }
-
-        private void FitCircleButton_Click(object sender, EventArgs e)
-        {
-            _latestCircleFittingResult = null;
-            if (_latestEdgeResult == null || _latestEdgeResult.EdgePoints == null)
-            {
-                UpdateCircleFittingResult(new CircleFittingResult { ErrorMessage = "請先執行邊緣檢測" });
-                ShowFittingOverlay();
-                return;
-            }
-
-            try
-            {
-                CircleFittingResult result = _circleFitter.FitCircle(_latestEdgeResult.EdgePoints, CircleFittingParameters.Default());
-                _latestCircleFittingResult = result;
-                UpdateCircleFittingResult(result);
-            }
-            catch (HalconException ex)
-            {
-                UpdateCircleFittingResult(new CircleFittingResult
-                {
-                    ErrorMessage = "圓擬合失敗 [Halcon " + ex.GetErrorCode() + "]: " + ex.Message
-                });
-            }
-            catch (Exception ex)
-            {
-                UpdateCircleFittingResult(new CircleFittingResult
-                {
-                    ErrorMessage = "圓擬合失敗 (unexpected " + ex.GetType().Name + "): " + ex.Message
-                });
-            }
-            ShowFittingOverlay();
-        }
-
-        private void FitEllipseButton_Click(object sender, EventArgs e)
-        {
-            _latestEllipseFittingResult = null;
-            if (_latestEdgeResult == null || _latestEdgeResult.EdgePoints == null)
-            {
-                UpdateEllipseFittingResult(new EllipseFittingResult { ErrorMessage = "請先執行邊緣檢測" });
-                ShowFittingOverlay();
-                return;
-            }
-
-            try
-            {
-                EllipseFittingResult result = _ellipseFitter.FitEllipse(_latestEdgeResult.EdgePoints, EllipseFittingParameters.Default());
-                _latestEllipseFittingResult = result;
-                UpdateEllipseFittingResult(result);
-            }
-            catch (HalconException ex)
-            {
-                UpdateEllipseFittingResult(new EllipseFittingResult
-                {
-                    ErrorMessage = "橢圓擬合失敗 [Halcon " + ex.GetErrorCode() + "]: " + ex.Message
-                });
-            }
-            catch (Exception ex)
-            {
-                UpdateEllipseFittingResult(new EllipseFittingResult
-                {
-                    ErrorMessage = "橢圓擬合失敗 (unexpected " + ex.GetType().Name + "): " + ex.Message
-                });
-            }
-            ShowFittingOverlay();
-        }
-
-        private void FitRectangleButton_Click(object sender, EventArgs e)
-        {
-            _latestRectangleFittingResult = null;
-            if (_latestEdgeResult == null || _latestEdgeResult.EdgePoints == null)
-            {
-                UpdateRectangleFittingResult(new RectangleFittingResult { ErrorMessage = "請先執行邊緣檢測" });
-                ShowFittingOverlay();
-                return;
-            }
-
-            try
-            {
-                RectangleFittingResult result = _rectangleFitter.FitRectangle(_latestEdgeResult.EdgePoints, RectangleFittingParameters.Default());
-                _latestRectangleFittingResult = result;
-                UpdateRectangleFittingResult(result);
-            }
-            catch (HalconException ex)
-            {
-                UpdateRectangleFittingResult(new RectangleFittingResult
-                {
-                    ErrorMessage = "矩形擬合失敗 [Halcon " + ex.GetErrorCode() + "]: " + ex.Message
-                });
-            }
-            catch (Exception ex)
-            {
-                UpdateRectangleFittingResult(new RectangleFittingResult
-                {
-                    ErrorMessage = "矩形擬合失敗 (unexpected " + ex.GetType().Name + "): " + ex.Message
-                });
-            }
-            ShowFittingOverlay();
         }
 
         private void EdgeDrawRoiCheck_CheckedChanged(object sender, EventArgs e)
@@ -1506,25 +1315,12 @@ namespace FlashMeasurementSystem
         {
             if (_loadedRecipe == null) { MessageBox.Show("請先載入配方 (.zcp)。", "Info"); return; }
             if (_imageHelper == null || _imageHelper.CurrentImage == null) { MessageBox.Show("請先載入影像。", "Info"); return; }
-            // 參考姿態守門只對「需要姿態變換的 1D 工具」有意義。純 2D 量測模型（無 1D 工具）
+            // 姿態只對「需要姿態變換的 1D 工具」有意義。純 2D 量測模型（無 1D 工具）
             // 不需匹配：未匹配時其標稱幾何以絕對影像座標量測（Pass 3 不套 reference_system/align）。
-            if (_loadedRecipe.HasReferencePose && !_hasMatch && _loadedRecipe.Tools.Count > 0)
+            if (_loadedRecipe.HasReferencePose && _loadedRecipe.Tools.Count > 0)
             {
-                // 訊息要指向真正的原因。使用者常常「剛按過 Run Matching」才走到這裡——
-                // 匹配失敗會 ResetMatchPose()，於是這裡看到的仍是「沒有姿態」。
-                // 只講「請先執行模板匹配」會讓人以為自己沒按，往錯的方向找問題。
-                MessageBox.Show(
-                    "此配方含參考姿態且有 1D 量測工具，需要目前影像的工件姿態才能搬動 ROI。\r\n\r\n" +
-                    "請在 Inspection 分頁執行 Run Matching。若剛才已執行過，代表匹配失敗——" +
-                    "最常見的原因是所選模板與目前工件不符" +
-                    (_loadedRecipe != null && !string.IsNullOrEmpty(_loadedRecipe.TemplateModelId)
-                        ? "。本配方指定的模板是：" + _loadedRecipe.TemplateModelId
-                        : "。"),
-                    "需要模板匹配", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return;
+                if (!EnsureMatchPoseForRecipe()) return;
             }
-            // v16：目前姿態必須是用配方的模板量出來的，否則變換出的 ROI 位置是錯的。
-            if (!EnsureMatchTemplateMatchesRecipe()) return;
             if (!EnsureRecipeValid()) return;
 
             // pixel size 來源（決策 A）：配方 CalibrationProfileId 有設且檔案存在 → 用校正檔；
@@ -2299,40 +2095,6 @@ namespace FlashMeasurementSystem
                 }
             }
 
-            LineFittingResult line = _latestLineFittingResult;
-            if (line != null && line.Success)
-            {
-                an.DrawLine(line.Row1, line.Column1, line.Row2, line.Column2, "green");
-            }
-
-            CircleFittingResult circle = _latestCircleFittingResult;
-            if (circle != null && circle.Success)
-            {
-                if (circle.IsClosed)
-                {
-                    an.DrawCircle(circle.CenterRow, circle.CenterColumn, circle.RadiusPx, "green");
-                }
-                else
-                {
-                    an.DrawArc(circle.CenterRow, circle.CenterColumn, circle.RadiusPx,
-                        circle.StartPhi, circle.EndPhi, circle.PointOrder, "green");
-                }
-            }
-
-            EllipseFittingResult ellipse = _latestEllipseFittingResult;
-            if (ellipse != null && ellipse.Success)
-            {
-                an.DrawEllipse(ellipse.CenterRow, ellipse.CenterColumn, ellipse.Phi,
-                    ellipse.Radius1Px, ellipse.Radius2Px, "green");
-            }
-
-            RectangleFittingResult rect = _latestRectangleFittingResult;
-            if (rect != null && rect.Success)
-            {
-                an.DrawRectangle2(rect.CenterRow, rect.CenterColumn, rect.Phi,
-                    rect.Length1Px, rect.Length2Px, "green");
-            }
-
             // 結果表（4.13b/B）：顯示目前量測值與公差判定（OK/NG），由 M3c 配方流程接上。
             System.Collections.Generic.List<OverlayResultRow> resultRows = BuildResultRows();
             if (resultRows.Count > 0)
@@ -2357,196 +2119,13 @@ namespace FlashMeasurementSystem
                 });
             }
 
-            LineFittingResult line = _latestLineFittingResult;
-            if (line != null && line.Success)
-            {
-                rows.Add(new OverlayResultRow
-                {
-                    Name = "Line",
-                    ValueText = string.Format(CultureInfo.InvariantCulture,
-                        "Len={0:F1}px Ang={1:F2}deg", line.Length,
-                        Domain.AngleMeasurement.AngleNormalizer.ToHalfCircle(line.AngleDeg)),
-                    IsOk = null
-                });
-            }
-
-            CircleFittingResult circleResult = _latestCircleFittingResult;
-            if (circleResult != null && circleResult.Success)
-            {
-                string prefix = circleResult.IsClosed ? "Circle" : "Arc";
-                rows.Add(new OverlayResultRow
-                {
-                    Name = prefix,
-                    ValueText = circleResult.IsClosed
-                        ? string.Format(CultureInfo.InvariantCulture,
-                            "D={0:F1}px R={1:F1}px", circleResult.DiameterPx, circleResult.RadiusPx)
-                        : string.Format(CultureInfo.InvariantCulture,
-                            "R={0:F1}px {1:F1}°→{2:F1}°",
-                            circleResult.RadiusPx,
-                            circleResult.StartPhi * 180.0 / Math.PI,
-                            circleResult.EndPhi * 180.0 / Math.PI),
-                    IsOk = null
-                });
-            }
-
-            EllipseFittingResult ellipseResult = _latestEllipseFittingResult;
-            if (ellipseResult != null && ellipseResult.Success)
-            {
-                rows.Add(new OverlayResultRow
-                {
-                    Name = "Ellipse",
-                    ValueText = string.Format(CultureInfo.InvariantCulture,
-                        "R1={0:F1}px R2={1:F1}px", ellipseResult.Radius1Px, ellipseResult.Radius2Px),
-                    IsOk = null
-                });
-            }
-
-            RectangleFittingResult rectResult = _latestRectangleFittingResult;
-            if (rectResult != null && rectResult.Success)
-            {
-                rows.Add(new OverlayResultRow
-                {
-                    Name = "Rectangle",
-                    ValueText = string.Format(CultureInfo.InvariantCulture,
-                        "L1={0:F1}px L2={1:F1}px", rectResult.Length1Px, rectResult.Length2Px),
-                    IsOk = null
-                });
-            }
-
             return rows;
         }
 
-        // Detect / Fit Line / Fit Circle 共用：以 DrawFittingLayers 為 persistent overlay。
+        // 邊緣檢測結果的 persistent overlay（ROI 框、弧帶、邊緣十字、邊對）。
         private void ShowFittingOverlay()
         {
             _imageHelper.SetPersistentOverlayAction(() => DrawFittingLayers(_imageHelper.Annotator));
-        }
-
-        private void UpdateLineFittingResult(LineFittingResult result)
-        {
-            if (result == null)
-            {
-                ClearFittingResultLabel();
-                return;
-            }
-
-            if (!result.Success)
-            {
-                fittingResultLabel.Text = "直線擬合失敗: " + result.ErrorMessage;
-                fittingResultLabel.ForeColor = Color.Red;
-                return;
-            }
-
-            fittingResultLabel.Text = string.Format(
-                CultureInfo.InvariantCulture,
-                "Line OK | P1=({0:F2},{1:F2}) P2=({2:F2},{3:F2})\nAngle={4:F2}° Len={5:F2}px RMS={6:F4}px Pts={7}",
-                result.Row1,
-                result.Column1,
-                result.Row2,
-                result.Column2,
-                Domain.AngleMeasurement.AngleNormalizer.ToHalfCircle(result.AngleDeg),
-                result.Length,
-                result.ResidualRms,
-                result.UsedPoints);
-            fittingResultLabel.ForeColor = Color.Green;
-        }
-
-        private void UpdateCircleFittingResult(CircleFittingResult result)
-        {
-            if (result == null)
-            {
-                ClearFittingResultLabel();
-                return;
-            }
-
-            if (!result.Success)
-            {
-                fittingResultLabel.Text = "圓擬合失敗: " + result.ErrorMessage;
-                fittingResultLabel.ForeColor = Color.Red;
-                return;
-            }
-
-            string typeLabel = result.IsClosed ? "Circle" : "Arc";
-            fittingResultLabel.Text = string.Format(
-                CultureInfo.InvariantCulture,
-                typeLabel + " OK | C=({0:F2},{1:F2}) R={2:F2}px D={3:F2}px\n"
-                + (result.IsClosed ? "" : "Arc {7:F1}°→{8:F1}° | ")
-                + "RMS={4:F4}px Round={5:F4}px Pts={6}",
-                result.CenterRow,
-                result.CenterColumn,
-                result.RadiusPx,
-                result.DiameterPx,
-                result.ResidualRms,
-                result.Roundness,
-                result.UsedPoints,
-                result.StartPhi * 180.0 / Math.PI,
-                result.EndPhi * 180.0 / Math.PI);
-            fittingResultLabel.ForeColor = Color.Green;
-        }
-
-        private void UpdateEllipseFittingResult(EllipseFittingResult result)
-        {
-            if (result == null)
-            {
-                ClearFittingResultLabel();
-                return;
-            }
-
-            if (!result.Success)
-            {
-                fittingResultLabel.Text = "橢圓擬合失敗: " + result.ErrorMessage;
-                fittingResultLabel.ForeColor = Color.Red;
-                return;
-            }
-
-            fittingResultLabel.Text = string.Format(
-                CultureInfo.InvariantCulture,
-                "Ellipse OK | C=({0:F2},{1:F2}) R1={2:F2}px R2={3:F2}px\nPhi={4:F2}° RMS={5:F4}px Pts={6}",
-                result.CenterRow,
-                result.CenterColumn,
-                result.Radius1Px,
-                result.Radius2Px,
-                result.Phi * 180.0 / Math.PI,
-                result.ResidualRms,
-                result.UsedPoints);
-            fittingResultLabel.ForeColor = Color.Green;
-        }
-
-        private void UpdateRectangleFittingResult(RectangleFittingResult result)
-        {
-            if (result == null)
-            {
-                ClearFittingResultLabel();
-                return;
-            }
-
-            if (!result.Success)
-            {
-                fittingResultLabel.Text = "矩形擬合失敗: " + result.ErrorMessage;
-                fittingResultLabel.ForeColor = Color.Red;
-                return;
-            }
-
-            fittingResultLabel.Text = string.Format(
-                CultureInfo.InvariantCulture,
-                "Rectangle OK | C=({0:F2},{1:F2}) L1={2:F2}px L2={3:F2}px\nPhi={4:F2}° RMS={5:F4}px Pts={6}",
-                result.CenterRow,
-                result.CenterColumn,
-                result.Length1Px,
-                result.Length2Px,
-                result.Phi * 180.0 / Math.PI,
-                result.ResidualRms,
-                result.UsedPoints);
-            fittingResultLabel.ForeColor = Color.Green;
-        }
-
-        // 四種擬合（直線/圓/橢圓/矩形）共用同一個結果標籤：原本四個標籤各佔 48px、
-        // 合計 192px 全都顯示「尚未執行」，把下方結果表擠到只剩約 30px。
-        // 擬合結果本來就是看「最後執行的那一次」，並列四個的資訊價值遠低於其佔用的空間。
-        private void ClearFittingResultLabel()
-        {
-            fittingResultLabel.Text = "擬合結果: 尚未執行";
-            fittingResultLabel.ForeColor = Color.Black;
         }
 
         private void ClearFittingState()
@@ -2562,11 +2141,6 @@ namespace FlashMeasurementSystem
             _latestArcRoi = null;
             _sectorRoiActive = false;
             _latestEdgeResult = null;
-            _latestLineFittingResult = null;
-            _latestCircleFittingResult = null;
-            _latestEllipseFittingResult = null;
-            _latestRectangleFittingResult = null;
-            ClearFittingResultLabel();
         }
 
         // 邊緣量測結果失效：清結果/擬合狀態與結果表，回到「等待 Detect」。
@@ -2576,11 +2150,6 @@ namespace FlashMeasurementSystem
             _latestEdgeResult = null;
             _latestArcRoi = null;
             _sectorRoiActive = false;
-            _latestLineFittingResult = null;
-            _latestCircleFittingResult = null;
-            _latestEllipseFittingResult = null;
-            _latestRectangleFittingResult = null;
-            ClearFittingResultLabel();
             RestoreDefaultEdgeGridColumns();
             _edgeResultsGrid.Rows.Clear();
             _edgeStatusLabel.Text = "Draw ROI, then Detect";
@@ -2853,221 +2422,6 @@ namespace FlashMeasurementSystem
             public override string ToString() => IsRealFile ? Path.GetFileName(_fullPath) : _fullPath;
         }
 
-        private void MeasurementTypeCombo_SelectedIndexChanged(object sender, EventArgs e)
-        {
-            if (measurementTypeCombo.SelectedItem == null) return;
-            string type = measurementTypeCombo.SelectedItem.ToString();
-            contourModeCombo.Enabled = type == "ContourMaxMin";
-            // 量測前在結果區顯示該 type 的座標輸入格式，避免餵錯行數/語意。
-            measureResultLabel.Text = GetMeasurementFormatHint(type);
-        }
-
-        // 各 measurement type 需要的座標輸入格式（每行 row,col）。
-        private static string GetMeasurementFormatHint(string type)
-        {
-            switch (type)
-            {
-                case "PointToPoint":
-                    return "格式（每行 row,col）：\r\n  行1：點 1\r\n  行2：點 2";
-                case "PointToLine":
-                    return "格式（每行 row,col）：\r\n  行1：點\r\n  行2：線端點 1\r\n  行3：線端點 2";
-                case "LineToLine":
-                    return "格式（每行 row,col）：\r\n  行1-2：線 1 的兩端點\r\n  行3-4：線 2 的兩端點";
-                case "CircleToCircle":
-                    return "格式（每行 row,col）：\r\n  行1：圓 1 圓心\r\n  行2：圓 2 圓心";
-                case "ContourMaxMin":
-                    return "格式（每行 row,col）：\r\n  contour 1 各點…\r\n  (空一行分隔)\r\n  contour 2 各點…";
-                default:
-                    return string.Empty;
-            }
-        }
-
-        // 把最近一次成功的 Line 擬合結果（兩端點）附加到座標輸入框，免去手動抄座標。
-        private void AppendLineButton_Click(object sender, EventArgs e)
-        {
-            LineFittingResult line = _latestLineFittingResult;
-            if (line == null || !line.Success)
-            {
-                measureResultLabel.Text = "尚無成功的 Line 擬合結果可帶入（請先在 Edge Detection 分頁按 Fit Line）。";
-                return;
-            }
-            AppendCoordLine(line.Row1, line.Column1);
-            AppendCoordLine(line.Row2, line.Column2);
-        }
-
-        // 把最近一次成功的 Circle 擬合結果（圓心）附加到座標輸入框。
-        private void AppendCircleButton_Click(object sender, EventArgs e)
-        {
-            CircleFittingResult circle = _latestCircleFittingResult;
-            if (circle == null || !circle.Success)
-            {
-                measureResultLabel.Text = "尚無成功的 Circle 擬合結果可帶入（請先在 Edge Detection 分頁按 Fit Circle）。";
-                return;
-            }
-            AppendCoordLine(circle.CenterRow, circle.CenterColumn);
-        }
-
-        // 把最近一次成功的 Ellipse 擬合結果（中心）附加到座標框。橢圓中心是「點」，
-        // 故走既有 PointToPoint/PointToLine 量測（A3-D：EllipseCenterToX）。
-        private void AppendEllipseButton_Click(object sender, EventArgs e)
-        {
-            EllipseFittingResult ellipse = _latestEllipseFittingResult;
-            if (ellipse == null || !ellipse.Success)
-            {
-                measureResultLabel.Text = "尚無成功的 Ellipse 擬合結果可帶入（請先在 Edge Detection 分頁按 Fit Ellipse）。";
-                return;
-            }
-            AppendCoordLine(ellipse.CenterRow, ellipse.CenterColumn);
-        }
-
-        // 把最近一次成功的 Rectangle 擬合結果（中心）附加到座標框（A3-D：RectCenterToX）。
-        private void AppendRectButton_Click(object sender, EventArgs e)
-        {
-            RectangleFittingResult rect = _latestRectangleFittingResult;
-            if (rect == null || !rect.Success)
-            {
-                measureResultLabel.Text = "尚無成功的 Rectangle 擬合結果可帶入（請先在 Edge Detection 分頁按 Fit Rectangle）。";
-                return;
-            }
-            AppendCoordLine(rect.CenterRow, rect.CenterColumn);
-        }
-
-        // 把最近一次 Edge Detection 的所有 EdgePoints 當成一條 contour 帶入座標框。
-        // 第二次按時自動以空行分隔，形成 ContourMaxMin 需要的「contour1 (空行) contour2」格式。
-        // 建議搭配 EdgesSubPix 取得密集輪廓點。
-        private void AppendContourButton_Click(object sender, EventArgs e)
-        {
-            EdgeResult edge = _latestEdgeResult;
-            if (edge == null || edge.EdgePoints == null || edge.EdgePoints.Count == 0)
-            {
-                measureResultLabel.Text = "尚無邊緣檢測結果可帶入（請先在 Edge Detection 分頁 Detect，建議用 EdgesSubPix 取得密集輪廓點）。";
-                return;
-            }
-
-            // subpix 可能上千點，用 StringBuilder 一次附加，避免逐點 AppendText 造成 UI 卡頓。
-            var sb = new System.Text.StringBuilder();
-            if (measurementCoordInput.TextLength > 0)
-            {
-                if (!measurementCoordInput.Text.EndsWith("\n", StringComparison.Ordinal))
-                {
-                    sb.AppendLine();
-                }
-                sb.AppendLine(); // 空行 = 兩條 contour 的分隔
-            }
-            foreach (EdgePoint p in edge.EdgePoints)
-            {
-                sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "{0:F2},{1:F2}", p.Row, p.Column));
-            }
-            measurementCoordInput.AppendText(sb.ToString());
-
-            // 帶入 contour 後自動切到 ContourMaxMin 量測類型，省一步操作。
-            int idx = measurementTypeCombo.Items.IndexOf("ContourMaxMin");
-            if (idx >= 0)
-            {
-                measurementTypeCombo.SelectedIndex = idx;
-            }
-        }
-
-        // 以 ParseCoordinateLine 能解析的格式 (row,col) 附加一行；自動補換行。
-        private void AppendCoordLine(double row, double col)
-        {
-            string text = string.Format(CultureInfo.InvariantCulture, "{0:F2},{1:F2}", row, col);
-            if (measurementCoordInput.TextLength > 0 &&
-                !measurementCoordInput.Text.EndsWith("\n", StringComparison.Ordinal))
-            {
-                measurementCoordInput.AppendText(Environment.NewLine);
-            }
-            measurementCoordInput.AppendText(text + Environment.NewLine);
-        }
-
-        // 量測成功後，把量測元素畫在目前載入的影像上（需 Edge Detection 分頁已載入影像）。
-        // 座標即 measurementCoordInput 的內容，沿用 ParseCoordinateLine 解析。
-        // 把量測元素畫在影像上，並清楚標示：
-        //   綠 = 參考幾何（線）、洋紅 = 點/圓心（含 label）、紅 = 真正被量測的那段距離、
-        //   黃 = 距離數值文字。讓使用者一眼看出量的是哪兩個東西、距離是哪一段、值多少。
-        private void DrawMeasurementOverlay(string typeName, DistanceMeasurementResult result)
-        {
-            if (_imageHelper == null || _imageHelper.CurrentImage == null) return;
-
-            // ContourMaxMin 用空行分隔成兩條 contour，並標出 Min/Max 距離線，單獨處理。
-            if (typeName == "ContourMaxMin")
-            {
-                DrawContourMeasurementOverlay(result);
-                return;
-            }
-
-            var pts = new System.Collections.Generic.List<double[]>();
-            string[] lines = measurementCoordInput.Text.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries);
-            foreach (string l in lines)
-            {
-                double[] c = ParseCoordinateLine(l);
-                if (c != null) pts.Add(c);
-            }
-
-            string distText = string.Format(CultureInfo.InvariantCulture,
-                "{0:F1} px / {1:F3} mm", result.DistancePx, result.DistanceMm);
-
-            _imageHelper.EndRect2Edit();  // H2：接管畫面前結束殘留編輯把手
-            _imageHelper.EndArcEdit();
-            _imageHelper.SetPersistentOverlayAction(() =>
-            {
-                var an = _imageHelper.Annotator;
-                // 先重畫偵測/擬合底層（ROI + 邊緣 + 擬合線/圓），量測標註疊在其上。
-                // 否則按 Measure 的瞬間所有視覺證據被換掉，無法目視驗證量測線是否貼合擬合結果。
-                DrawFittingLayers(an);
-                switch (typeName)
-                {
-                    case "PointToPoint":
-                        if (pts.Count >= 2)
-                        {
-                            DrawMeasurePoint(an, pts[0], "P1");
-                            DrawMeasurePoint(an, pts[1], "P2");
-                            an.DrawLine(pts[0][0], pts[0][1], pts[1][0], pts[1][1], "red");
-                            DrawDistanceLabel(an, pts[0], pts[1], distText);
-                        }
-                        break;
-                    case "CircleToCircle":
-                        if (pts.Count >= 2)
-                        {
-                            DrawMeasurePoint(an, pts[0], "C1");
-                            DrawMeasurePoint(an, pts[1], "C2");
-                            an.DrawLine(pts[0][0], pts[0][1], pts[1][0], pts[1][1], "red");
-                            DrawDistanceLabel(an, pts[0], pts[1], distText);
-                        }
-                        break;
-                    case "PointToLine":
-                        if (pts.Count >= 3)
-                        {
-                            // 參考線 L（綠）
-                            an.DrawLine(pts[1][0], pts[1][1], pts[2][0], pts[2][1], "green");
-                            an.DrawText("L", (int)((pts[1][0] + pts[2][0]) / 2), (int)((pts[1][1] + pts[2][1]) / 2), "green");
-                            // 待量測的點 P（洋紅）
-                            DrawMeasurePoint(an, pts[0], "P");
-                            // 真正的距離 = P 到線的垂足 F（紅）
-                            double[] f = PerpFoot(pts[0], pts[1], pts[2]);
-                            an.DrawCross(f[0], f[1], 16, "red");
-                            an.DrawLine(pts[0][0], pts[0][1], f[0], f[1], "red");
-                            DrawDistanceLabel(an, pts[0], f, distText);
-                        }
-                        break;
-                    case "LineToLine":
-                        if (pts.Count >= 4)
-                        {
-                            an.DrawLine(pts[0][0], pts[0][1], pts[1][0], pts[1][1], "green");
-                            an.DrawText("L1", (int)((pts[0][0] + pts[1][0]) / 2), (int)((pts[0][1] + pts[1][1]) / 2), "green");
-                            an.DrawLine(pts[2][0], pts[2][1], pts[3][0], pts[3][1], "green");
-                            an.DrawText("L2", (int)((pts[2][0] + pts[3][0]) / 2), (int)((pts[2][1] + pts[3][1]) / 2), "green");
-                            // 距離 = line1 中點到 line2 的垂足（紅）—— 對平行邊即垂直間距
-                            double[] m1 = { (pts[0][0] + pts[1][0]) / 2.0, (pts[0][1] + pts[1][1]) / 2.0 };
-                            double[] f2 = PerpFoot(m1, pts[2], pts[3]);
-                            an.DrawLine(m1[0], m1[1], f2[0], f2[1], "red");
-                            DrawDistanceLabel(an, m1, f2, distText);
-                        }
-                        break;
-                }
-            });
-        }
-
         // 角度量測 overlay（line_to_line）：兩條線（綠）+ 頂點（洋紅）+ 角度值（黃）。
         // 頂點用四點重心而非真正交點——對平行線也安全（交點可能不存在或在影像外）。
         private void DrawAngleOverlay(double[] a1, double[] a2, double[] b1, double[] b2, AngleMeasurementResult result)
@@ -3115,49 +2469,6 @@ namespace FlashMeasurementSystem
                     an.DrawLine(a1[0], a1[1], a1[0], a1[1] + refLen, "gray");
                 an.DrawCross(a1[0], a1[1], 18, "magenta");
                 an.DrawText(angleText, (int)a1[0] - 16, (int)a1[1] + 8, "yellow");
-            });
-        }
-
-        // ContourMaxMin 專屬 overlay：把兩條 contour 畫出來，並標出最近(Min,紅)與最遠(Max,橘)的距離線。
-        private void DrawContourMeasurementOverlay(DistanceMeasurementResult result)
-        {
-            var c1 = new System.Collections.Generic.List<double[]>();
-            var c2 = new System.Collections.Generic.List<double[]>();
-            bool second = false;
-            string[] lines = measurementCoordInput.Text.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
-            foreach (string l in lines)
-            {
-                if (string.IsNullOrWhiteSpace(l)) { second = true; continue; }
-                double[] c = ParseCoordinateLine(l);
-                if (c == null) continue;
-                if (second) c2.Add(c); else c1.Add(c);
-            }
-            if (c1.Count == 0 || c2.Count == 0) return;
-
-            FindNearestFarthestPair(c1, c2, out double[] na, out double[] nb, out double[] fa, out double[] fb);
-
-            string minText = string.Format(CultureInfo.InvariantCulture,
-                "Min {0:F1}px / {1:F3}mm", result.DistanceMinPx, result.DistanceMinMm);
-            string maxText = string.Format(CultureInfo.InvariantCulture,
-                "Max {0:F1}px / {1:F3}mm", result.DistanceMaxPx, result.DistanceMaxMm);
-
-            _imageHelper.EndRect2Edit();  // H2：接管畫面前結束殘留編輯把手
-            _imageHelper.EndArcEdit();
-            _imageHelper.SetPersistentOverlayAction(() =>
-            {
-                var an = _imageHelper.Annotator;
-                // 同 DrawMeasurementOverlay：先重畫偵測/擬合底層再疊量測標註。
-                DrawFittingLayers(an);
-                DrawContourPoints(an, c1, "cyan");
-                DrawContourPoints(an, c2, "cyan");
-                // Max（橘線）
-                an.DrawLine(fa[0], fa[1], fb[0], fb[1], "orange");
-                DrawDistanceLabel(an, fa, fb, maxText, "orange");
-                // Min（紅線，醒目，兩端標 cross）
-                an.DrawCross(na[0], na[1], 18, "red");
-                an.DrawCross(nb[0], nb[1], 18, "red");
-                an.DrawLine(na[0], na[1], nb[0], nb[1], "red");
-                DrawDistanceLabel(an, na, nb, minText, "yellow");
             });
         }
 
@@ -3216,246 +2527,6 @@ namespace FlashMeasurementSystem
             double t = ((p[0] - a[0]) * abr + (p[1] - a[1]) * abc) / denom;
             return new[] { a[0] + t * abr, a[1] + t * abc };
         }
-        private void MeasureDistanceButton_Click(object sender, EventArgs e)
-        {
-            try
-            {
-                var parameters = new DistanceMeasurementParameters
-                {
-                    PixelSizeUmX = (double)measurementPixelSizeXNumeric.Value,
-                    PixelSizeUmY = (double)measurementPixelSizeYNumeric.Value,
-                    ContourMode = contourModeCombo.SelectedItem.ToString()
-                };
-
-                string typeName = measurementTypeCombo.SelectedItem.ToString();
-                DistanceMeasurementResult result;
-
-                switch (typeName)
-                {
-                    case "PointToPoint":
-                        result = MeasurePointToPoint(parameters);
-                        break;
-                    case "PointToLine":
-                        result = MeasurePointToLine(parameters);
-                        break;
-                    case "LineToLine":
-                        result = MeasureLineToLine(parameters);
-                        break;
-                    case "CircleToCircle":
-                        result = MeasureCircleToCircle(parameters);
-                        break;
-                    case "ContourMaxMin":
-                        result = MeasureContourMaxMin(parameters);
-                        break;
-                    default:
-                        measureResultLabel.Text = "Unknown measurement type.";
-                        return;
-                }
-
-                if (result.Success)
-                {
-                    string text = string.Format(
-                        CultureInfo.InvariantCulture,
-                        "Distance: {0:F4} px / {1:F4} mm",
-                        result.DistancePx, result.DistanceMm);
-                    if (typeName == "LineToLine" || typeName == "ContourMaxMin")
-                    {
-                        text += string.Format(
-                            CultureInfo.InvariantCulture,
-                            "\r\nMin: {0:F4} mm  Max: {1:F4} mm",
-                            result.DistanceMinMm, result.DistanceMaxMm);
-                    }
-                    measureResultLabel.Text = text;
-                    DrawMeasurementOverlay(typeName, result);
-                }
-                else
-                {
-                    measureResultLabel.Text = "Failed: " + result.ErrorMessage;
-                }
-            }
-            catch (Exception ex)
-            {
-                measureResultLabel.Text = "Error: " + ex.Message;
-            }
-        }
-
-        // 角度量測（手冊 4.7）：line_to_line 需 4 行座標（兩條線），
-        // line_to_horizontal / line_to_vertical 需 2 行座標（單一條線）。
-        // 座標來源與距離量測共用 measurementCoordInput（可用 Append Line 帶入擬合線）。
-        private void MeasureAngleButton_Click(object sender, EventArgs e)
-        {
-            try
-            {
-                AngleMeasurementParameters parameters = new AngleMeasurementParameters
-                {
-                    Mode = angleModeCombo.SelectedItem == null ? "line_to_line" : angleModeCombo.SelectedItem.ToString()
-                };
-
-                string[] lines = measurementCoordInput.Text.Split(
-                    new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries);
-
-                AngleMeasurementResult result;
-
-                if (parameters.Mode == "line_to_line")
-                {
-                    if (lines.Length < 4)
-                    {
-                        measureResultLabel.Text = "角度量測需 4 行座標（線1兩端點、線2兩端點）。可按兩次 Append Line。";
-                        return;
-                    }
-                    double[] a1 = ParseCoordinateLine(lines[0]);
-                    double[] a2 = ParseCoordinateLine(lines[1]);
-                    double[] b1 = ParseCoordinateLine(lines[2]);
-                    double[] b2 = ParseCoordinateLine(lines[3]);
-                    if (a1 == null || a2 == null || b1 == null || b2 == null)
-                    {
-                        measureResultLabel.Text = "座標格式錯誤（每行 row,col）。";
-                        return;
-                    }
-                    result = _angleMeasurer.MeasureAngle(
-                        a1[0], a1[1], a2[0], a2[1], b1[0], b1[1], b2[0], b2[1], parameters);
-                    if (result.Success) DrawAngleOverlay(a1, a2, b1, b2, result);
-                }
-                else
-                {
-                    if (lines.Length < 2)
-                    {
-                        measureResultLabel.Text = "角度量測（對水平/垂直）需 2 行座標（單一條線的兩端點）。可按一次 Append Line。";
-                        return;
-                    }
-                    double[] a1 = ParseCoordinateLine(lines[0]);
-                    double[] a2 = ParseCoordinateLine(lines[1]);
-                    if (a1 == null || a2 == null)
-                    {
-                        measureResultLabel.Text = "座標格式錯誤（每行 row,col）。";
-                        return;
-                    }
-                    result = _angleMeasurer.MeasureAngle(
-                        a1[0], a1[1], a2[0], a2[1], 0, 0, 0, 0, parameters);
-                    if (result.Success) DrawAngleRefOverlay(a1, a2, parameters.Mode, result);
-                }
-
-                if (result.Success)
-                {
-                    string warn = result.IsNearParallel ? "  (近平行，建議改用距離量測)" : "";
-                    measureResultLabel.Text = string.Format(
-                        CultureInfo.InvariantCulture,
-                        "Angle: {0:F3}°  (acute {1:F3}°){2}\r\nL1∠x={3:F2}°  L2∠x={4:F2}°  raw={5:F2}°",
-                        result.AngleDeg, result.AcuteAngleDeg, warn,
-                        result.RefAngle1Deg, result.RefAngle2Deg, result.RawAngleDeg);
-                }
-                else
-                {
-                    measureResultLabel.Text = "Failed: " + result.ErrorMessage;
-                }
-            }
-            catch (Exception ex)
-            {
-                measureResultLabel.Text = "Error: " + ex.Message;
-            }
-        }
-
-        private double[] ParseCoordinateLine(string line)
-        {
-            string[] parts = line.Split(',');
-            if (parts.Length != 2) return null;
-            if (!double.TryParse(parts[0].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out double row)) return null;
-            if (!double.TryParse(parts[1].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out double col)) return null;
-            return new double[] { row, col };
-        }
-
-        private DistanceMeasurementResult MeasurePointToPoint(DistanceMeasurementParameters parameters)
-        {
-            string[] lines = measurementCoordInput.Text.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries);
-            if (lines.Length < 2) return new DistanceMeasurementResult { ErrorMessage = "Need 2 coordinate lines (row,col each)." };
-            double[] p1 = ParseCoordinateLine(lines[0]);
-            double[] p2 = ParseCoordinateLine(lines[1]);
-            if (p1 == null || p2 == null) return new DistanceMeasurementResult { ErrorMessage = "Invalid coordinate format." };
-            return _distanceMeasurer.MeasurePointToPoint(p1[0], p1[1], p2[0], p2[1], parameters);
-        }
-
-        private DistanceMeasurementResult MeasurePointToLine(DistanceMeasurementParameters parameters)
-        {
-            string[] lines = measurementCoordInput.Text.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries);
-            if (lines.Length < 3) return new DistanceMeasurementResult { ErrorMessage = "Need 3 coordinate lines (point, line-pt1, line-pt2)." };
-            double[] pt = ParseCoordinateLine(lines[0]);
-            double[] l1 = ParseCoordinateLine(lines[1]);
-            double[] l2 = ParseCoordinateLine(lines[2]);
-            if (pt == null || l1 == null || l2 == null) return new DistanceMeasurementResult { ErrorMessage = "Invalid coordinate format." };
-            return _distanceMeasurer.MeasurePointToLine(pt[0], pt[1], l1[0], l1[1], l2[0], l2[1], parameters);
-        }
-
-        private DistanceMeasurementResult MeasureLineToLine(DistanceMeasurementParameters parameters)
-        {
-            string[] lines = measurementCoordInput.Text.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries);
-            if (lines.Length < 4) return new DistanceMeasurementResult { ErrorMessage = "Need 4 coordinate lines (line1-pt1, line1-pt2, line2-pt1, line2-pt2)." };
-            double[] a1 = ParseCoordinateLine(lines[0]);
-            double[] a2 = ParseCoordinateLine(lines[1]);
-            double[] b1 = ParseCoordinateLine(lines[2]);
-            double[] b2 = ParseCoordinateLine(lines[3]);
-            if (a1 == null || a2 == null || b1 == null || b2 == null) return new DistanceMeasurementResult { ErrorMessage = "Invalid coordinate format." };
-            return _distanceMeasurer.MeasureLineToLine(a1[0], a1[1], a2[0], a2[1], b1[0], b1[1], b2[0], b2[1], parameters);
-        }
-
-        private DistanceMeasurementResult MeasureCircleToCircle(DistanceMeasurementParameters parameters)
-        {
-            string[] lines = measurementCoordInput.Text.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries);
-            if (lines.Length < 2) return new DistanceMeasurementResult { ErrorMessage = "Need 2 coordinate lines (circle1 center, circle2 center)." };
-            double[] c1 = ParseCoordinateLine(lines[0]);
-            double[] c2 = ParseCoordinateLine(lines[1]);
-            if (c1 == null || c2 == null) return new DistanceMeasurementResult { ErrorMessage = "Invalid coordinate format." };
-            return _distanceMeasurer.MeasureCircleToCircle(c1[0], c1[1], c2[0], c2[1], parameters);
-        }
-
-        private DistanceMeasurementResult MeasureContourMaxMin(DistanceMeasurementParameters parameters)
-        {
-            // 注意：這裡必須用 None 而非 RemoveEmptyEntries —— ContourMaxMin 靠「空行」分隔
-            // 兩條 contour，RemoveEmptyEntries 會把空行整個移除，導致下面的分隔偵測永遠失效、
-            // 所有點被塞進 contour1。其他 Measure 方法按行數取座標才用 RemoveEmptyEntries。
-            string[] lines = measurementCoordInput.Text.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
-            if (lines.Length < 2) return new DistanceMeasurementResult { ErrorMessage = "Need at least 2 points for contour. Use 2+ lines per contour separated by a blank line." };
-
-            var contour1Points = new System.Collections.Generic.List<EdgePoint>();
-            var contour2Points = new System.Collections.Generic.List<EdgePoint>();
-            bool secondContour = false;
-
-            foreach (string line in lines)
-            {
-                if (string.IsNullOrWhiteSpace(line))
-                {
-                    secondContour = true;
-                    continue;
-                }
-                double[] coord = ParseCoordinateLine(line);
-                if (coord == null) return new DistanceMeasurementResult { ErrorMessage = "Invalid coordinate: " + line };
-                if (!secondContour)
-                    contour1Points.Add(new EdgePoint { Row = coord[0], Column = coord[1] });
-                else
-                    contour2Points.Add(new EdgePoint { Row = coord[0], Column = coord[1] });
-            }
-
-            if (contour1Points.Count < 2 || contour2Points.Count < 2)
-                return new DistanceMeasurementResult { ErrorMessage = "Each contour needs at least 2 points." };
-
-            HXLDCont cont1 = null, cont2 = null;
-            try
-            {
-                cont1 = EdgePointsToContour(contour1Points);
-                cont2 = EdgePointsToContour(contour2Points);
-                return _distanceMeasurer.MeasureContourMaxMin(cont1, cont2, parameters);
-            }
-            catch (HalconException ex)
-            {
-                return new DistanceMeasurementResult { ErrorMessage = "Halcon error: " + ex.Message };
-            }
-            finally
-            {
-                // 每次 ContourMaxMin 量測都 new 兩個 HXLDCont，須釋放避免非託管記憶體累積。
-                cont1?.Dispose();
-                cont2?.Dispose();
-            }
-        }
-
         private static HXLDCont EdgePointsToContour(System.Collections.Generic.IList<EdgePoint> points)
         {
             int n = points.Count;
