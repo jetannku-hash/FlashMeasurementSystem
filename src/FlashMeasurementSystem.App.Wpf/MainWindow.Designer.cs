@@ -100,6 +100,7 @@
             this.edgeAmplitudeColumn = new System.Windows.Forms.DataGridViewTextBoxColumn();
             this.edgeDistanceColumn = new System.Windows.Forms.DataGridViewTextBoxColumn();
             this.measurementTabPage = new System.Windows.Forms.TabPage();
+            this.recipeTabPage = new System.Windows.Forms.TabPage();
             this.measurementBox = new System.Windows.Forms.GroupBox();
             this.measurementTableLayout = new System.Windows.Forms.TableLayoutPanel();
             this.measurementPixelXLabel = new System.Windows.Forms.Label();
@@ -245,9 +246,13 @@
             // 
             // featureTabControl
             // 
-            this.featureTabControl.Controls.Add(this.inspectionTabPage);
-            this.featureTabControl.Controls.Add(this.edgeDetectionTabPage);
-            this.featureTabControl.Controls.Add(this.measurementTabPage);
+            // 分頁順序＝工作流程順序：從左到右做一遍就是建立並驗證一個配方。
+            // 原本三個分頁是按「技術分類」切的（Inspection / Edge Detection / Measurement），
+            // 導致「建一個新料號」這件事要橫跨兩個分頁加一個彈出視窗，看不出先後。
+            this.featureTabControl.Controls.Add(this.inspectionTabPage);      // ① 建立模板
+            this.featureTabControl.Controls.Add(this.recipeTabPage);          // ② 配方
+            this.featureTabControl.Controls.Add(this.measurementTabPage);     // ③ 量測
+            this.featureTabControl.Controls.Add(this.edgeDetectionTabPage);   // ④ 診斷
             this.featureTabControl.Dock = System.Windows.Forms.DockStyle.Fill;
             this.featureTabControl.Location = new System.Drawing.Point(4, 4);
             this.featureTabControl.Name = "featureTabControl";
@@ -258,16 +263,29 @@
             // 
             // inspectionTabPage
             // 
+            // Dock=Fill 的必須先加入，Dock=Top 的後加（後加者顯示在上方），與原本順序一致。
+            // imageQualityBox 已移至「④ 診斷」——影像品質檢查是出問題時才用的診斷工具，
+            // 不是建立模板的步驟，留在這裡會讓人以為每次建模板都要先跑它。
             this.inspectionTabPage.Controls.Add(this.templateMatchingBox);
             this.inspectionTabPage.Controls.Add(this.templateCreationBox);
-            this.inspectionTabPage.Controls.Add(this.imageQualityBox);
             this.inspectionTabPage.Location = new System.Drawing.Point(4, 22);
             this.inspectionTabPage.Name = "inspectionTabPage";
             this.inspectionTabPage.Padding = new System.Windows.Forms.Padding(3);
             this.inspectionTabPage.Size = new System.Drawing.Size(253, 608);
             this.inspectionTabPage.TabIndex = 0;
-            this.inspectionTabPage.Text = "Inspection";
+            this.inspectionTabPage.Text = "① 建立模板";
             this.inspectionTabPage.UseVisualStyleBackColor = true;
+            //
+            // recipeTabPage
+            //
+            // 內容（配方工具列）由 MainWindow.cs 在 OnLoad 以程式碼建構，比照既有 topToolbar 做法。
+            this.recipeTabPage.Location = new System.Drawing.Point(4, 22);
+            this.recipeTabPage.Name = "recipeTabPage";
+            this.recipeTabPage.Padding = new System.Windows.Forms.Padding(3);
+            this.recipeTabPage.Size = new System.Drawing.Size(253, 608);
+            this.recipeTabPage.TabIndex = 1;
+            this.recipeTabPage.Text = "② 配方";
+            this.recipeTabPage.UseVisualStyleBackColor = true;
             // 
             // templateMatchingBox
             // 
@@ -284,7 +302,7 @@
             this.templateMatchingBox.Size = new System.Drawing.Size(247, 306);
             this.templateMatchingBox.TabIndex = 3;
             this.templateMatchingBox.TabStop = false;
-            this.templateMatchingBox.Text = "Template Matching";
+            this.templateMatchingBox.Text = "模板比對";
             // 
             // matchResultTextBox
             // 
@@ -389,7 +407,7 @@
             this.templateCreationBox.Size = new System.Drawing.Size(247, 186);
             this.templateCreationBox.TabIndex = 2;
             this.templateCreationBox.TabStop = false;
-            this.templateCreationBox.Text = "Template Creation";
+            this.templateCreationBox.Text = "建立模板";
             // 
             // roiClearButton
             // 
@@ -537,7 +555,7 @@
             this.imageQualityBox.Size = new System.Drawing.Size(247, 110);
             this.imageQualityBox.TabIndex = 0;
             this.imageQualityBox.TabStop = false;
-            this.imageQualityBox.Text = "Image Quality Check";
+            this.imageQualityBox.Text = "影像品質檢查";
             // 
             // iqcResultLabel
             // 
@@ -560,13 +578,15 @@
             // 
             // edgeDetectionTabPage
             // 
+            // 診斷分頁：Dock=Fill 的邊緣檢測先加入，Dock=Top 的影像品質檢查後加（顯示在上方）。
             this.edgeDetectionTabPage.Controls.Add(this._edgeDetectionBox);
+            this.edgeDetectionTabPage.Controls.Add(this.imageQualityBox);
             this.edgeDetectionTabPage.Location = new System.Drawing.Point(4, 22);
             this.edgeDetectionTabPage.Name = "edgeDetectionTabPage";
             this.edgeDetectionTabPage.Padding = new System.Windows.Forms.Padding(3);
             this.edgeDetectionTabPage.Size = new System.Drawing.Size(253, 608);
-            this.edgeDetectionTabPage.TabIndex = 1;
-            this.edgeDetectionTabPage.Text = "Edge Detection";
+            this.edgeDetectionTabPage.TabIndex = 3;
+            this.edgeDetectionTabPage.Text = "④ 診斷";
             this.edgeDetectionTabPage.UseVisualStyleBackColor = true;
             // 
             // _edgeDetectionBox
@@ -579,7 +599,7 @@
             this._edgeDetectionBox.Size = new System.Drawing.Size(247, 602);
             this._edgeDetectionBox.TabIndex = 0;
             this._edgeDetectionBox.TabStop = false;
-            this._edgeDetectionBox.Text = "Edge Detection";
+            this._edgeDetectionBox.Text = "邊緣檢測（探索用）";
             // 
             // edgeTableLayout
             // 
@@ -1279,7 +1299,7 @@
             this.measurementTabPage.Padding = new System.Windows.Forms.Padding(3);
             this.measurementTabPage.Size = new System.Drawing.Size(253, 608);
             this.measurementTabPage.TabIndex = 2;
-            this.measurementTabPage.Text = "Measurement";
+            this.measurementTabPage.Text = "③ 量測";
             this.measurementTabPage.UseVisualStyleBackColor = true;
             // 
             // measurementBox
@@ -1499,6 +1519,7 @@
         private System.Windows.Forms.TabPage edgeDetectionTabPage;
         private System.Windows.Forms.GroupBox imageQualityBox;
         private System.Windows.Forms.TabPage measurementTabPage;
+        private System.Windows.Forms.TabPage recipeTabPage;
         private System.Windows.Forms.GroupBox measurementBox;
         private System.Windows.Forms.NumericUpDown measurementPixelSizeXNumeric;
         private System.Windows.Forms.NumericUpDown measurementPixelSizeYNumeric;

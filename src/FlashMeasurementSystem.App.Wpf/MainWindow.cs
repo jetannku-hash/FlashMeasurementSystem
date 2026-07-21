@@ -144,28 +144,36 @@ namespace FlashMeasurementSystem
             // 結果表空狀態提示（第五組 #11）：無資料列時於表格中央繪製引導文字。
             _edgeResultsGrid.Paint += EdgeResultsGrid_Paint;
 
-            // 校正 + 配方按鈕（M3b/M3c）：程式碼動態加在 Measurement 分頁頂端的工具列，不動 Designer.cs。
-            // measurementBox 為 Dock=Fill 且先加入，故此 Top 工具列置前後可佔頂端、GroupBox 填其餘。
-            var topToolbar = new FlowLayoutPanel
-            {
-                Dock = DockStyle.Top,
-                FlowDirection = FlowDirection.LeftToRight,
-                WrapContents = true,
-                AutoSize = true
-            };
-            var calibButton = new Button { Text = "校正...", Width = 64, Height = 26 };
-            calibButton.Click += OpenCalibrationDialog;
-            var loadRecipeButton = new Button { Text = "&Load Recipe", Width = 84, Height = 26 };
+            // 三個分頁各自的動作工具列（比照原 topToolbar 以程式碼建構，不動 Designer.cs）。
+            // 分頁順序即工作流程順序，故按鈕依「屬於哪一步」分配，而非全部堆在同一列：
+            //   ② 配方 = 定義要量什麼；③ 量測 = 執行與驗證；④ 診斷 = 出問題時才用。
+            // 校正不在任何分頁——它是整台機器的設定、一台機器只做一次，放在分頁裡會讓人
+            // 以為每次建模板都得重做，故移到選單列（見 MainWindow.ViewMode.cs 的「設定」選單）。
+
+            // ── ② 配方 ──
+            var recipeToolbar = MakeTabToolbar();
+            var loadRecipeButton = new Button { Text = "載入配方…", Width = 90, Height = 26 };
             loadRecipeButton.Click += LoadRecipeButton_Click;
-            var setRefButton = new Button { Text = "&Set Ref", Width = 64, Height = 26 };
+            var setRefButton = new Button { Text = "設定參考姿態", Width = 100, Height = 26 };
             setRefButton.Click += SetRefPoseButton_Click;
-            var runRecipeButton = new Button { Text = "&Run Recipe", Width = 84, Height = 26 };
-            runRecipeButton.Click += RunRecipeButton_Click;
-            // 配方編輯器（M3c-2）：建/編 .zcp。Load Recipe 為執行流程入口，兩者並存。
-            var editRecipeButton = new Button { Text = "&Edit Recipe", Width = 84, Height = 26 };
+            var editRecipeButton = new Button { Text = "編輯配方…", Width = 90, Height = 26 };
             editRecipeButton.Click += OpenRecipeEditor;
-            var metrologyButton = new Button { Text = "Metrology Model", Width = 110, Height = 26 };
+            var metrologyButton = new Button { Text = "2D 量測模型…", Width = 100, Height = 26 };
             metrologyButton.Click += OpenMetrologyModelEditor;
+            recipeToolbar.Controls.Add(loadRecipeButton);
+            recipeToolbar.Controls.Add(setRefButton);
+            recipeToolbar.Controls.Add(editRecipeButton);
+            recipeToolbar.Controls.Add(metrologyButton);
+            recipeTabPage.Controls.Add(recipeToolbar);
+
+            // ── ③ 量測 ──
+            var runToolbar = MakeTabToolbar();
+            // 載入影像在「① 建立模板」分頁也有一顆（供 Run Matching 用）。共用同一個 handler，
+            // 兩個入口不會漂移；量測分頁需要它，否則得跳回第一個分頁才能換圖。
+            var loadImageButton = new Button { Text = "載入影像…", Width = 90, Height = 26 };
+            loadImageButton.Click += LoadTestImageButton_Click;
+            var runRecipeButton = new Button { Text = "執行配方", Width = 84, Height = 26 };
+            runRecipeButton.Click += RunRecipeButton_Click;
             var oneClickButton = new Button { Text = "一鍵量測", Width = 84, Height = 26 };
             oneClickButton.Click += OneClickMeasureButton_Click;
             _skipIqcCheckBox = new CheckBox
@@ -175,37 +183,35 @@ namespace FlashMeasurementSystem
                 Checked = false,
                 Margin = new Padding(4, 6, 4, 0)
             };
+            runToolbar.Controls.Add(loadImageButton);
+            runToolbar.Controls.Add(runRecipeButton);
+            runToolbar.Controls.Add(oneClickButton);
+            runToolbar.Controls.Add(_skipIqcCheckBox);
+            measurementTabPage.Controls.Add(runToolbar);
 
-            // 獨立動作按鈕（Task 4）：DXF/CAD 輪廓度比對。比照 Edit Recipe / Metrology Model，
-            // 非配方/一鍵量測流程的一環，僅開一個獨立面板操作目前共用影像。
-            var dxfButton = new Button { Text = "DXF 比對...", Width = 84, Height = 26 };
+            // ── ④ 診斷 ──
+            var diagToolbar = MakeTabToolbar();
+            var dxfButton = new Button { Text = "DXF 比對…", Width = 90, Height = 26 };
             dxfButton.Click += OpenDxfComparisonForm;
+            diagToolbar.Controls.Add(dxfButton);
+            edgeDetectionTabPage.Controls.Add(diagToolbar);
 
-            // Toolbar tooltips
-            _toolTip.SetToolTip(calibButton, "Open pixel-size calibration dialog");
-            _toolTip.SetToolTip(loadRecipeButton, "Load a measurement recipe (.zcp)");
-            _toolTip.SetToolTip(setRefButton, "Set the current match pose as the recipe reference pose");
-            _toolTip.SetToolTip(runRecipeButton, "Run the loaded recipe on the current image");
-            _toolTip.SetToolTip(editRecipeButton, "Open recipe editor to create or modify recipes");
-            _toolTip.SetToolTip(metrologyButton, "Define the 2D metrology model for the loaded recipe");
-            _toolTip.SetToolTip(oneClickButton, "Run full pipeline: IQC → Match → Measure → Evaluate → Report");
+            _toolTip.SetToolTip(loadRecipeButton, "載入量測配方 (.zcp)");
+            _toolTip.SetToolTip(setRefButton, "把目前的匹配姿態設為本配方的參考姿態，並記住所用模板");
+            _toolTip.SetToolTip(editRecipeButton, "開啟配方編輯器，新增或修改量測工具");
+            _toolTip.SetToolTip(metrologyButton, "定義本配方的 2D 量測模型");
+            _toolTip.SetToolTip(loadImageButton, "載入待測影像");
+            _toolTip.SetToolTip(runRecipeButton, "以目前影像執行配方量測（不產報表；需要姿態時會自行匹配）");
+            _toolTip.SetToolTip(oneClickButton, "完整流程：影像品質 → 模板匹配 → 量測 → 判定 → CSV/PDF 報表");
             _toolTip.SetToolTip(_skipIqcCheckBox,
                 "略過影像品質檢查（僅供合成影像測試）。只在工程模式生效，切到操作員模式會自動取消勾選。");
-            _toolTip.SetToolTip(dxfButton, "Open standalone DXF/CAD contour comparison panel");
+            _toolTip.SetToolTip(dxfButton, "開啟 DXF/CAD 輪廓度比對面板");
 
-            topToolbar.Controls.Add(calibButton);
-            topToolbar.Controls.Add(loadRecipeButton);
-            topToolbar.Controls.Add(setRefButton);
-            topToolbar.Controls.Add(runRecipeButton);
-            topToolbar.Controls.Add(editRecipeButton);
-            topToolbar.Controls.Add(metrologyButton);
-            topToolbar.Controls.Add(oneClickButton);
-            topToolbar.Controls.Add(_skipIqcCheckBox);
-            topToolbar.Controls.Add(dxfButton);
-            measurementTabPage.Controls.Add(topToolbar);
             // WinForms docking 依「反 z-order」處理：最後面(SendToBack)的先 dock 佔邊，
-            // 最前面(BringToFront)的後 dock 佔剩餘。故 Top 工具列要在後、Fill 內容要在前。
-            topToolbar.SendToBack();
+            // 最前面的後 dock 佔剩餘。故 Top 工具列要在後、Fill 內容要在前。
+            recipeToolbar.SendToBack();
+            runToolbar.SendToBack();
+            diagToolbar.SendToBack();
             measurementBox.BringToFront();
 
             _openImageDialog = new OpenFileDialog
