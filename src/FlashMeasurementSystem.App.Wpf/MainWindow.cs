@@ -1389,6 +1389,8 @@ namespace FlashMeasurementSystem
                     _loadedRecipe.Name, _loadedRecipe.Tools.Count, _loadedRecipe.SchemaVersion,
                     _loadedRecipe.HasReferencePose ? "，含參考姿態" : "，無參考姿態（需 Set Ref）"),
                     SystemColors.ControlText);
+                // 操作員面板的「配方：」欄需同步，否則換配方後仍顯示舊料號。
+                UpdateOperatorRecipeInfo();
             }
             catch (Exception ex)
             {

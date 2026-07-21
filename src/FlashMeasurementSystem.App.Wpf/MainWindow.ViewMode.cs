@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.IO;
 using System.Windows.Forms;
 
 namespace FlashMeasurementSystem
@@ -43,6 +44,8 @@ namespace FlashMeasurementSystem
         private Panel _rightHostPanel;
         private Panel _operatorPanel;
         private Label _operatorResultLabel;
+        private Label _operatorRecipeLabel;
+        private Label _operatorReportLabel;
 
         /// <summary>
         /// 建立模式切換選單。比照既有 topToolbar 的做法以程式碼建構，不動 Designer.cs
@@ -77,28 +80,70 @@ namespace FlashMeasurementSystem
         /// <summary>
         /// 建立操作員面板，並讓它與工程分頁共用 mainTableLayout 的右欄格子。
         ///
-        /// Phase 2a 只放結果顯示；操作動作（載入影像／一鍵量測／重新載入配方等）於 Phase 2b 加入，
-        /// 因此此階段的操作員模式**刻意尚不可用**，僅供驗證結果訊息分流是否正確。
+        /// 只放生產閉環所需：配方/報表資訊、載入影像、一鍵量測、重新載入配方、結果訊息。
+        /// 會改變判定基準的動作（校正、Set Ref、建範本、參數試調）一律不放這裡。
+        /// PASS/FAIL 大橫幅沿用既有的 resultBannerLabel——它掛在 mainTableLayout(0,0)、
+        /// 位於分頁之外，兩種模式都看得到，不需複製。
         /// </summary>
         private void BuildOperatorPanel()
         {
+            // 由下往上加入 Dock=Top 的控制項，最後加入的會排在最上面；
+            // 結果標籤 Dock=Fill 須「先」加入才能填滿剩餘空間。
             _operatorResultLabel = new Label
             {
                 Dock = DockStyle.Fill,
                 TextAlign = ContentAlignment.TopLeft,
-                Padding = new Padding(4),
-                AutoEllipsis = true,
+                Padding = new Padding(2, 6, 2, 2),
                 Text = string.Empty
+            };
+
+            var iqcButton = MakeOperatorButton("影像品質檢查", RunIqcButton_Click, 28);
+            // IQC 已含在一鍵量測流程內（MeasurementWorkflow 的 CheckingImage 階段），
+            // 這裡保留為「一鍵失敗時的診斷入口」，故做成次要樣式、置於最下。
+            _toolTip.SetToolTip(iqcButton, "單獨檢查目前影像的品質（一鍵量測已包含此步驟）");
+
+            var reloadRecipeButton = MakeOperatorButton("重新載入配方…", LoadRecipeButton_Click, 28);
+            _toolTip.SetToolTip(reloadRecipeButton, "換料號時載入另一個配方 (.zcp)");
+
+            var oneClickButton = MakeOperatorButton("一鍵量測", OneClickMeasureButton_Click, 46);
+            oneClickButton.Font = new Font(Font.FontFamily, 11F, FontStyle.Bold);
+            _toolTip.SetToolTip(oneClickButton, "影像品質檢查 → 範本比對 → 量測 → 判定 → 產出 CSV 與 PDF 報表");
+
+            var loadImageButton = MakeOperatorButton("載入影像…", LoadTestImageButton_Click, 34);
+            _toolTip.SetToolTip(loadImageButton, "載入待測影像");
+
+            _operatorReportLabel = new Label
+            {
+                Dock = DockStyle.Top,
+                Height = 32,
+                AutoEllipsis = true,
+                TextAlign = ContentAlignment.MiddleLeft
+            };
+
+            _operatorRecipeLabel = new Label
+            {
+                Dock = DockStyle.Top,
+                Height = 32,
+                AutoEllipsis = true,
+                TextAlign = ContentAlignment.MiddleLeft,
+                Font = new Font(Font, FontStyle.Bold)
             };
 
             _operatorPanel = new Panel
             {
                 Dock = DockStyle.Fill,
-                Padding = new Padding(4),
-                AutoScroll = true,
+                Padding = new Padding(6),
                 Visible = false
             };
             _operatorPanel.Controls.Add(_operatorResultLabel);
+            _operatorPanel.Controls.Add(iqcButton);
+            _operatorPanel.Controls.Add(reloadRecipeButton);
+            _operatorPanel.Controls.Add(oneClickButton);
+            _operatorPanel.Controls.Add(loadImageButton);
+            _operatorPanel.Controls.Add(_operatorReportLabel);
+            _operatorPanel.Controls.Add(_operatorRecipeLabel);
+
+            UpdateOperatorRecipeInfo();
 
             // 把既有的 rightPanel 從 TableLayoutPanel 取出，改掛到共用容器下。
             // 只換父層，不動它自身的 Dock/Padding/AutoScroll 設定。
@@ -113,6 +158,45 @@ namespace FlashMeasurementSystem
             _rightHostPanel.Controls.Add(_operatorPanel);
 
             mainTableLayout.Controls.Add(_rightHostPanel, 1, 1);
+        }
+
+        /// <summary>
+        /// 操作員面板的動作按鈕。刻意共用工程模式既有的 Click handler，
+        /// 不另寫一條流程——兩個入口跑同一段程式碼，才不會日後行為漂移。
+        /// </summary>
+        private Button MakeOperatorButton(string text, EventHandler onClick, int height)
+        {
+            var b = new Button
+            {
+                Text = text,
+                Dock = DockStyle.Top,
+                Height = height,
+                Margin = new Padding(0, 0, 0, 6)
+            };
+            b.Click += onClick;
+            return b;
+        }
+
+        /// <summary>
+        /// 更新操作員面板上的配方名稱與報表輸出位置。
+        /// 操作員需要在按下量測前，先確認自己跑的是對的配方。
+        /// </summary>
+        private void UpdateOperatorRecipeInfo()
+        {
+            if (_operatorRecipeLabel == null) return;
+
+            if (_loadedRecipe == null)
+            {
+                _operatorRecipeLabel.Text = "配方：（尚未載入）";
+                _operatorRecipeLabel.ForeColor = Color.DarkRed;
+            }
+            else
+            {
+                _operatorRecipeLabel.Text = "配方：" + _loadedRecipe.Name;
+                _operatorRecipeLabel.ForeColor = SystemColors.ControlText;
+            }
+
+            _operatorReportLabel.Text = "報表：" + Path.Combine(ResolveDataDir(), "reports");
         }
 
         /// <summary>
