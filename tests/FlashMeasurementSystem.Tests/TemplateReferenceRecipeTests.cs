@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using FlashMeasurementSystem.Application.Roi;
+using FlashMeasurementSystem.Domain.ImageQuality;
 using FlashMeasurementSystem.Domain.Roi;
 using FlashMeasurementSystem.Infrastructure.Roi;
 
@@ -27,6 +28,7 @@ namespace FlashMeasurementSystem.Tests
             NoWarningWhenTemplateRecorded();
             NoWarningWithoutReferencePose();
             SaveStampsCurrentSchemaVersion();
+            EditRoundTripKeepsEveryField();
 
             Console.WriteLine("TemplateReferenceRecipeTests passed");
         }
@@ -137,6 +139,49 @@ namespace FlashMeasurementSystem.Tests
             finally
             {
                 if (File.Exists(path)) File.Delete(path);
+            }
+        }
+
+        // 編輯器的「載入 → 編輯 → 存檔」不可弄丟任何欄位。
+        //
+        // 這條路徑踩過兩次：編輯器原本逐欄手寫複製，v15 的 IqcThresholds 補上了，
+        // v16 的 TemplateModelId 仍然漏掉——症狀是按下 Save 後配方記錄的模板被靜默清空，
+        // 檔案看起來一切正常，直到之後量測位置出錯或驗證跳警告才會發現。
+        // 改用 Recipe.CloneWithoutTools()（MemberwiseClone）後漏抄不再可能。
+        //
+        // 本測試鎖的是 CloneWithoutTools 的契約：除 Tools 外每個屬性都必須被保留
+        // （以反射逐一比對，新增欄位自動納入檢查）。它**無法**偵測有人把編輯器改回
+        // 逐欄手寫複製——那段程式在 App.Wpf 且為 private，測不到。編輯器必須持續
+        // 委派給這個方法，這點只能靠 CopyRecipeMetadata 上的註解說明。
+        private static void EditRoundTripKeepsEveryField()
+        {
+            var src = ValidRecipe();
+            src.RecipeId = "R-9";
+            src.Name = "orig";
+            src.CalibrationProfileId = "CAL-9";
+            src.RefRow = 11.5; src.RefCol = 22.5; src.RefAngleRad = 0.75;
+            src.HasReferencePose = true;
+            src.TemplateModelId = "t_edit.shm";
+            src.IqcThresholds = new ImageQualityThresholds { MaxBrightness = 199.0 };
+            src.CreatedAt = new DateTime(2026, 7, 21, 10, 0, 0);
+            src.ModifiedAt = new DateTime(2026, 7, 21, 11, 0, 0);
+
+            Recipe copy = src.CloneWithoutTools();
+
+            Assert(copy.Tools != null && copy.Tools.Count == 0, "clone must start with an empty tool list");
+            Assert(!ReferenceEquals(copy.Tools, src.Tools), "clone must not share the tool list");
+
+            foreach (var prop in typeof(Recipe).GetProperties())
+            {
+                if (prop.Name == "Tools") continue;          // 刻意換成空清單
+                object a = prop.GetValue(src, null);
+                object b = prop.GetValue(copy, null);
+                if (!Equals(a, b))
+                {
+                    throw new InvalidOperationException(string.Format(
+                        "TemplateReference edit round-trip dropped '{0}': expected {1}, actual {2}",
+                        prop.Name, a ?? "null", b ?? "null"));
+                }
             }
         }
 
