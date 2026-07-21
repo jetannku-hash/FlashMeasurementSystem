@@ -104,7 +104,9 @@ namespace FlashMeasurementSystem
             if (!skipImageQualityCheck)
             try
             {
-                ImageQualityResult iqResult = _iqc.Check(image, ImageQualityThresholds.Default());
+                // 門檻取自配方（未設定則回退全域預設）：亮度/銳利度的合格範圍取決於工件、
+                // 鏡頭與打光，不同料號本來就該有不同門檻。
+                ImageQualityResult iqResult = _iqc.Check(image, recipe.EffectiveIqcThresholds());
                 if (!iqResult.Pass)
                 {
                     result.Success = false;

@@ -116,6 +116,11 @@ namespace FlashMeasurementSystem
             NormalizeTemplateMatchingLayout();
             SetupToolTips();
 
+            // 操作員／工程師模式切換選單與操作員面板（見 MainWindow.ViewMode.cs）。
+            BuildViewModeMenu();
+            BuildOperatorPanel();
+            ApplyViewMode();
+
             _imageHelper = new HWindowControlHelper(hWindowControl);
             _imageHelper.MouseMoved += OnImageMouseMoved;
             _imageHelper.RoiSelected += OnImageRoiSelected;
@@ -201,7 +206,8 @@ namespace FlashMeasurementSystem
             _toolTip.SetToolTip(editRecipeButton, "Open recipe editor to create or modify recipes");
             _toolTip.SetToolTip(metrologyButton, "Define the 2D metrology model for the loaded recipe");
             _toolTip.SetToolTip(oneClickButton, "Run full pipeline: IQC → Match → Measure → Evaluate → Report");
-            _toolTip.SetToolTip(_skipIqcCheckBox, "Skip image quality check (for testing with synthetic images)");
+            _toolTip.SetToolTip(_skipIqcCheckBox,
+                "略過影像品質檢查（僅供合成影像測試）。只在工程模式生效，切到操作員模式會自動取消勾選。");
             _toolTip.SetToolTip(dxfButton, "Open standalone DXF/CAD contour comparison panel");
 
             topToolbar.Controls.Add(calibButton);
@@ -230,12 +236,18 @@ namespace FlashMeasurementSystem
             try
             {
                 HOperatorSet.GetSystem("version", out HTuple version);
-                Text = $"Flash Measurement System - Template Matching (Halcon {version.S})";
+                // 經 SetBaseWindowTitle 而非直接寫 Text：標題列尾端還要接模式後綴，
+                // 直接指派會把 [工程模式] 抹掉（見 MainWindow.ViewMode.cs）。
+                SetBaseWindowTitle($"Flash Measurement System - Template Matching (Halcon {version.S})");
             }
             catch (HalconException)
             {
-                Text = "Flash Measurement System - Template Matching (Halcon unavailable)";
+                SetBaseWindowTitle("Flash Measurement System - Template Matching (Halcon unavailable)");
             }
+
+            // 還原上次使用的配方（見 MainWindow.ViewMode.cs）：操作員開機後即可直接載圖量測。
+            // 須在 UpdateEmptyState 之前，空狀態引導才會反映「配方已載入」。
+            TryRestoreLastRecipe();
 
             // 初始空狀態：尚無影像/配方→顯示三步驟引導；橫幅為灰「—」。
             UpdateEmptyState();
@@ -351,10 +363,7 @@ namespace FlashMeasurementSystem
             _toolTip.SetToolTip(_sectorDrawCheck, "勾選後從圓心往外拖拉出扇形量測區，放開後自動進入把手微調");
             _toolTip.SetToolTip(_edgeResultsGrid, "Detected edge points (Row, Col, Amplitude, Distance)");
             _toolTip.SetToolTip(_edgeStatusLabel, "Edge detection status — PASS (green) or FAIL (red)");
-            _toolTip.SetToolTip(lineFittingResultLabel, "Line fitting result");
-            _toolTip.SetToolTip(circleFittingResultLabel, "Circle fitting result");
-            _toolTip.SetToolTip(ellipseFittingResultLabel, "Ellipse fitting result");
-            _toolTip.SetToolTip(rectangleFittingResultLabel, "Rectangle fitting result");
+            _toolTip.SetToolTip(fittingResultLabel, "最後一次擬合（直線/圓/橢圓/矩形）的結果");
 
             // ── Measurement ──
             _toolTip.SetToolTip(measurementPixelSizeXNumeric, "Pixel size in X direction (µm/pixel)");
@@ -482,9 +491,10 @@ namespace FlashMeasurementSystem
             matchResultTextBox.Text = string.Empty;
             iqcResultLabel.Text = "Not tested";
             iqcResultLabel.ForeColor = Color.Black;
-            measureResultLabel.Text = string.Empty;
             // 重置顏色：否則上一次配方 NG(紅)/OK(綠) 會殘留並染色後續無關文字。
-            measureResultLabel.ForeColor = SystemColors.ControlText;
+            // 走 SetMeasurementResult 一併清掉操作員結果面，否則換圖後操作員畫面
+            // 仍留著上一張影像的 OK/NG 文字（正是本方法要防的誤判）。
+            SetMeasurementResult(string.Empty, SystemColors.ControlText);
 
             // 換圖必須清掉匹配姿態，否則 Run Recipe 守門（HasReferencePose && !_hasMatch）
             // 會放行，並用前一張影像的 _lastMatch* 對新影像做 ROI 變換，畫出錯誤的 OK/NG。
@@ -508,7 +518,18 @@ namespace FlashMeasurementSystem
         {
             bool hasImage = _imageHelper != null && _imageHelper.CurrentImage != null;
             bool hasRecipe = _loadedRecipe != null;
-            emptyStateGuideLabel.Visible = !hasImage && !hasRecipe;
+
+            // 只要還沒有影像就顯示引導。原本的條件是「無影像且無配方」，在配方只能手動載入時
+            // 沒問題；但開機自動還原配方後，沿用該條件會讓操作員一開機就看到全黑畫面、
+            // 沒有任何提示。影像格此時是空的，引導不會蓋住任何已載入內容。
+            emptyStateGuideLabel.Visible = !hasImage;
+
+            if (!hasImage)
+            {
+                emptyStateGuideLabel.Text = hasRecipe
+                    ? "配方已就緒\n① 載入影像（Load Image）\n② 按一鍵量測（One-Click）"
+                    : "① 載入影像（Load Image）\n② 載入或建立配方（Load / Edit Recipe）\n③ 按一鍵量測（One-Click）";
+            }
         }
 
         // PASS/FAIL 大字橫幅（GUI-02 / N2）：依配方執行結果設定顏色與文字。
@@ -761,16 +782,20 @@ namespace FlashMeasurementSystem
 
             try
             {
-                var result = _iqc.Check(_imageHelper.CurrentImage, ImageQualityThresholds.Default());
-                iqcResultLabel.Text = result.Pass
+                // 與一鍵量測用同一組門檻（配方未載入時才退回全域預設），否則會出現
+                // 「單獨檢查說 PASS、一鍵量測卻 FAIL」這種難以追查的不一致。
+                ImageQualityThresholds thresholds = _loadedRecipe != null
+                    ? _loadedRecipe.EffectiveIqcThresholds()
+                    : ImageQualityThresholds.Default();
+                var result = _iqc.Check(_imageHelper.CurrentImage, thresholds);
+                SetIqcResult(result.Pass
                     ? $"PASS | Mean:{result.MeanBrightness:F1} Sat:{result.SaturationRatio:F2}% Blur:{result.BlurScore:F1} Contrast:{result.Contrast:F1}"
-                    : $"FAIL | {result.Message}";
-                iqcResultLabel.ForeColor = result.Pass ? System.Drawing.Color.Green : System.Drawing.Color.Red;
+                    : $"FAIL | {result.Message}",
+                    result.Pass ? System.Drawing.Color.Green : System.Drawing.Color.Red);
             }
             catch (HalconException ex)
             {
-                iqcResultLabel.Text = $"IQC error: {ex.Message}";
-                iqcResultLabel.ForeColor = System.Drawing.Color.Red;
+                SetIqcResult($"IQC error: {ex.Message}", System.Drawing.Color.Red);
             }
         }
 
@@ -1372,21 +1397,7 @@ namespace FlashMeasurementSystem
 
             if (_openRecipeDialog.ShowDialog(this) != DialogResult.OK) return;
 
-            try
-            {
-                _loadedRecipe = _recipeStore.Load(_openRecipeDialog.FileName);
-                _loadedRecipePath = _openRecipeDialog.FileName;
-                measureResultLabel.Text = string.Format(CultureInfo.InvariantCulture,
-                    "已載入配方 '{0}'（{1} 工具，SchemaVer {2}{3}）",
-                    _loadedRecipe.Name, _loadedRecipe.Tools.Count, _loadedRecipe.SchemaVersion,
-                    _loadedRecipe.HasReferencePose ? "，含參考姿態" : "，無參考姿態（需 Set Ref）");
-            }
-            catch (Exception ex)
-            {
-                _loadedRecipe = null;
-                _loadedRecipePath = null;
-                measureResultLabel.Text = "載入配方失敗: " + ex.Message;
-            }
+            LoadRecipeFromPath(_openRecipeDialog.FileName);
             UpdateEmptyState();
         }
 
@@ -1408,13 +1419,14 @@ namespace FlashMeasurementSystem
                 {
                     _recipeStore.Save(_loadedRecipe, _loadedRecipePath);
                 }
-                measureResultLabel.Text = string.Format(CultureInfo.InvariantCulture,
+                SetMeasurementResult(string.Format(CultureInfo.InvariantCulture,
                     "參考姿態已設定並存檔：Row={0:F2} Col={1:F2} Angle={2:F2}°",
-                    _loadedRecipe.RefRow, _loadedRecipe.RefCol, _lastMatchAngleDeg);
+                    _loadedRecipe.RefRow, _loadedRecipe.RefCol, _lastMatchAngleDeg),
+                    SystemColors.ControlText);
             }
             catch (Exception ex)
             {
-                measureResultLabel.Text = "參考姿態存檔失敗: " + ex.Message;
+                SetMeasurementResult("參考姿態存檔失敗: " + ex.Message, SystemColors.ControlText);
             }
         }
 
@@ -1760,11 +1772,11 @@ namespace FlashMeasurementSystem
                 if (r.IsOk == true) okCount++;
                 else if (r.IsOk == false) ngCount++;
             }
-            measureResultLabel.Text = string.Format(CultureInfo.InvariantCulture,
+            SetMeasurementResult(string.Format(CultureInfo.InvariantCulture,
                 "配方 '{0}'：{1} 工具，OK {2} / NG {3}（pixel size：{4}）",
-                _loadedRecipe != null ? _loadedRecipe.Name : "", results.Count, okCount, ngCount, pixelSizeSource);
-            measureResultLabel.ForeColor = ngCount > 0 ? System.Drawing.Color.DarkRed
-                : (okCount > 0 ? System.Drawing.Color.DarkGreen : System.Drawing.SystemColors.ControlText);
+                _loadedRecipe != null ? _loadedRecipe.Name : "", results.Count, okCount, ngCount, pixelSizeSource),
+                ngCount > 0 ? System.Drawing.Color.DarkRed
+                    : (okCount > 0 ? System.Drawing.Color.DarkGreen : System.Drawing.SystemColors.ControlText));
             SetResultBanner(okCount, ngCount, true);
         }
 
@@ -1827,7 +1839,10 @@ namespace FlashMeasurementSystem
                     pxUmX, pxUmY,
                     reportDir,
                     templatePath, null, null,
-                    _skipIqcCheckBox != null && _skipIqcCheckBox.Checked,
+                    // 略過 IQC 只在工程模式生效。此旗標用途是拿合成影像測試，
+                    // 若讓它在操作員模式也生效，工程師忘了取消勾選就會讓產線靜默跳過
+                    // 影像品質把關——那正是最不該被跳過的一關。
+                    _viewMode == ViewMode.Engineering && _skipIqcCheckBox != null && _skipIqcCheckBox.Checked,
                     out System.Collections.Generic.List<ToolRunResult> results,
                     out System.Collections.Generic.List<ItemJudgment> judgments);
 
@@ -1852,12 +1867,12 @@ namespace FlashMeasurementSystem
                 string csvInfo = !string.IsNullOrEmpty(wfResult.ReportPath)
                     ? " | CSV: " + wfResult.ReportPath
                     : "";
-                measureResultLabel.Text += string.Format(CultureInfo.InvariantCulture,
+                AppendMeasurementResult(string.Format(CultureInfo.InvariantCulture,
                     " | 一鍵：{0} OK {1}/NG {2}{3}{4}{5}",
                     wfResult.AllOk ? "PASS" : "FAIL", wfResult.OkCount, wfResult.NgCount,
                     csvInfo,
                     pdfInfo,
-                    !wfResult.Success ? " (" + wfResult.Message + ")" : "");
+                    !wfResult.Success ? " (" + wfResult.Message + ")" : ""));
             }
             catch (Exception ex)
             {
@@ -2348,19 +2363,18 @@ namespace FlashMeasurementSystem
         {
             if (result == null)
             {
-                lineFittingResultLabel.Text = "直線擬合: 尚未執行";
-                lineFittingResultLabel.ForeColor = Color.Black;
+                ClearFittingResultLabel();
                 return;
             }
 
             if (!result.Success)
             {
-                lineFittingResultLabel.Text = "直線擬合失敗: " + result.ErrorMessage;
-                lineFittingResultLabel.ForeColor = Color.Red;
+                fittingResultLabel.Text = "直線擬合失敗: " + result.ErrorMessage;
+                fittingResultLabel.ForeColor = Color.Red;
                 return;
             }
 
-            lineFittingResultLabel.Text = string.Format(
+            fittingResultLabel.Text = string.Format(
                 CultureInfo.InvariantCulture,
                 "Line OK | P1=({0:F2},{1:F2}) P2=({2:F2},{3:F2})\nAngle={4:F2}° Len={5:F2}px RMS={6:F4}px Pts={7}",
                 result.Row1,
@@ -2371,27 +2385,26 @@ namespace FlashMeasurementSystem
                 result.Length,
                 result.ResidualRms,
                 result.UsedPoints);
-            lineFittingResultLabel.ForeColor = Color.Green;
+            fittingResultLabel.ForeColor = Color.Green;
         }
 
         private void UpdateCircleFittingResult(CircleFittingResult result)
         {
             if (result == null)
             {
-                circleFittingResultLabel.Text = "圓擬合: 尚未執行";
-                circleFittingResultLabel.ForeColor = Color.Black;
+                ClearFittingResultLabel();
                 return;
             }
 
             if (!result.Success)
             {
-                circleFittingResultLabel.Text = "圓擬合失敗: " + result.ErrorMessage;
-                circleFittingResultLabel.ForeColor = Color.Red;
+                fittingResultLabel.Text = "圓擬合失敗: " + result.ErrorMessage;
+                fittingResultLabel.ForeColor = Color.Red;
                 return;
             }
 
             string typeLabel = result.IsClosed ? "Circle" : "Arc";
-            circleFittingResultLabel.Text = string.Format(
+            fittingResultLabel.Text = string.Format(
                 CultureInfo.InvariantCulture,
                 typeLabel + " OK | C=({0:F2},{1:F2}) R={2:F2}px D={3:F2}px\n"
                 + (result.IsClosed ? "" : "Arc {7:F1}°→{8:F1}° | ")
@@ -2405,26 +2418,25 @@ namespace FlashMeasurementSystem
                 result.UsedPoints,
                 result.StartPhi * 180.0 / Math.PI,
                 result.EndPhi * 180.0 / Math.PI);
-            circleFittingResultLabel.ForeColor = Color.Green;
+            fittingResultLabel.ForeColor = Color.Green;
         }
 
         private void UpdateEllipseFittingResult(EllipseFittingResult result)
         {
             if (result == null)
             {
-                ellipseFittingResultLabel.Text = "橢圓擬合: 尚未執行";
-                ellipseFittingResultLabel.ForeColor = Color.Black;
+                ClearFittingResultLabel();
                 return;
             }
 
             if (!result.Success)
             {
-                ellipseFittingResultLabel.Text = "橢圓擬合失敗: " + result.ErrorMessage;
-                ellipseFittingResultLabel.ForeColor = Color.Red;
+                fittingResultLabel.Text = "橢圓擬合失敗: " + result.ErrorMessage;
+                fittingResultLabel.ForeColor = Color.Red;
                 return;
             }
 
-            ellipseFittingResultLabel.Text = string.Format(
+            fittingResultLabel.Text = string.Format(
                 CultureInfo.InvariantCulture,
                 "Ellipse OK | C=({0:F2},{1:F2}) R1={2:F2}px R2={3:F2}px\nPhi={4:F2}° RMS={5:F4}px Pts={6}",
                 result.CenterRow,
@@ -2434,26 +2446,25 @@ namespace FlashMeasurementSystem
                 result.Phi * 180.0 / Math.PI,
                 result.ResidualRms,
                 result.UsedPoints);
-            ellipseFittingResultLabel.ForeColor = Color.Green;
+            fittingResultLabel.ForeColor = Color.Green;
         }
 
         private void UpdateRectangleFittingResult(RectangleFittingResult result)
         {
             if (result == null)
             {
-                rectangleFittingResultLabel.Text = "矩形擬合: 尚未執行";
-                rectangleFittingResultLabel.ForeColor = Color.Black;
+                ClearFittingResultLabel();
                 return;
             }
 
             if (!result.Success)
             {
-                rectangleFittingResultLabel.Text = "矩形擬合失敗: " + result.ErrorMessage;
-                rectangleFittingResultLabel.ForeColor = Color.Red;
+                fittingResultLabel.Text = "矩形擬合失敗: " + result.ErrorMessage;
+                fittingResultLabel.ForeColor = Color.Red;
                 return;
             }
 
-            rectangleFittingResultLabel.Text = string.Format(
+            fittingResultLabel.Text = string.Format(
                 CultureInfo.InvariantCulture,
                 "Rectangle OK | C=({0:F2},{1:F2}) L1={2:F2}px L2={3:F2}px\nPhi={4:F2}° RMS={5:F4}px Pts={6}",
                 result.CenterRow,
@@ -2463,7 +2474,16 @@ namespace FlashMeasurementSystem
                 result.Phi * 180.0 / Math.PI,
                 result.ResidualRms,
                 result.UsedPoints);
-            rectangleFittingResultLabel.ForeColor = Color.Green;
+            fittingResultLabel.ForeColor = Color.Green;
+        }
+
+        // 四種擬合（直線/圓/橢圓/矩形）共用同一個結果標籤：原本四個標籤各佔 48px、
+        // 合計 192px 全都顯示「尚未執行」，把下方結果表擠到只剩約 30px。
+        // 擬合結果本來就是看「最後執行的那一次」，並列四個的資訊價值遠低於其佔用的空間。
+        private void ClearFittingResultLabel()
+        {
+            fittingResultLabel.Text = "擬合結果: 尚未執行";
+            fittingResultLabel.ForeColor = Color.Black;
         }
 
         private void ClearFittingState()
@@ -2483,10 +2503,7 @@ namespace FlashMeasurementSystem
             _latestCircleFittingResult = null;
             _latestEllipseFittingResult = null;
             _latestRectangleFittingResult = null;
-            UpdateLineFittingResult(null);
-            UpdateCircleFittingResult(null);
-            UpdateEllipseFittingResult(null);
-            UpdateRectangleFittingResult(null);
+            ClearFittingResultLabel();
         }
 
         // 邊緣量測結果失效：清結果/擬合狀態與結果表，回到「等待 Detect」。
@@ -2500,10 +2517,7 @@ namespace FlashMeasurementSystem
             _latestCircleFittingResult = null;
             _latestEllipseFittingResult = null;
             _latestRectangleFittingResult = null;
-            UpdateLineFittingResult(null);
-            UpdateCircleFittingResult(null);
-            UpdateEllipseFittingResult(null);
-            UpdateRectangleFittingResult(null);
+            ClearFittingResultLabel();
             RestoreDefaultEdgeGridColumns();
             _edgeResultsGrid.Rows.Clear();
             _edgeStatusLabel.Text = "Draw ROI, then Detect";

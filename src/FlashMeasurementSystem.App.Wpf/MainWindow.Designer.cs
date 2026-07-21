@@ -1,4 +1,4 @@
-namespace FlashMeasurementSystem
+﻿namespace FlashMeasurementSystem
 {
     partial class MainWindow
     {
@@ -97,10 +97,7 @@ namespace FlashMeasurementSystem
             this._arcEditCheck = new System.Windows.Forms.CheckBox();
             this._sectorDrawCheck = new System.Windows.Forms.CheckBox();
             this._edgeStatusLabel = new System.Windows.Forms.Label();
-            this.lineFittingResultLabel = new System.Windows.Forms.Label();
-            this.circleFittingResultLabel = new System.Windows.Forms.Label();
-            this.ellipseFittingResultLabel = new System.Windows.Forms.Label();
-            this.rectangleFittingResultLabel = new System.Windows.Forms.Label();
+            this.fittingResultLabel = new System.Windows.Forms.Label();
             this._edgeResultsGrid = new System.Windows.Forms.DataGridView();
             this.edgeIndexColumn = new System.Windows.Forms.DataGridViewTextBoxColumn();
             this.edgeRowColumn = new System.Windows.Forms.DataGridViewTextBoxColumn();
@@ -182,8 +179,10 @@ namespace FlashMeasurementSystem
             // mainTableLayout
             // 
             this.mainTableLayout.ColumnCount = 2;
-            this.mainTableLayout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 75F));
-            this.mainTableLayout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 25F));
+            // 右側控制面板改固定寬度：25% 在 1920 寬螢幕下會變成 480px，
+            // 但控制面板的需求寬度是固定的，多出來的寬度應該還給影像區。
+            this.mainTableLayout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 100F));
+            this.mainTableLayout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Absolute, 340F));
             this.mainTableLayout.Controls.Add(this.resultBannerPanel, 0, 0);
             this.mainTableLayout.Controls.Add(this.imageHostPanel, 0, 1);
             this.mainTableLayout.Controls.Add(this.rightPanel, 1, 1);
@@ -606,9 +605,13 @@ namespace FlashMeasurementSystem
             // 
             // edgeTableLayout
             // 
-            this.edgeTableLayout.ColumnCount = 2;
-            this.edgeTableLayout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 48F));
-            this.edgeTableLayout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 52F));
+            // 三欄：標籤(110) / 輸入(140) / 剩餘寬度吸收欄。
+            // 原本兩欄各佔 48%/52%，視窗一拉寬，Sigma=1.2 這種輸入框會被拉到 200px 以上；
+            // 參數輸入框的需求寬度與視窗寬度無關，故改固定寬度，多餘寬度交給第三欄。
+            this.edgeTableLayout.ColumnCount = 3;
+            this.edgeTableLayout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Absolute, 110F));
+            this.edgeTableLayout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Absolute, 140F));
+            this.edgeTableLayout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 100F));
             this.edgeTableLayout.Controls.Add(this.edgeAlgorithmLabel, 0, 0);
             this.edgeTableLayout.Controls.Add(this.edgeAlgorithmPanel, 1, 0);
             this.edgeTableLayout.Controls.Add(this.edgeSigmaLabel, 0, 1);
@@ -635,15 +638,12 @@ namespace FlashMeasurementSystem
             this.edgeTableLayout.Controls.Add(this.arcMeasurePanel, 0, 12);
             this.edgeTableLayout.Controls.Add(this.edgeButtonPanel, 0, 13);
             this.edgeTableLayout.Controls.Add(this._edgeStatusLabel, 0, 14);
-            this.edgeTableLayout.Controls.Add(this.lineFittingResultLabel, 0, 15);
-            this.edgeTableLayout.Controls.Add(this.circleFittingResultLabel, 0, 16);
-            this.edgeTableLayout.Controls.Add(this.ellipseFittingResultLabel, 0, 17);
-            this.edgeTableLayout.Controls.Add(this.rectangleFittingResultLabel, 0, 18);
-            this.edgeTableLayout.Controls.Add(this._edgeResultsGrid, 0, 19);
+            this.edgeTableLayout.Controls.Add(this.fittingResultLabel, 0, 15);
+            this.edgeTableLayout.Controls.Add(this._edgeResultsGrid, 0, 16);
             this.edgeTableLayout.Dock = System.Windows.Forms.DockStyle.Fill;
             this.edgeTableLayout.Location = new System.Drawing.Point(8, 33);
             this.edgeTableLayout.Name = "edgeTableLayout";
-            this.edgeTableLayout.RowCount = 20;
+            this.edgeTableLayout.RowCount = 17;
             // Algorithm 列：兩個 AutoSize RadioButton 疊放（第二顆 y=25），Segoe UI 下高度較
             // Microsoft Sans Serif 多幾 px，44 會把下面的 EdgesSubPix 切掉，故放寬到 48。
             this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 48F));
@@ -658,12 +658,13 @@ namespace FlashMeasurementSystem
             this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 26F));
             this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 26F));
             this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 26F));
-            this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 144F));
+            // 弧量測面板（arcMeasurePanel）列：內部 6 列均分，144 時每列僅 23px，
+            // 扣掉上下 Margin 後 Dock=Fill 的 detectArcButton 只剩 17px，按鈕文字會被切掉
+            // （同列的 NumericUpDown 因為 chrome 較薄，17px 仍看得到字，所以只有按鈕出問題）。
+            // 174 → 每列 29px → 按鈕 23px，足夠容納 Segoe UI 8.25 的文字與按鈕外框。
+            this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 174F));
             this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 84F));
             this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 22F));
-            this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 48F));
-            this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 48F));
-            this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 48F));
             this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 48F));
             this.edgeTableLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 100F));
             this.edgeTableLayout.Size = new System.Drawing.Size(231, 561);
@@ -921,7 +922,7 @@ namespace FlashMeasurementSystem
             // 
             // _edgeDrawRoiCheck
             // 
-            this.edgeTableLayout.SetColumnSpan(this._edgeDrawRoiCheck, 2);
+            this.edgeTableLayout.SetColumnSpan(this._edgeDrawRoiCheck, 3);
             this._edgeDrawRoiCheck.Dock = System.Windows.Forms.DockStyle.Fill;
             this._edgeDrawRoiCheck.Location = new System.Drawing.Point(3, 229);
             this._edgeDrawRoiCheck.Name = "_edgeDrawRoiCheck";
@@ -1013,7 +1014,7 @@ namespace FlashMeasurementSystem
             // arcMeasurePanel
             //
             this.arcMeasurePanel.ColumnCount = 4;
-            this.edgeTableLayout.SetColumnSpan(this.arcMeasurePanel, 2);
+            this.edgeTableLayout.SetColumnSpan(this.arcMeasurePanel, 3);
             this.arcMeasurePanel.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 26F));
             this.arcMeasurePanel.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 24F));
             this.arcMeasurePanel.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 26F));
@@ -1195,7 +1196,7 @@ namespace FlashMeasurementSystem
             // edgeButtonPanel
             //
             this.edgeButtonPanel.ColumnCount = 2;
-            this.edgeTableLayout.SetColumnSpan(this.edgeButtonPanel, 2);
+            this.edgeTableLayout.SetColumnSpan(this.edgeButtonPanel, 3);
             this.edgeButtonPanel.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 50F));
             this.edgeButtonPanel.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 50F));
             this.edgeButtonPanel.Controls.Add(this._runEdgeDetectionButton, 0, 0);
@@ -1282,7 +1283,7 @@ namespace FlashMeasurementSystem
             //
             // _edgeStatusLabel
             //
-            this.edgeTableLayout.SetColumnSpan(this._edgeStatusLabel, 2);
+            this.edgeTableLayout.SetColumnSpan(this._edgeStatusLabel, 3);
             this._edgeStatusLabel.Dock = System.Windows.Forms.DockStyle.Fill;
             this._edgeStatusLabel.Location = new System.Drawing.Point(3, 388);
             this._edgeStatusLabel.Name = "_edgeStatusLabel";
@@ -1291,49 +1292,16 @@ namespace FlashMeasurementSystem
             this._edgeStatusLabel.Text = "Draw ROI, then Detect";
             this._edgeStatusLabel.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
             // 
-            // lineFittingResultLabel
+            // fittingResultLabel
             // 
-            this.edgeTableLayout.SetColumnSpan(this.lineFittingResultLabel, 2);
-            this.lineFittingResultLabel.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.lineFittingResultLabel.Location = new System.Drawing.Point(3, 410);
-            this.lineFittingResultLabel.Name = "lineFittingResultLabel";
-            this.lineFittingResultLabel.Size = new System.Drawing.Size(225, 48);
-            this.lineFittingResultLabel.TabIndex = 25;
-            this.lineFittingResultLabel.Text = "直線擬合: 尚未執行";
-            this.lineFittingResultLabel.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
-            // 
-            // circleFittingResultLabel
-            // 
-            this.edgeTableLayout.SetColumnSpan(this.circleFittingResultLabel, 2);
-            this.circleFittingResultLabel.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.circleFittingResultLabel.Location = new System.Drawing.Point(3, 458);
-            this.circleFittingResultLabel.Name = "circleFittingResultLabel";
-            this.circleFittingResultLabel.Size = new System.Drawing.Size(225, 48);
-            this.circleFittingResultLabel.TabIndex = 26;
-            this.circleFittingResultLabel.Text = "圓擬合: 尚未執行";
-            this.circleFittingResultLabel.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
-            //
-            // ellipseFittingResultLabel
-            //
-            this.edgeTableLayout.SetColumnSpan(this.ellipseFittingResultLabel, 2);
-            this.ellipseFittingResultLabel.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.ellipseFittingResultLabel.Location = new System.Drawing.Point(3, 506);
-            this.ellipseFittingResultLabel.Name = "ellipseFittingResultLabel";
-            this.ellipseFittingResultLabel.Size = new System.Drawing.Size(225, 48);
-            this.ellipseFittingResultLabel.TabIndex = 27;
-            this.ellipseFittingResultLabel.Text = "橢圓擬合: 尚未執行";
-            this.ellipseFittingResultLabel.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
-            //
-            // rectangleFittingResultLabel
-            //
-            this.edgeTableLayout.SetColumnSpan(this.rectangleFittingResultLabel, 2);
-            this.rectangleFittingResultLabel.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.rectangleFittingResultLabel.Location = new System.Drawing.Point(3, 554);
-            this.rectangleFittingResultLabel.Name = "rectangleFittingResultLabel";
-            this.rectangleFittingResultLabel.Size = new System.Drawing.Size(225, 48);
-            this.rectangleFittingResultLabel.TabIndex = 28;
-            this.rectangleFittingResultLabel.Text = "矩形擬合: 尚未執行";
-            this.rectangleFittingResultLabel.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
+            this.edgeTableLayout.SetColumnSpan(this.fittingResultLabel, 3);
+            this.fittingResultLabel.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.fittingResultLabel.Location = new System.Drawing.Point(3, 410);
+            this.fittingResultLabel.Name = "fittingResultLabel";
+            this.fittingResultLabel.Size = new System.Drawing.Size(225, 48);
+            this.fittingResultLabel.TabIndex = 25;
+            this.fittingResultLabel.Text = "擬合結果: 尚未執行";
+            this.fittingResultLabel.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
             //
             // _edgeResultsGrid
             //
@@ -1347,7 +1315,7 @@ namespace FlashMeasurementSystem
             this.edgeColumnColumn,
             this.edgeAmplitudeColumn,
             this.edgeDistanceColumn});
-            this.edgeTableLayout.SetColumnSpan(this._edgeResultsGrid, 2);
+            this.edgeTableLayout.SetColumnSpan(this._edgeResultsGrid, 3);
             this._edgeResultsGrid.Dock = System.Windows.Forms.DockStyle.Fill;
             this._edgeResultsGrid.Location = new System.Drawing.Point(3, 509);
             this._edgeResultsGrid.Name = "_edgeResultsGrid";
@@ -1915,10 +1883,7 @@ namespace FlashMeasurementSystem
         private System.Windows.Forms.CheckBox _arcEditCheck;
         private System.Windows.Forms.CheckBox _sectorDrawCheck;
         private System.Windows.Forms.Label _edgeStatusLabel;
-        private System.Windows.Forms.Label lineFittingResultLabel;
-        private System.Windows.Forms.Label circleFittingResultLabel;
-        private System.Windows.Forms.Label ellipseFittingResultLabel;
-        private System.Windows.Forms.Label rectangleFittingResultLabel;
+        private System.Windows.Forms.Label fittingResultLabel;
         private System.Windows.Forms.DataGridView _edgeResultsGrid;
         private System.Windows.Forms.DataGridViewTextBoxColumn edgeIndexColumn;
         private System.Windows.Forms.DataGridViewTextBoxColumn edgeRowColumn;

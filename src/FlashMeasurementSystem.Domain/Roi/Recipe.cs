@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using FlashMeasurementSystem.Domain.ImageQuality;
 using FlashMeasurementSystem.Domain.MetrologyModel;
 
 namespace FlashMeasurementSystem.Domain.Roi
@@ -37,7 +38,11 @@ namespace FlashMeasurementSystem.Domain.Roi
         // v14：孔陣列圓度濾波（HoleArrayAnalysisParameters.MinCircularity，加性欄，預設 0.80）。
         //     純加欄位、向後相容、無遷移碼：舊檔載入時該欄取預設 0.80＝啟用併塊濾除。這會改變舊配方的
         //     偵測行為（沾黏孔不再被當成一個大孔），屬「修正錯誤量測」而非破壞相容；需要舊行為者設 0 停用。
-        public int SchemaVersion { get; set; } = 14;
+        // v15：每配方影像品質門檻（IqcThresholds，加性 nullable 欄）。純加欄位、向後相容、無遷移碼：
+        //     舊檔載入時 IqcThresholds=null → EffectiveIqcThresholds() 回退到既有的全域預設，行為不變。
+        //     動機：正確的亮度/銳利度門檻取決於工件、鏡頭與打光，單一全域值不可能對所有料號都對；
+        //     門檻寫死時，一旦不適用當前設定，操作員除了請工程師勾「略過IQC」之外毫無出路。
+        public int SchemaVersion { get; set; } = 15;
         public string RecipeId { get; set; } = "";
         public string Name { get; set; } = "";
 
@@ -58,8 +63,23 @@ namespace FlashMeasurementSystem.Domain.Roi
         // 與 Tools 並存：執行期 RecipeRunner 在 1D passes 之後加一個 metrology pass。
         public MetrologyModelDef MetrologyModel { get; set; } = null;
 
+        // v15：選用的每配方影像品質門檻；null = 沿用全域預設（向後相容，舊 .zcp 載入時為 null）。
+        public ImageQualityThresholds IqcThresholds { get; set; } = null;
+
         public DateTime CreatedAt { get; set; }
         public DateTime ModifiedAt { get; set; }
+
+        /// <summary>
+        /// 本配方實際採用的影像品質門檻：有設就用配方的，沒設就回退全域預設。
+        ///
+        /// 刻意集中於此而非在各呼叫端各寫一次 null 判斷——量測流程（MeasurementWorkflow）與
+        /// 單獨的影像品質檢查按鈕是兩個入口，兩邊若各自實作 fallback 就可能漂移，
+        /// 導致「單獨檢查說 PASS、一鍵量測卻 FAIL」這種最難查的不一致。
+        /// </summary>
+        public ImageQualityThresholds EffectiveIqcThresholds()
+        {
+            return IqcThresholds ?? ImageQualityThresholds.Default();
+        }
 
         public static Recipe Default()
         {
