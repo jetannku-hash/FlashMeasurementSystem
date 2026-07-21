@@ -116,6 +116,10 @@ namespace FlashMeasurementSystem
             NormalizeTemplateMatchingLayout();
             SetupToolTips();
 
+            // 操作員／工程師模式切換選單（見 MainWindow.ViewMode.cs）。
+            BuildViewModeMenu();
+            ApplyViewMode();
+
             _imageHelper = new HWindowControlHelper(hWindowControl);
             _imageHelper.MouseMoved += OnImageMouseMoved;
             _imageHelper.RoiSelected += OnImageRoiSelected;
@@ -230,11 +234,13 @@ namespace FlashMeasurementSystem
             try
             {
                 HOperatorSet.GetSystem("version", out HTuple version);
-                Text = $"Flash Measurement System - Template Matching (Halcon {version.S})";
+                // 經 SetBaseWindowTitle 而非直接寫 Text：標題列尾端還要接模式後綴，
+                // 直接指派會把 [工程模式] 抹掉（見 MainWindow.ViewMode.cs）。
+                SetBaseWindowTitle($"Flash Measurement System - Template Matching (Halcon {version.S})");
             }
             catch (HalconException)
             {
-                Text = "Flash Measurement System - Template Matching (Halcon unavailable)";
+                SetBaseWindowTitle("Flash Measurement System - Template Matching (Halcon unavailable)");
             }
 
             // 初始空狀態：尚無影像/配方→顯示三步驟引導；橫幅為灰「—」。
