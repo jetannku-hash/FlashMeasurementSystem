@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using FlashMeasurementSystem.Domain.Gdt;
 using FlashMeasurementSystem.Domain.Roi;
@@ -145,6 +145,23 @@ namespace FlashMeasurementSystem.Tests
             AssertHasError(RecipeValidator.Validate(selfRef, W, H), "self reference → error");
 
             // 未知型別 → Warning（非 Error）
+            // 同型別內重名 → Error。報表以「名稱＋型別」把結果對回工具，重名時永遠命中第一個，
+            // 第二個工具會被套上第一個的公差重新判定 → 超規值可能在 CSV/PDF 上顯示 OK，
+            // 而判定橫幅（用 RecipeRunner 已算好的 IsOk）是對的：畫面正確、出貨文件錯。
+            var dupName = new Recipe();
+            var dn1 = Circle("d1", 200, 200, 40, 40); dn1.Name = "孔徑";
+            var dn2 = Circle("d2", 400, 400, 40, 40); dn2.Name = "孔徑";
+            dupName.Tools.Add(dn1); dupName.Tools.Add(dn2);
+            AssertHasError(RecipeValidator.Validate(dupName, W, H), "duplicate tool name → error");
+
+            // 不同型別可以同名——報表的查詢鍵包含型別，不會混淆。
+            var sameNameDiffType = new Recipe();
+            var sn1 = Circle("s1", 200, 200, 40, 40); sn1.Name = "特徵";
+            var sn2 = Line("s2", 400, 400, 40, 40); sn2.Name = "特徵";
+            sameNameDiffType.Tools.Add(sn1); sameNameDiffType.Tools.Add(sn2);
+            AssertCount(RecipeValidator.Validate(sameNameDiffType, W, H), 0, 0,
+                "same name across different types → no issue");
+
             // 不支援的型別 → Error（原為 Warning）。該工具不會被執行，量測結果因此不完整，
             // 而未執行的工具在 OK/NG 兩邊都不計 → 整份配方顯示 PASS。一份「有工具沒跑」的配方
             // 不可能給出可信的合格判定，故直接擋下，不讓操作員在警告框按「是」放行。

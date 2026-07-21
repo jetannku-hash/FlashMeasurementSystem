@@ -76,6 +76,30 @@ namespace FlashMeasurementSystem.Domain.Roi
                 }
             }
 
+            // 同型別內名稱不可重複。報表把量測結果對回工具是以「名稱＋型別」查詢的
+            // （ToolRunResult 不帶 Id），重名時永遠命中第一個 → 第二個工具的結果會被套上
+            // 第一個的公差重新判定，超規值可能在 CSV/PDF 上顯示 OK。判定橫幅用的是
+            // RecipeRunner 已算好的 IsOk，所以畫面正確、出貨文件錯——最難察覺的那種。
+            // 以「型別 → 該型別已見過的名稱」分層，而不是把兩者串成單一字串當 key：
+            // 串接需要一個保證不會出現在內容裡的分隔字元，是不必要的風險。
+            var nameSeenByType = new Dictionary<string, HashSet<string>>();
+            foreach (MeasurementTool tool in tools)
+            {
+                if (tool == null || string.IsNullOrEmpty(tool.Name)) continue;
+                string nameType = tool.ToolType ?? "";
+                HashSet<string> seenNames;
+                if (!nameSeenByType.TryGetValue(nameType, out seenNames))
+                {
+                    seenNames = new HashSet<string>();
+                    nameSeenByType[nameType] = seenNames;
+                }
+                if (!seenNames.Add(tool.Name))
+                {
+                    issues.Add(new RecipeIssue(RecipeIssueSeverity.Error, tool.Id, tool.Name,
+                        "同型別內工具名稱重複：'" + tool.Name + "'（報表會把結果對到錯的公差）"));
+                }
+            }
+
             foreach (MeasurementTool tool in tools)
             {
                 if (tool == null)

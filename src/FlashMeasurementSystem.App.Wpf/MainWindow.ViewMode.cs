@@ -497,6 +497,20 @@ namespace FlashMeasurementSystem
         }
 
         /// <summary>
+        /// 解除所有互動繪製模式並同步取消對應的勾選。
+        /// 供「離開這組控制項」的事件共用：分頁切換與模式切換。
+        /// </summary>
+        private void DisarmDrawingModes()
+        {
+            if (_imageHelper == null) return;
+            _imageHelper.DisarmInteractiveModes();
+            if (_edgeDrawRoiCheck != null && _edgeDrawRoiCheck.Checked) _edgeDrawRoiCheck.Checked = false;
+            if (roiModeCheck != null && roiModeCheck.Checked) roiModeCheck.Checked = false;
+            if (_sectorDrawCheck != null && _sectorDrawCheck.Checked) _sectorDrawCheck.Checked = false;
+            if (_arcEditCheck != null && _arcEditCheck.Checked) _arcEditCheck.Checked = false;
+        }
+
+        /// <summary>
         /// 各分頁頂端動作工具列的共同外觀。WrapContents 讓按鈕在面板變窄時折行而非被裁掉。
         /// </summary>
         private static FlowLayoutPanel MakeTabToolbar()
@@ -570,6 +584,13 @@ namespace FlashMeasurementSystem
 
             if (rightPanel != null) rightPanel.Visible = engineering;
             if (_operatorPanel != null) _operatorPanel.Visible = !engineering;
+
+            // 切到操作員模式必須解除所有互動模式並取消繪製勾選。少了這一步，勾著「Draw ROI」
+            // 切過去之後：checkbox 隨 rightPanel 一起隱藏、但 IsRoiMode 仍為 true，於是操作員
+            // 在生產畫面上拖曳會畫出 ROI 並進入 rect2 編輯，出現可拖動的綠色把手——而操作員
+            // 沒有任何 UI 能關掉它。分頁切換早就有等價處理（FeatureTabControl_SelectedIndexChanged），
+            // 模式切換是同一類「離開這組控制項」的事件，卻漏了。
+            if (!engineering) DisarmDrawingModes();
             // 校正會改變所有量測的尺度基準，與其他工程功能同樣不該讓操作員碰到。
             if (_settingsMenuItem != null) _settingsMenuItem.Visible = engineering;
 
