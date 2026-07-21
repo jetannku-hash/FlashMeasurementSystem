@@ -1315,25 +1315,12 @@ namespace FlashMeasurementSystem
         {
             if (_loadedRecipe == null) { MessageBox.Show("請先載入配方 (.zcp)。", "Info"); return; }
             if (_imageHelper == null || _imageHelper.CurrentImage == null) { MessageBox.Show("請先載入影像。", "Info"); return; }
-            // 參考姿態守門只對「需要姿態變換的 1D 工具」有意義。純 2D 量測模型（無 1D 工具）
+            // 姿態只對「需要姿態變換的 1D 工具」有意義。純 2D 量測模型（無 1D 工具）
             // 不需匹配：未匹配時其標稱幾何以絕對影像座標量測（Pass 3 不套 reference_system/align）。
-            if (_loadedRecipe.HasReferencePose && !_hasMatch && _loadedRecipe.Tools.Count > 0)
+            if (_loadedRecipe.HasReferencePose && _loadedRecipe.Tools.Count > 0)
             {
-                // 訊息要指向真正的原因。使用者常常「剛按過 Run Matching」才走到這裡——
-                // 匹配失敗會 ResetMatchPose()，於是這裡看到的仍是「沒有姿態」。
-                // 只講「請先執行模板匹配」會讓人以為自己沒按，往錯的方向找問題。
-                MessageBox.Show(
-                    "此配方含參考姿態且有 1D 量測工具，需要目前影像的工件姿態才能搬動 ROI。\r\n\r\n" +
-                    "請在 Inspection 分頁執行 Run Matching。若剛才已執行過，代表匹配失敗——" +
-                    "最常見的原因是所選模板與目前工件不符" +
-                    (_loadedRecipe != null && !string.IsNullOrEmpty(_loadedRecipe.TemplateModelId)
-                        ? "。本配方指定的模板是：" + _loadedRecipe.TemplateModelId
-                        : "。"),
-                    "需要模板匹配", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return;
+                if (!EnsureMatchPoseForRecipe()) return;
             }
-            // v16：目前姿態必須是用配方的模板量出來的，否則變換出的 ROI 位置是錯的。
-            if (!EnsureMatchTemplateMatchesRecipe()) return;
             if (!EnsureRecipeValid()) return;
 
             // pixel size 來源（決策 A）：配方 CalibrationProfileId 有設且檔案存在 → 用校正檔；
