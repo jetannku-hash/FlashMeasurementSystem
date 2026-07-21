@@ -36,6 +36,8 @@ namespace FlashMeasurementSystem
 
         private MenuStrip _viewModeMenuStrip;
         private ToolStripMenuItem _engineeringModeMenuItem;
+        // 「設定」選單只在工程模式顯示：校正會改變所有量測的尺度基準，屬工程動作。
+        private ToolStripMenuItem _settingsMenuItem;
 
         // 標題列由「基底標題」+「模式後綴」組成。基底由 OnLoad 依 HALCON 版本設定
         // （見 SetBaseWindowTitle 的呼叫端），模式後綴由本檔負責，兩者互不覆寫。
@@ -70,8 +72,16 @@ namespace FlashMeasurementSystem
             var viewMenu = new ToolStripMenuItem("檢視(&V)");
             viewMenu.DropDownItems.Add(_engineeringModeMenuItem);
 
+            // 校正放選單而非分頁：它是整台機器的設定、一台機器只做一次（且需要標準件），
+            // 放在「建立模板」分頁裡會讓人誤以為每建一個料號都要重跑一次校正。
+            var calibItem = new ToolStripMenuItem("像素尺寸校正(&C)…");
+            calibItem.Click += OpenCalibrationDialog;
+            _settingsMenuItem = new ToolStripMenuItem("設定(&S)");
+            _settingsMenuItem.DropDownItems.Add(calibItem);
+
             _viewModeMenuStrip = new MenuStrip();
             _viewModeMenuStrip.Items.Add(viewMenu);
+            _viewModeMenuStrip.Items.Add(_settingsMenuItem);
 
             Controls.Add(_viewModeMenuStrip);
             MainMenuStrip = _viewModeMenuStrip;
@@ -486,6 +496,20 @@ namespace FlashMeasurementSystem
             if (_operatorResultLabel != null) _operatorResultLabel.Text += text;
         }
 
+        /// <summary>
+        /// 各分頁頂端動作工具列的共同外觀。WrapContents 讓按鈕在面板變窄時折行而非被裁掉。
+        /// </summary>
+        private static FlowLayoutPanel MakeTabToolbar()
+        {
+            return new FlowLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = true,
+                AutoSize = true
+            };
+        }
+
         private void OnEngineeringModeMenuItemCheckedChanged(object sender, EventArgs e)
         {
             SetViewMode(_engineeringModeMenuItem.Checked ? ViewMode.Engineering : ViewMode.Operator);
@@ -546,6 +570,8 @@ namespace FlashMeasurementSystem
 
             if (rightPanel != null) rightPanel.Visible = engineering;
             if (_operatorPanel != null) _operatorPanel.Visible = !engineering;
+            // 校正會改變所有量測的尺度基準，與其他工程功能同樣不該讓操作員碰到。
+            if (_settingsMenuItem != null) _settingsMenuItem.Visible = engineering;
 
             // 離開工程模式時清掉「略過IQC」。該旗標只在工程模式生效（見 OneClickMeasureButton_Click），
             // 若讓勾選狀態留著，使用者會遇到「明明勾了卻毫無作用、也沒有任何說明」的情況——

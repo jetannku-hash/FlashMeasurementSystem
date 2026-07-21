@@ -1403,23 +1403,10 @@ namespace FlashMeasurementSystem
         // (this method runs both on load → _recipe and on save → BuildRecipe).
         private static Recipe CopyRecipeMetadata(Recipe src)
         {
-            return new Recipe
-            {
-                SchemaVersion = src.SchemaVersion,
-                RecipeId = src.RecipeId,
-                Name = src.Name,
-                CalibrationProfileId = src.CalibrationProfileId,
-                RefRow = src.RefRow,
-                RefCol = src.RefCol,
-                RefAngleRad = src.RefAngleRad,
-                HasReferencePose = src.HasReferencePose,
-                MetrologyModel = src.MetrologyModel,
-                // v15：同 MetrologyModel，必須帶過去。漏了的話「開啟配方 → 改個工具 → 存檔」
-                // 會把本配方的影像品質門檻靜默清成 null（退回全域預設），而畫面上毫無跡象。
-                IqcThresholds = src.IqcThresholds,
-                CreatedAt = src.CreatedAt,
-                ModifiedAt = src.ModifiedAt
-            };
+            // 委派給 Domain 的 CloneWithoutTools()：它以 MemberwiseClone 複製所有欄位，
+            // 新增欄位會自動帶過去。原本這裡逐欄手寫，v16 的 TemplateModelId 就是這樣漏掉的
+            // ——存檔會把 Set Ref 記錄的模板靜默清空，而配方檔看起來一切正常。
+            return src.CloneWithoutTools();
         }
 
         private static MeasurementTool DeepCopyTool(MeasurementTool src)

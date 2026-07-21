@@ -93,6 +93,26 @@ namespace FlashMeasurementSystem.Domain.Roi
             return IqcThresholds ?? ImageQualityThresholds.Default();
         }
 
+        /// <summary>
+        /// 複製本配方的所有欄位，但 Tools 換成一份空清單（由呼叫端填入）。
+        /// 供編輯器「載入 → 編輯 → 存檔」使用。
+        ///
+        /// 刻意用 MemberwiseClone 而非逐欄列舉：編輯器原本手寫每一個欄位的複製，
+        /// 每次加新欄位都得記得補一行，漏掉的症狀是「開啟配方 → 改任一工具 → 存檔」
+        /// 把該欄位靜默清成預設值，畫面上毫無跡象。這個坑已經踩過兩次
+        /// （v15 IqcThresholds 補上了，v16 TemplateModelId 仍然漏掉，直到使用者回報）。
+        /// 用 MemberwiseClone 之後，日後新增欄位會自動被帶過去，漏抄不再可能發生。
+        ///
+        /// 淺拷貝：MetrologyModel / IqcThresholds 等參考型別與來源共用同一個實例，
+        /// 與先前逐欄複製的語意相同（編輯器是整個換掉這些物件，不是就地修改）。
+        /// </summary>
+        public Recipe CloneWithoutTools()
+        {
+            var copy = (Recipe)MemberwiseClone();
+            copy.Tools = new List<MeasurementTool>();
+            return copy;
+        }
+
         public static Recipe Default()
         {
             return new Recipe();
