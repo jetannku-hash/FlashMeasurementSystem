@@ -144,6 +144,7 @@ namespace FlashMeasurementSystem.Tests
             GdtEvaluationDomainTests.Run();
             Console.WriteLine("GdtEvaluationDomainTests passed");
             RecipeValidatorTests.Run();
+            MeasurementOutcomeTests.Run();
             IqcThresholdsRecipeTests.Run();
             TemplateReferenceRecipeTests.Run();
             Console.WriteLine("RecipeValidatorTests passed");

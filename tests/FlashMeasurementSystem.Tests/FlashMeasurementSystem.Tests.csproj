@@ -73,6 +73,7 @@
     <Compile Include="GdtCalculatorDomainTests.cs" />
     <Compile Include="GdtEvaluationDomainTests.cs" />
     <Compile Include="RecipeValidatorTests.cs" />
+    <Compile Include="MeasurementOutcomeTests.cs" />
     <Compile Include="IqcThresholdsRecipeTests.cs" />
     <Compile Include="TemplateReferenceRecipeTests.cs" />
     <Compile Include="CsvReportWriterTests.cs" />
