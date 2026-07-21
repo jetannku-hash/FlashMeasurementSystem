@@ -1839,7 +1839,10 @@ namespace FlashMeasurementSystem
                     pxUmX, pxUmY,
                     reportDir,
                     templatePath, null, null,
-                    _skipIqcCheckBox != null && _skipIqcCheckBox.Checked,
+                    // 略過 IQC 只在工程模式生效。此旗標用途是拿合成影像測試，
+                    // 若讓它在操作員模式也生效，工程師忘了取消勾選就會讓產線靜默跳過
+                    // 影像品質把關——那正是最不該被跳過的一關。
+                    _viewMode == ViewMode.Engineering && _skipIqcCheckBox != null && _skipIqcCheckBox.Checked,
                     out System.Collections.Generic.List<ToolRunResult> results,
                     out System.Collections.Generic.List<ItemJudgment> judgments);
 

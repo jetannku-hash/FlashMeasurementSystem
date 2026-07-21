@@ -27,9 +27,9 @@ namespace FlashMeasurementSystem
             Engineering
         }
 
-        // Phase 1 預設為 Engineering，使行為與導入前完全一致（此時操作員版面尚未建立）。
-        // Phase 3 收攏工程功能後改為預設 Operator——共用機台上，安全的預設是權限較小的那個。
-        private ViewMode _viewMode = ViewMode.Engineering;
+        // 共用機台上，安全的預設是權限較小的那個：開機即操作員模式，
+        // 工程師要動到會改變判定基準的功能時，必須自己去選單切換（此舉即是一次明示的意圖表達）。
+        private ViewMode _viewMode = ViewMode.Operator;
 
         private MenuStrip _viewModeMenuStrip;
         private ToolStripMenuItem _engineeringModeMenuItem;
@@ -236,8 +236,41 @@ namespace FlashMeasurementSystem
         private void SetViewMode(ViewMode mode)
         {
             if (_viewMode == mode) return;
+
+            // 切到操作員模式前，先收掉還開著的工程面板。
+            // RecipeEditor / MetrologyModelEditorForm / DxfComparisonForm 都是 modeless
+            // （MainWindow.cs 以 .Show(this) 開啟），若放著不管，操作員畫面上會浮著工程視窗，
+            // 而且它們仍持有共用影像視窗的 overlay 租約、繼續在影像上畫自己的圖層。
+            if (mode == ViewMode.Operator && !CloseEngineeringForms())
+            {
+                // 有面板拒絕關閉（例如 RecipeEditor 的「未存變更」確認被取消）→ 放棄切換，
+                // 並把選單勾選狀態轉回來，否則勾選狀態會與實際模式不一致。
+                if (_engineeringModeMenuItem != null) _engineeringModeMenuItem.Checked = true;
+                return;
+            }
+
             _viewMode = mode;
             ApplyViewMode();
+        }
+
+        /// <summary>
+        /// 關閉所有由主視窗擁有的工程面板。回傳 false 表示有面板拒絕關閉。
+        /// 各面板在 FormClosed 內會 Dispose 自己的 overlay 租約，故不需在此另外收租約。
+        /// </summary>
+        private bool CloseEngineeringForms()
+        {
+            // OwnedForms 會在 Close() 過程中變動，先取一份快照再逐一關閉。
+            Form[] owned = OwnedForms;
+            foreach (Form f in owned)
+            {
+                if (!f.IsDisposed) f.Close();
+            }
+
+            foreach (Form f in owned)
+            {
+                if (!f.IsDisposed && f.Visible) return false;
+            }
+            return true;
         }
 
         /// <summary>
