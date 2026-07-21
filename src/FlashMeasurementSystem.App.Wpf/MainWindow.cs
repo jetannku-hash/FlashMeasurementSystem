@@ -363,10 +363,7 @@ namespace FlashMeasurementSystem
             _toolTip.SetToolTip(_sectorDrawCheck, "勾選後從圓心往外拖拉出扇形量測區，放開後自動進入把手微調");
             _toolTip.SetToolTip(_edgeResultsGrid, "Detected edge points (Row, Col, Amplitude, Distance)");
             _toolTip.SetToolTip(_edgeStatusLabel, "Edge detection status — PASS (green) or FAIL (red)");
-            _toolTip.SetToolTip(lineFittingResultLabel, "Line fitting result");
-            _toolTip.SetToolTip(circleFittingResultLabel, "Circle fitting result");
-            _toolTip.SetToolTip(ellipseFittingResultLabel, "Ellipse fitting result");
-            _toolTip.SetToolTip(rectangleFittingResultLabel, "Rectangle fitting result");
+            _toolTip.SetToolTip(fittingResultLabel, "最後一次擬合（直線/圓/橢圓/矩形）的結果");
 
             // ── Measurement ──
             _toolTip.SetToolTip(measurementPixelSizeXNumeric, "Pixel size in X direction (µm/pixel)");
@@ -2366,19 +2363,18 @@ namespace FlashMeasurementSystem
         {
             if (result == null)
             {
-                lineFittingResultLabel.Text = "直線擬合: 尚未執行";
-                lineFittingResultLabel.ForeColor = Color.Black;
+                ClearFittingResultLabel();
                 return;
             }
 
             if (!result.Success)
             {
-                lineFittingResultLabel.Text = "直線擬合失敗: " + result.ErrorMessage;
-                lineFittingResultLabel.ForeColor = Color.Red;
+                fittingResultLabel.Text = "直線擬合失敗: " + result.ErrorMessage;
+                fittingResultLabel.ForeColor = Color.Red;
                 return;
             }
 
-            lineFittingResultLabel.Text = string.Format(
+            fittingResultLabel.Text = string.Format(
                 CultureInfo.InvariantCulture,
                 "Line OK | P1=({0:F2},{1:F2}) P2=({2:F2},{3:F2})\nAngle={4:F2}° Len={5:F2}px RMS={6:F4}px Pts={7}",
                 result.Row1,
@@ -2389,27 +2385,26 @@ namespace FlashMeasurementSystem
                 result.Length,
                 result.ResidualRms,
                 result.UsedPoints);
-            lineFittingResultLabel.ForeColor = Color.Green;
+            fittingResultLabel.ForeColor = Color.Green;
         }
 
         private void UpdateCircleFittingResult(CircleFittingResult result)
         {
             if (result == null)
             {
-                circleFittingResultLabel.Text = "圓擬合: 尚未執行";
-                circleFittingResultLabel.ForeColor = Color.Black;
+                ClearFittingResultLabel();
                 return;
             }
 
             if (!result.Success)
             {
-                circleFittingResultLabel.Text = "圓擬合失敗: " + result.ErrorMessage;
-                circleFittingResultLabel.ForeColor = Color.Red;
+                fittingResultLabel.Text = "圓擬合失敗: " + result.ErrorMessage;
+                fittingResultLabel.ForeColor = Color.Red;
                 return;
             }
 
             string typeLabel = result.IsClosed ? "Circle" : "Arc";
-            circleFittingResultLabel.Text = string.Format(
+            fittingResultLabel.Text = string.Format(
                 CultureInfo.InvariantCulture,
                 typeLabel + " OK | C=({0:F2},{1:F2}) R={2:F2}px D={3:F2}px\n"
                 + (result.IsClosed ? "" : "Arc {7:F1}°→{8:F1}° | ")
@@ -2423,26 +2418,25 @@ namespace FlashMeasurementSystem
                 result.UsedPoints,
                 result.StartPhi * 180.0 / Math.PI,
                 result.EndPhi * 180.0 / Math.PI);
-            circleFittingResultLabel.ForeColor = Color.Green;
+            fittingResultLabel.ForeColor = Color.Green;
         }
 
         private void UpdateEllipseFittingResult(EllipseFittingResult result)
         {
             if (result == null)
             {
-                ellipseFittingResultLabel.Text = "橢圓擬合: 尚未執行";
-                ellipseFittingResultLabel.ForeColor = Color.Black;
+                ClearFittingResultLabel();
                 return;
             }
 
             if (!result.Success)
             {
-                ellipseFittingResultLabel.Text = "橢圓擬合失敗: " + result.ErrorMessage;
-                ellipseFittingResultLabel.ForeColor = Color.Red;
+                fittingResultLabel.Text = "橢圓擬合失敗: " + result.ErrorMessage;
+                fittingResultLabel.ForeColor = Color.Red;
                 return;
             }
 
-            ellipseFittingResultLabel.Text = string.Format(
+            fittingResultLabel.Text = string.Format(
                 CultureInfo.InvariantCulture,
                 "Ellipse OK | C=({0:F2},{1:F2}) R1={2:F2}px R2={3:F2}px\nPhi={4:F2}° RMS={5:F4}px Pts={6}",
                 result.CenterRow,
@@ -2452,26 +2446,25 @@ namespace FlashMeasurementSystem
                 result.Phi * 180.0 / Math.PI,
                 result.ResidualRms,
                 result.UsedPoints);
-            ellipseFittingResultLabel.ForeColor = Color.Green;
+            fittingResultLabel.ForeColor = Color.Green;
         }
 
         private void UpdateRectangleFittingResult(RectangleFittingResult result)
         {
             if (result == null)
             {
-                rectangleFittingResultLabel.Text = "矩形擬合: 尚未執行";
-                rectangleFittingResultLabel.ForeColor = Color.Black;
+                ClearFittingResultLabel();
                 return;
             }
 
             if (!result.Success)
             {
-                rectangleFittingResultLabel.Text = "矩形擬合失敗: " + result.ErrorMessage;
-                rectangleFittingResultLabel.ForeColor = Color.Red;
+                fittingResultLabel.Text = "矩形擬合失敗: " + result.ErrorMessage;
+                fittingResultLabel.ForeColor = Color.Red;
                 return;
             }
 
-            rectangleFittingResultLabel.Text = string.Format(
+            fittingResultLabel.Text = string.Format(
                 CultureInfo.InvariantCulture,
                 "Rectangle OK | C=({0:F2},{1:F2}) L1={2:F2}px L2={3:F2}px\nPhi={4:F2}° RMS={5:F4}px Pts={6}",
                 result.CenterRow,
@@ -2481,7 +2474,16 @@ namespace FlashMeasurementSystem
                 result.Phi * 180.0 / Math.PI,
                 result.ResidualRms,
                 result.UsedPoints);
-            rectangleFittingResultLabel.ForeColor = Color.Green;
+            fittingResultLabel.ForeColor = Color.Green;
+        }
+
+        // 四種擬合（直線/圓/橢圓/矩形）共用同一個結果標籤：原本四個標籤各佔 48px、
+        // 合計 192px 全都顯示「尚未執行」，把下方結果表擠到只剩約 30px。
+        // 擬合結果本來就是看「最後執行的那一次」，並列四個的資訊價值遠低於其佔用的空間。
+        private void ClearFittingResultLabel()
+        {
+            fittingResultLabel.Text = "擬合結果: 尚未執行";
+            fittingResultLabel.ForeColor = Color.Black;
         }
 
         private void ClearFittingState()
@@ -2501,10 +2503,7 @@ namespace FlashMeasurementSystem
             _latestCircleFittingResult = null;
             _latestEllipseFittingResult = null;
             _latestRectangleFittingResult = null;
-            UpdateLineFittingResult(null);
-            UpdateCircleFittingResult(null);
-            UpdateEllipseFittingResult(null);
-            UpdateRectangleFittingResult(null);
+            ClearFittingResultLabel();
         }
 
         // 邊緣量測結果失效：清結果/擬合狀態與結果表，回到「等待 Detect」。
@@ -2518,10 +2517,7 @@ namespace FlashMeasurementSystem
             _latestCircleFittingResult = null;
             _latestEllipseFittingResult = null;
             _latestRectangleFittingResult = null;
-            UpdateLineFittingResult(null);
-            UpdateCircleFittingResult(null);
-            UpdateEllipseFittingResult(null);
-            UpdateRectangleFittingResult(null);
+            ClearFittingResultLabel();
             RestoreDefaultEdgeGridColumns();
             _edgeResultsGrid.Rows.Clear();
             _edgeStatusLabel.Text = "Draw ROI, then Detect";
