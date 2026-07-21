@@ -218,6 +218,41 @@ namespace FlashMeasurementSystem
         }
 
         /// <summary>
+        /// 把 Inspection 分頁的模板下拉選單切到配方指定的模板。
+        ///
+        /// 載入配方時呼叫，讓畫面反映配方的真相。少了這一步，使用者會看到一個與配方無關的
+        /// 模板被選著，以為那就是會被使用的模板——但一鍵量測其實是用配方指定的那個，
+        /// 兩者不一致時畫面等於在說謊。
+        /// 找不到對應項目時不動選取（例如模板檔已被刪除），由 ResolveTemplatePath 負責報錯。
+        /// </summary>
+        private void SelectTemplateInCombo(string templateModelId)
+        {
+            if (string.IsNullOrEmpty(templateModelId)) return;
+            if (templateFileCombo == null) return;
+
+            for (int i = 0; i < templateFileCombo.Items.Count; i++)
+            {
+                var item = templateFileCombo.Items[i] as FileItemWrapper;
+                if (item == null || !item.IsRealFile) continue;
+                if (string.Equals(Path.GetFileName(item.FullPath), templateModelId,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    templateFileCombo.SelectedIndex = i;
+                    return;
+                }
+            }
+        }
+
+        /// <summary>
+        /// 目前下拉選單選取的模板檔名；未選或不是實體檔時回 null。
+        /// </summary>
+        private string SelectedTemplateIdOrNull()
+        {
+            var item = templateFileCombo?.SelectedItem as FileItemWrapper;
+            return item != null && item.IsRealFile ? Path.GetFileName(item.FullPath) : null;
+        }
+
+        /// <summary>
         /// Layer 2 防護：確認目前的匹配姿態是用配方指定的模板量出來的。
         ///
         /// 工程模式下可以「用模板 A 做 Set Ref → 之後用模板 B 按 Run Matching → 再按 Run Recipe」，
@@ -272,6 +307,8 @@ namespace FlashMeasurementSystem
                     SystemColors.ControlText);
                 // 操作員面板的「配方：」欄需同步，否則換配方後仍顯示舊料號。
                 UpdateOperatorRecipeInfo();
+                // 讓畫面上的模板選取反映配方指定的模板，避免「選著 A、實際跑 B」。
+                SelectTemplateInCombo(_loadedRecipe.TemplateModelId);
 
                 if (rememberAsLast) TryRememberLastRecipe(path);
                 return true;
