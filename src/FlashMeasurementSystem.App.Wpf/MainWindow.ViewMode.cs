@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.Globalization;
 using System.IO;
 using System.Windows.Forms;
 
@@ -175,6 +176,86 @@ namespace FlashMeasurementSystem
             };
             b.Click += onClick;
             return b;
+        }
+
+        /// <summary>
+        /// 記住上次使用配方的位置。放在 data/ 下與其他執行期資料一致，
+        /// 且該路徑已列入 .gitignore（機器相關狀態不進版控）。
+        /// </summary>
+        private static string LastRecipeStatePath()
+        {
+            return Path.Combine(DataPaths.DataDir(), "last-recipe.txt");
+        }
+
+        /// <summary>
+        /// 由路徑載入配方。手動載入（Load Recipe）與開機自動還原共用此方法，
+        /// 兩條路徑才不會在訊息、狀態欄位或錯誤處理上漂移。
+        /// </summary>
+        /// <param name="rememberAsLast">
+        /// 是否把此路徑記為「下次開機要還原的配方」。自動還原時傳 false——
+        /// 還原成功不需要重寫同一個值，還原失敗更不該把壞路徑再寫回去。
+        /// </param>
+        private bool LoadRecipeFromPath(string path, bool rememberAsLast = true)
+        {
+            try
+            {
+                _loadedRecipe = _recipeStore.Load(path);
+                _loadedRecipePath = path;
+                SetMeasurementResult(string.Format(CultureInfo.InvariantCulture,
+                    "已載入配方 '{0}'（{1} 工具，SchemaVer {2}{3}）",
+                    _loadedRecipe.Name, _loadedRecipe.Tools.Count, _loadedRecipe.SchemaVersion,
+                    _loadedRecipe.HasReferencePose ? "，含參考姿態" : "，無參考姿態（需 Set Ref）"),
+                    SystemColors.ControlText);
+                // 操作員面板的「配方：」欄需同步，否則換配方後仍顯示舊料號。
+                UpdateOperatorRecipeInfo();
+
+                if (rememberAsLast) TryRememberLastRecipe(path);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _loadedRecipe = null;
+                _loadedRecipePath = null;
+                SetMeasurementResult("載入配方失敗: " + ex.Message, SystemColors.ControlText);
+                UpdateOperatorRecipeInfo();
+                return false;
+            }
+        }
+
+        private void TryRememberLastRecipe(string path)
+        {
+            try
+            {
+                Directory.CreateDirectory(DataPaths.DataDir());
+                File.WriteAllText(LastRecipeStatePath(), path);
+            }
+            catch (Exception)
+            {
+                // 記不住只影響下次開機的便利性，不該讓載入配方這個主要動作失敗。
+            }
+        }
+
+        /// <summary>
+        /// 開機還原上次使用的配方，讓操作員開機後可直接載圖量測，不必每天先找一次配方。
+        /// 任何失敗都靜默略過並維持「尚未載入」狀態——配方被刪或換機器都屬正常情況，
+        /// 不應該用錯誤對話框擋住啟動。
+        /// </summary>
+        private void TryRestoreLastRecipe()
+        {
+            try
+            {
+                string statePath = LastRecipeStatePath();
+                if (!File.Exists(statePath)) return;
+
+                string recipePath = File.ReadAllText(statePath).Trim();
+                if (string.IsNullOrEmpty(recipePath) || !File.Exists(recipePath)) return;
+
+                LoadRecipeFromPath(recipePath, rememberAsLast: false);
+            }
+            catch (Exception)
+            {
+                // 同上：還原失敗不影響啟動。
+            }
         }
 
         /// <summary>

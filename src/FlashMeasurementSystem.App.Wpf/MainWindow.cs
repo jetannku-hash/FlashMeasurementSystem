@@ -244,6 +244,10 @@ namespace FlashMeasurementSystem
                 SetBaseWindowTitle("Flash Measurement System - Template Matching (Halcon unavailable)");
             }
 
+            // 還原上次使用的配方（見 MainWindow.ViewMode.cs）：操作員開機後即可直接載圖量測。
+            // 須在 UpdateEmptyState 之前，空狀態引導才會反映「配方已載入」。
+            TryRestoreLastRecipe();
+
             // 初始空狀態：尚無影像/配方→顯示三步驟引導；橫幅為灰「—」。
             UpdateEmptyState();
             SetResultBanner(0, 0, false);
@@ -516,7 +520,18 @@ namespace FlashMeasurementSystem
         {
             bool hasImage = _imageHelper != null && _imageHelper.CurrentImage != null;
             bool hasRecipe = _loadedRecipe != null;
-            emptyStateGuideLabel.Visible = !hasImage && !hasRecipe;
+
+            // 只要還沒有影像就顯示引導。原本的條件是「無影像且無配方」，在配方只能手動載入時
+            // 沒問題；但開機自動還原配方後，沿用該條件會讓操作員一開機就看到全黑畫面、
+            // 沒有任何提示。影像格此時是空的，引導不會蓋住任何已載入內容。
+            emptyStateGuideLabel.Visible = !hasImage;
+
+            if (!hasImage)
+            {
+                emptyStateGuideLabel.Text = hasRecipe
+                    ? "配方已就緒\n① 載入影像（Load Image）\n② 按一鍵量測（One-Click）"
+                    : "① 載入影像（Load Image）\n② 載入或建立配方（Load / Edit Recipe）\n③ 按一鍵量測（One-Click）";
+            }
         }
 
         // PASS/FAIL 大字橫幅（GUI-02 / N2）：依配方執行結果設定顏色與文字。
@@ -1380,24 +1395,7 @@ namespace FlashMeasurementSystem
 
             if (_openRecipeDialog.ShowDialog(this) != DialogResult.OK) return;
 
-            try
-            {
-                _loadedRecipe = _recipeStore.Load(_openRecipeDialog.FileName);
-                _loadedRecipePath = _openRecipeDialog.FileName;
-                SetMeasurementResult(string.Format(CultureInfo.InvariantCulture,
-                    "已載入配方 '{0}'（{1} 工具，SchemaVer {2}{3}）",
-                    _loadedRecipe.Name, _loadedRecipe.Tools.Count, _loadedRecipe.SchemaVersion,
-                    _loadedRecipe.HasReferencePose ? "，含參考姿態" : "，無參考姿態（需 Set Ref）"),
-                    SystemColors.ControlText);
-                // 操作員面板的「配方：」欄需同步，否則換配方後仍顯示舊料號。
-                UpdateOperatorRecipeInfo();
-            }
-            catch (Exception ex)
-            {
-                _loadedRecipe = null;
-                _loadedRecipePath = null;
-                measureResultLabel.Text = "載入配方失敗: " + ex.Message;
-            }
+            LoadRecipeFromPath(_openRecipeDialog.FileName);
             UpdateEmptyState();
         }
 

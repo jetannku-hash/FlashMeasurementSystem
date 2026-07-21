@@ -16,6 +16,7 @@ _obsolete_build_20260605/
 graphify-out/
 
 # ── Data: 輸出 / 大型 / 機器專屬（見 CLAUDE.md 與全域規範） ──
+data/last-recipe.txt
 data/logs/
 data/images/
 data/reports/
