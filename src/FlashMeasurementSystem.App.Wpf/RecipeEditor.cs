@@ -5,6 +5,7 @@ using System.Globalization;
 using System.IO;
 using System.Windows.Forms;
 using FlashMeasurementSystem.Domain.EdgeDetection;
+using FlashMeasurementSystem.Domain.ImageQuality;
 using FlashMeasurementSystem.Domain.GearAnalysis;
 using FlashMeasurementSystem.Domain.Gdt;
 using FlashMeasurementSystem.Domain.HoleArrayAnalysis;
@@ -75,6 +76,7 @@ namespace FlashMeasurementSystem
         private Button _saveButton;
         private Button _saveAsButton;
         private Button _trialMeasureButton;
+        private Button _iqcThresholdsButton;
 
         // ── Left: tool list ──
         private ListBox _toolListBox;
@@ -320,6 +322,9 @@ namespace FlashMeasurementSystem
             _saveAsButton.Click += OnSaveAs;
             _trialMeasureButton = new Button { Text = "[在此試測]", Width = 90, Enabled = false };
             _trialMeasureButton.Click += OnTrialMeasure;
+            // v15：本配方的影像品質門檻。屬配方層級設定，右側屬性面板是工具專屬的，故走獨立對話框。
+            _iqcThresholdsButton = new Button { Text = "影像品質門檻…", Width = 100 };
+            _iqcThresholdsButton.Click += OnEditIqcThresholds;
 
             bar.Controls.Add(_newButton);
             bar.Controls.Add(_loadButton);
@@ -344,6 +349,7 @@ namespace FlashMeasurementSystem
             bar.Controls.Add(_saveButton);
             bar.Controls.Add(_saveAsButton);
             bar.Controls.Add(_trialMeasureButton);
+            bar.Controls.Add(_iqcThresholdsButton);
 
             return bar;
         }
@@ -1408,6 +1414,9 @@ namespace FlashMeasurementSystem
                 RefAngleRad = src.RefAngleRad,
                 HasReferencePose = src.HasReferencePose,
                 MetrologyModel = src.MetrologyModel,
+                // v15：同 MetrologyModel，必須帶過去。漏了的話「開啟配方 → 改個工具 → 存檔」
+                // 會把本配方的影像品質門檻靜默清成 null（退回全域預設），而畫面上毫無跡象。
+                IqcThresholds = src.IqcThresholds,
                 CreatedAt = src.CreatedAt,
                 ModifiedAt = src.ModifiedAt
             };
@@ -2180,6 +2189,34 @@ namespace FlashMeasurementSystem
             }
             MarkDirty();
             ShowRoiEdit();
+        }
+
+        // v15：編輯本配方的影像品質門檻。門檻存在 _recipe 上（非工具層級），
+        // 存檔時由 CopyRecipeMetadata 帶進輸出的 Recipe。
+        private void OnEditIqcThresholds(object sender, EventArgs e)
+        {
+            using (var dlg = new IqcThresholdsDialog(_recipe.IqcThresholds))
+            {
+                if (dlg.ShowDialog(this) != DialogResult.OK) return;
+
+                // 只有真的變了才標記為未存檔，避免「開啟後直接按確定」也讓配方變 dirty。
+                if (!SameThresholds(_recipe.IqcThresholds, dlg.Result))
+                {
+                    _recipe.IqcThresholds = dlg.Result;
+                    MarkDirty();
+                }
+            }
+        }
+
+        private static bool SameThresholds(ImageQualityThresholds a, ImageQualityThresholds b)
+        {
+            if (a == null && b == null) return true;
+            if (a == null || b == null) return false;
+            return a.MinBrightness == b.MinBrightness
+                && a.MaxBrightness == b.MaxBrightness
+                && a.MaxSaturationRatio == b.MaxSaturationRatio
+                && a.MinBlurScore == b.MinBlurScore
+                && a.MinContrast == b.MinContrast;
         }
 
         // ─── Dirty tracking ────────────────────────────────────────────

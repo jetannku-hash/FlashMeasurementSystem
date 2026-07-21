@@ -785,7 +785,12 @@ namespace FlashMeasurementSystem
 
             try
             {
-                var result = _iqc.Check(_imageHelper.CurrentImage, ImageQualityThresholds.Default());
+                // 與一鍵量測用同一組門檻（配方未載入時才退回全域預設），否則會出現
+                // 「單獨檢查說 PASS、一鍵量測卻 FAIL」這種難以追查的不一致。
+                ImageQualityThresholds thresholds = _loadedRecipe != null
+                    ? _loadedRecipe.EffectiveIqcThresholds()
+                    : ImageQualityThresholds.Default();
+                var result = _iqc.Check(_imageHelper.CurrentImage, thresholds);
                 SetIqcResult(result.Pass
                     ? $"PASS | Mean:{result.MeanBrightness:F1} Sat:{result.SaturationRatio:F2}% Blur:{result.BlurScore:F1} Contrast:{result.Contrast:F1}"
                     : $"FAIL | {result.Message}",

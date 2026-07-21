@@ -186,7 +186,46 @@ namespace FlashMeasurementSystem.Domain.Roi
                 ValidateReferences(issues, tool, type, byId);
             }
 
+            ValidateIqcThresholds(issues, recipe);
+
             return issues;
+        }
+
+        /// <summary>
+        /// 每配方影像品質門檻的合理性檢查（v15）。門檻設反了會讓「每一張」影像都不合格，
+        /// 而失敗訊息只會說過亮/過暗，看不出是門檻本身寫錯——正是該在按下量測前就攔下的那類問題。
+        /// 未設定（null）代表沿用全域預設，不檢查。
+        /// </summary>
+        private static void ValidateIqcThresholds(List<RecipeIssue> issues, Recipe recipe)
+        {
+            ImageQuality.ImageQualityThresholds t = recipe.IqcThresholds;
+            if (t == null) return;
+
+            if (t.MinBrightness >= t.MaxBrightness)
+            {
+                issues.Add(new RecipeIssue(RecipeIssueSeverity.Error, "", "",
+                    "影像品質門檻：亮度下限須小於上限（目前下限 ≥ 上限，將導致任何影像都不合格）"));
+            }
+            if (t.MinBrightness < 0.0 || t.MaxBrightness > 255.0)
+            {
+                issues.Add(new RecipeIssue(RecipeIssueSeverity.Warning, "", "",
+                    "影像品質門檻：亮度範圍超出 8-bit 影像的 0–255"));
+            }
+            if (t.MaxSaturationRatio < 0.0 || t.MaxSaturationRatio > 100.0)
+            {
+                issues.Add(new RecipeIssue(RecipeIssueSeverity.Error, "", "",
+                    "影像品質門檻：飽和像素比例上限須介於 0–100（%）"));
+            }
+            if (t.MinBlurScore < 0.0)
+            {
+                issues.Add(new RecipeIssue(RecipeIssueSeverity.Error, "", "",
+                    "影像品質門檻：銳利度下限不可為負"));
+            }
+            if (t.MinContrast < 0.0)
+            {
+                issues.Add(new RecipeIssue(RecipeIssueSeverity.Error, "", "",
+                    "影像品質門檻：對比度下限不可為負"));
+            }
         }
 
         private static void ValidateRoi(List<RecipeIssue> issues, MeasurementTool tool, int w, int h)
