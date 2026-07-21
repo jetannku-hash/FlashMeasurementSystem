@@ -206,7 +206,8 @@ namespace FlashMeasurementSystem
             _toolTip.SetToolTip(editRecipeButton, "Open recipe editor to create or modify recipes");
             _toolTip.SetToolTip(metrologyButton, "Define the 2D metrology model for the loaded recipe");
             _toolTip.SetToolTip(oneClickButton, "Run full pipeline: IQC → Match → Measure → Evaluate → Report");
-            _toolTip.SetToolTip(_skipIqcCheckBox, "Skip image quality check (for testing with synthetic images)");
+            _toolTip.SetToolTip(_skipIqcCheckBox,
+                "略過影像品質檢查（僅供合成影像測試）。只在工程模式生效，切到操作員模式會自動取消勾選。");
             _toolTip.SetToolTip(dxfButton, "Open standalone DXF/CAD contour comparison panel");
 
             topToolbar.Controls.Add(calibButton);

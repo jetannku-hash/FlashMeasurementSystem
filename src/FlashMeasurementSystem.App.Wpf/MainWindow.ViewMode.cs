@@ -389,6 +389,12 @@ namespace FlashMeasurementSystem
             if (rightPanel != null) rightPanel.Visible = engineering;
             if (_operatorPanel != null) _operatorPanel.Visible = !engineering;
 
+            // 離開工程模式時清掉「略過IQC」。該旗標只在工程模式生效（見 OneClickMeasureButton_Click），
+            // 若讓勾選狀態留著，使用者會遇到「明明勾了卻毫無作用、也沒有任何說明」的情況——
+            // 勾選狀態必須誠實反映它是否真的有效。回到工程模式需重新勾選，這也符合它
+            // 「臨時拿合成影像測試」的定位，不該跨模式長期存在。
+            if (!engineering && _skipIqcCheckBox != null) _skipIqcCheckBox.Checked = false;
+
             ApplyWindowTitle();
         }
 
