@@ -302,6 +302,25 @@ namespace FlashMeasurementSystem
             }
         }
 
+        /// <summary>
+        /// 設定影像品質檢查結果。
+        ///
+        /// iqcResultLabel 實體位於 Inspection 分頁內（imageQualityBox），操作員模式下是隱藏的；
+        /// 影像品質檢查按鈕同時出現在操作員面板上，若只寫該 label，操作員會看到「按了沒反應」。
+        /// 與 measureResultLabel 同一類問題，處置方式一致：鏡像到操作員結果面。
+        /// </summary>
+        private void SetIqcResult(string text, Color color)
+        {
+            iqcResultLabel.Text = text;
+            iqcResultLabel.ForeColor = color;
+
+            if (_operatorResultLabel != null)
+            {
+                _operatorResultLabel.Text = text;
+                _operatorResultLabel.ForeColor = color;
+            }
+        }
+
         /// <summary>附加到目前的量測結果訊息後方（一鍵量測會接在配方結果之後）。</summary>
         private void AppendMeasurementResult(string text)
         {

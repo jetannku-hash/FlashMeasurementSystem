@@ -785,15 +785,14 @@ namespace FlashMeasurementSystem
             try
             {
                 var result = _iqc.Check(_imageHelper.CurrentImage, ImageQualityThresholds.Default());
-                iqcResultLabel.Text = result.Pass
+                SetIqcResult(result.Pass
                     ? $"PASS | Mean:{result.MeanBrightness:F1} Sat:{result.SaturationRatio:F2}% Blur:{result.BlurScore:F1} Contrast:{result.Contrast:F1}"
-                    : $"FAIL | {result.Message}";
-                iqcResultLabel.ForeColor = result.Pass ? System.Drawing.Color.Green : System.Drawing.Color.Red;
+                    : $"FAIL | {result.Message}",
+                    result.Pass ? System.Drawing.Color.Green : System.Drawing.Color.Red);
             }
             catch (HalconException ex)
             {
-                iqcResultLabel.Text = $"IQC error: {ex.Message}";
-                iqcResultLabel.ForeColor = System.Drawing.Color.Red;
+                SetIqcResult($"IQC error: {ex.Message}", System.Drawing.Color.Red);
             }
         }
 
