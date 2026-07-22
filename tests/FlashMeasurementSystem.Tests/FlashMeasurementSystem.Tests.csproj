@@ -78,6 +78,8 @@
     <Compile Include="RecipeRunnerToolWiringDomainTests.cs" />
     <Compile Include="MeasurementWorkflowDomainTests.cs" />
     <Compile Include="ArcRoiTransformDomainTests.cs" />
+    <Compile Include="RepeatabilityDomainTests.cs" />
+    <Compile Include="StraightnessBandDomainTests.cs" />
     <Compile Include="ToolTypesTests.cs" />
     <Compile Include="IqcThresholdsRecipeTests.cs" />
     <Compile Include="TemplateReferenceRecipeTests.cs" />

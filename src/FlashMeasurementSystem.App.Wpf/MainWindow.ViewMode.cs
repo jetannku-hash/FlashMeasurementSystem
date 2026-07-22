@@ -1,10 +1,15 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Globalization;
 using System.IO;
+using System.Text;
 using System.Windows.Forms;
+using FlashMeasurementSystem.Domain.Repeatability;
 using FlashMeasurementSystem.Domain.Roi;
 using FlashMeasurementSystem.Domain.TemplateMatching;
+using FlashMeasurementSystem.Domain.Tolerance;
+using FlashMeasurementSystem.Domain.Workflow;
 
 namespace FlashMeasurementSystem
 {
@@ -76,8 +81,15 @@ namespace FlashMeasurementSystem
             // 放在「建立模板」分頁裡會讓人誤以為每建一個料號都要重跑一次校正。
             var calibItem = new ToolStripMenuItem("像素尺寸校正(&C)…");
             calibItem.Click += OpenCalibrationDialog;
+            // 重複性測試：對當前影像重複跑配方 N 次算 6σ/GR&R（手冊 §6.3）。工程診斷，放設定選單。
+            var repeatItem = new ToolStripMenuItem("重複性測試(&R)…")
+            {
+                ToolTipText = "對當前影像重複量測 30 次，計算 6σ 與 GR&R%（量測系統穩定度）"
+            };
+            repeatItem.Click += RunRepeatabilityTest;
             _settingsMenuItem = new ToolStripMenuItem("設定(&S)");
             _settingsMenuItem.DropDownItems.Add(calibItem);
+            _settingsMenuItem.DropDownItems.Add(repeatItem);
 
             _viewModeMenuStrip = new MenuStrip();
             _viewModeMenuStrip.Items.Add(viewMenu);
@@ -89,6 +101,93 @@ namespace FlashMeasurementSystem
             // 而不是把頂端空間讓出來，結果是 PASS/FAIL 橫幅上緣被選單遮掉 ~21px。
             // WinForms 的 dock 依 z-order 決定誰先取得空間，此處保持 Add 後的預設順序即可。
             _viewModeMenuStrip.SendToBack();
+        }
+
+        /// <summary>
+        /// 重複性測試（手冊 §6.3）：對「當前影像」重複跑載入的配方 N 次，對每個判定項算 6σ / GR&R%。
+        /// 重用一鍵量測的 RunOnce 取值路徑（judgments[].MeasuredValue，已受測），避免與 GetMeasuredValue 漂移。
+        /// ⚠️靜態 replay 影像上 HALCON 量測是確定性的 → 6σ≈0，驗證的是「演算法數值穩定性」；
+        /// 含製程/擺放變異的完整 GR&R 需真實重複取像（待硬體）。
+        /// 每次 RunOnce 會寫一列報表，故導向 reports/repeatability 子夾，不污染正式量測報表。
+        /// </summary>
+        private void RunRepeatabilityTest(object sender, EventArgs e)
+        {
+            if (_loadedRecipe == null) { MessageBox.Show(this, "請先載入配方 (.zcp)。", "重複性測試"); return; }
+            if (_imageHelper == null || _imageHelper.CurrentImage == null) { MessageBox.Show(this, "請先載入影像。", "重複性測試"); return; }
+
+            const int n = 30;   // 手冊建議 N ≥ 30
+            ResolvePixelSize(out double pxUmX, out double pxUmY, out string _);
+            string templatePath = ResolveTemplatePath(_loadedRecipe, out string templateError);
+            if (templateError != null)
+            {
+                MessageBox.Show(this, templateError, "重複性測試", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            string reportDir = Path.Combine(ResolveDataDir(), "reports", "repeatability");
+            bool skipIqc = _viewMode == ViewMode.Engineering && _skipIqcCheckBox != null && _skipIqcCheckBox.Checked;
+
+            var order = new List<string>();
+            var values = new Dictionary<string, List<double>>();
+            var tolRange = new Dictionary<string, double>();
+
+            for (int i = 0; i < n; i++)
+            {
+                _workflow.RunOnce(
+                    _loadedRecipe, _imageHelper.CurrentImage, pxUmX, pxUmY,
+                    reportDir, templatePath, null, null, skipIqc,
+                    out List<ToolRunResult> _, out List<ItemJudgment> judgments);
+
+                if (i == 0 && (judgments == null || judgments.Count == 0))
+                {
+                    MessageBox.Show(this,
+                        "本配方沒有可判定的量測項（需含公差的工具），無法做重複性統計。",
+                        "重複性測試", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+                if (judgments == null) continue;
+
+                foreach (ItemJudgment j in judgments)
+                {
+                    string key = j.ToolName ?? "";
+                    if (!values.ContainsKey(key))
+                    {
+                        values[key] = new List<double>();
+                        tolRange[key] = j.UpperLimit - j.LowerLimit;
+                        order.Add(key);
+                    }
+                    values[key].Add(j.MeasuredValue);
+                }
+            }
+
+            var sb = new StringBuilder();
+            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "重複性測試（同一影像重複量測 {0} 次）", n));
+            sb.AppendLine("靜態影像上 6σ≈0 即演算法確定性；真實製程變異需重複取像。");
+            sb.AppendLine();
+            foreach (string key in order)
+            {
+                List<double> vals = values[key];
+                if (vals.Count < 2) continue;
+                double t = tolRange.TryGetValue(key, out double tv) ? tv : 0.0;
+                RepeatabilityReport r = RepeatabilityReport.Calculate(vals, t);
+                sb.AppendLine(key + "：");
+                sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
+                    "  平均={0:F4}  標準差={1:F4}  全距={2:F4}  6σ={3:F4}", r.Mean, r.StdDev, r.Range, r.SixSigma));
+                sb.AppendLine("  GR&R=" + (double.IsNaN(r.GrrPercent)
+                    ? "N/A（此項無公差）"
+                    : string.Format(CultureInfo.InvariantCulture, "{0:F1}%（{1}）", r.GrrPercent, VerdictText(r.Verdict))));
+            }
+            MessageBox.Show(this, sb.ToString(), "重複性測試結果", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        private static string VerdictText(RepeatabilityVerdict v)
+        {
+            switch (v)
+            {
+                case RepeatabilityVerdict.Excellent: return "優良 <10%";
+                case RepeatabilityVerdict.Acceptable: return "可接受 10–30%";
+                case RepeatabilityVerdict.Unacceptable: return "不合格 >30%";
+                default: return "N/A";
+            }
         }
 
         /// <summary>

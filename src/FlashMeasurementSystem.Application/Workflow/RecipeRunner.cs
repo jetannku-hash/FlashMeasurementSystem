@@ -86,7 +86,8 @@ namespace FlashMeasurementSystem
         public string ValueText;       // 結果表顯示文字
         public string Message;         // 失敗/說明
         public GeometricPrimitive OutputPrimitive;  // A5：此工具的幾何輸出（resolver / 下游消費）
-        public double ResidualRmsPx;     // line/circle 擬合殘差 RMS（px）；供真直度（近似）與品質
+        public double ResidualRmsPx;     // line/circle 擬合殘差 RMS（px）；品質指標
+        public double StraightnessBandPx; // line 各點到擬合線垂距 max-min（px）；供真直度真值（peak-to-peak）
         public double CircleRoundnessPx; // circle max-min 徑向（px）；供真圓度真值
         public double GdtDeviationMm;    // GD&T：形位偏差（mm）
     }
@@ -816,7 +817,10 @@ namespace FlashMeasurementSystem
                 res.LineRow1 = line.Row1; res.LineCol1 = line.Column1;
                 res.LineRow2 = line.Row2; res.LineCol2 = line.Column2;
                 res.LineAngleDeg = line.AngleDeg;
-                res.ResidualRmsPx = line.ResidualRms;   // 供真直度（RMS 近似，v1）
+                res.ResidualRmsPx = line.ResidualRms;   // 品質指標
+                // 真直度真值：各邊點到擬合線的垂距 max-min（peak-to-peak 帶寬），取代 RMS 近似。
+                res.StraightnessBandPx = StraightnessBand.PeakToPeakPx(
+                    edges.EdgePoints, line.Row1, line.Column1, line.Row2, line.Column2);
 
                 // C2：若 line 公差單位為 deg，對線角度做環狀公差判定。
                 //     否則維持純元素模式（IsOk = null）。
@@ -976,7 +980,7 @@ namespace FlashMeasurementSystem
         }
 
         // Pass 1.7 GD&T 形位公差：偏差(px) → mm → 單邊判定(0 ≤ dev ≤ T)。
-        // roundness 需 1 circle（偏差=max-min 徑向，真值）；straightness 需 1 line（偏差=ResidualRms 近似，v1）；
+        // roundness 需 1 circle（偏差=max-min 徑向，真值）；straightness 需 1 line（偏差=垂距 peak-to-peak 帶寬，真值）；
         // parallelism/perpendicularity 需 2 line（量測線, 基準線）；concentricity 需 2 circle（量測, 基準）。
         // 僅允許參照 line/circle 基礎元件（不支援鏈式參照構造結果）。
         private void MeasureGdt(ToolRunResult res, MeasurementTool tool,
@@ -1030,7 +1034,7 @@ namespace FlashMeasurementSystem
                     res.Measured = false; res.ValueText = "需 line";
                     res.Message = "真直度需參照一個 line 元素"; return;
                 }
-                deviationPx = a.ResidualRmsPx;
+                deviationPx = a.StraightnessBandPx;   // 真值 peak-to-peak 帶寬（非 RMS 近似）
             }
             else
             {
