@@ -1036,16 +1036,6 @@ namespace FlashMeasurementSystem
             };
         }
 
-        private EdgeDetectionRoi CreateEdgeDetectionRoiFromNumeric(RegionInfo region)
-        {
-            double centerRow = (region.Row1 + region.Row2) / 2.0;
-            double centerCol = (region.Col1 + region.Col2) / 2.0;
-            double angleRad = (double)_edgeAngleNumeric.Value * Math.PI / 180.0;
-            double length1 = (double)_edgeScanLengthNumeric.Value / 2.0;
-            double length2 = (double)_edgeRoiWidthNumeric.Value / 2.0;
-            return EdgeDetectionRoi.FromCenter(centerRow, centerCol, length1, length2, angleRad);
-        }
-
         private void OnEdgeRoiNumericChanged(object sender, EventArgs e)
         {
             if (_updatingEdgeRoiControls || _imageHelper == null || _imageHelper.CurrentImage == null || !_imageHelper.IsEditingRect2)
