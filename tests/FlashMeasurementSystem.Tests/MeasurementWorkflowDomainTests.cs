@@ -29,7 +29,7 @@ namespace FlashMeasurementSystem.Tests
     /// MeasurementWorkflow.RunOnce 的管線編排測試（IQC → 模板匹配 → 量測 → 判定計數 → 報表）。
     /// 與 RecipeRunnerDomainTests 合起來補上 2026-07-21 審查點名的結構性驗證洞。
     /// 三個 vendor adapter（IQC/matcher/report）以 fake 注入，量測層用真的 RecipeRunner + fake
-    /// 偵測器，判定用真的 ToleranceJudger。TImage/TRegion/TContour 皆以 object 具現。
+    /// 偵測器，判定用真的 ToleranceJudger。TImage/TRegion 皆以 object 具現。
     ///
     /// 兩個重點：
     /// (1) 模板載入的 MeasurementAdapterException 被 workflow 捕捉 → 證明 Option A 的邊界翻譯
@@ -170,21 +170,21 @@ namespace FlashMeasurementSystem.Tests
 
         // ─── builders ─────────────────────────────────────────────
 
-        private static MeasurementWorkflow<object, object, object> MakeWorkflow(
+        private static MeasurementWorkflow<object, object> MakeWorkflow(
             IImageQualityChecker<object> iqc,
             ITemplateMatcher<object, object> matcher,
-            RecipeRunner<object, object> runner,
+            RecipeRunner<object> runner,
             IMeasurementReportWriter writer,
             Func<object, bool> isImageInitialized = null)
         {
-            return new MeasurementWorkflow<object, object, object>(
+            return new MeasurementWorkflow<object, object>(
                 iqc, matcher, runner, new ToleranceJudger(), writer,
                 isImageInitialized ?? (img => img != null));
         }
 
-        private static RecipeRunner<object, object> BuildRunner(EdgeResult edges, CircleFittingResult circle)
+        private static RecipeRunner<object> BuildRunner(EdgeResult edges, CircleFittingResult circle)
         {
-            return new RecipeRunner<object, object>(
+            return new RecipeRunner<object>(
                 new FakeEdgeDetector(edges),
                 new FakeCircleFitter(circle),
                 new FakeLineFitter(),
@@ -286,13 +286,12 @@ namespace FlashMeasurementSystem.Tests
                 => new LineFittingResult { Success = false, ErrorMessage = "not used" };
         }
 
-        private sealed class ThrowingDistanceMeasurer : IDistanceMeasurer<object>
+        private sealed class ThrowingDistanceMeasurer : IDistanceMeasurer
         {
             public DistanceMeasurementResult MeasurePointToPoint(double r1, double c1, double r2, double c2, DistanceMeasurementParameters p) => throw new InvalidOperationException("distance measurer should not be called");
             public DistanceMeasurementResult MeasurePointToLine(double pr, double pc, double lr1, double lc1, double lr2, double lc2, DistanceMeasurementParameters p) => throw new InvalidOperationException("distance measurer should not be called");
             public DistanceMeasurementResult MeasureLineToLine(double a1r, double a1c, double a2r, double a2c, double b1r, double b1c, double b2r, double b2c, DistanceMeasurementParameters p) => throw new InvalidOperationException("distance measurer should not be called");
             public DistanceMeasurementResult MeasureCircleToCircle(double r1, double c1, double r2, double c2, DistanceMeasurementParameters p) => throw new InvalidOperationException("distance measurer should not be called");
-            public DistanceMeasurementResult MeasureContourMaxMin(object c1, object c2, DistanceMeasurementParameters p) => throw new InvalidOperationException("distance measurer should not be called");
         }
 
         private sealed class ThrowingAngleMeasurer : IAngleMeasurer

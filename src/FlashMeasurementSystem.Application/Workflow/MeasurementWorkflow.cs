@@ -20,12 +20,12 @@ namespace FlashMeasurementSystem
     /// Orchestrates: image quality check → template matching → measurement → evaluation → CSV report.
     /// Hardware stages (WaitingPart/Acquiring/Outputting) are excluded — see manual §4.14.
     /// </summary>
-    public sealed class MeasurementWorkflow<TImage, TRegion, TContour>
+    public sealed class MeasurementWorkflow<TImage, TRegion>
         where TImage : class
     {
         private readonly IImageQualityChecker<TImage> _iqc;
         private readonly ITemplateMatcher<TImage, TRegion> _templateMatcher;
-        private readonly RecipeRunner<TImage, TContour> _recipeRunner;
+        private readonly RecipeRunner<TImage> _recipeRunner;
         private readonly IToleranceJudger _judger;
         private readonly IMeasurementReportWriter _reportWriter;
         // 影像「已初始化」是 vendor 專屬判斷（HImage.IsInitialized），不進 HALCON-free 的本類。
@@ -37,7 +37,7 @@ namespace FlashMeasurementSystem
         public MeasurementWorkflow(
             IImageQualityChecker<TImage> iqc,
             ITemplateMatcher<TImage, TRegion> templateMatcher,
-            RecipeRunner<TImage, TContour> recipeRunner,
+            RecipeRunner<TImage> recipeRunner,
             IToleranceJudger judger,
             IMeasurementReportWriter reportWriter,
             Func<TImage, bool> isImageInitialized)

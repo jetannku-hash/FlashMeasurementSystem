@@ -7,7 +7,7 @@ using HalconDotNet;
 
 namespace FlashMeasurementSystem.Halcon.DistanceMeasurement
 {
-    public class HalconDistanceMeasurer : IDistanceMeasurer<HXLDCont>
+    public class HalconDistanceMeasurer : IDistanceMeasurer
     {
         // 物理單位換算策略（修正非等向像素 pixelSizeX != pixelSizeY 的錯誤）：
         // 不再用「方向向量加權混合 pixel size」（那對 point-to-line / line-to-line / contour
@@ -160,59 +160,6 @@ namespace FlashMeasurementSystem.Halcon.DistanceMeasurement
             Log("CircleToCircle", p, result,
                 string.Format(CultureInfo.InvariantCulture, "c1=({0:F2},{1:F2}) c2=({2:F2},{3:F2})",
                     circle1Row, circle1Col, circle2Row, circle2Col));
-            return result;
-        }
-
-        public DistanceMeasurementResult MeasureContourMaxMin(
-            HXLDCont contour1,
-            HXLDCont contour2,
-            DistanceMeasurementParameters parameters)
-        {
-            var result = new DistanceMeasurementResult();
-            var p = parameters ?? DistanceMeasurementParameters.Default();
-
-            if (contour1 == null || contour2 == null)
-            {
-                result.ErrorMessage = "ContourMaxMin: both contours must be non-null";
-                Log("ContourMaxMin", p, result, "contour=null");
-                return result;
-            }
-
-            HObject c1Phys = null;
-            HObject c2Phys = null;
-            try
-            {
-                HOperatorSet.DistanceCc(contour1, contour2, p.ContourMode,
-                    out HTuple minPx, out HTuple maxPx);
-
-                // 物理空間：把 contour 縮放到 um 再算。row(=Row=x in hom-mat) 乘 PixelSizeUmY，
-                // col(=Column=y in hom-mat) 乘 PixelSizeUmX (reference L161477-484 的 row→x/col→y 慣例)。
-                HOperatorSet.HomMat2dIdentity(out HTuple hom);
-                HOperatorSet.HomMat2dScale(hom, p.PixelSizeUmY, p.PixelSizeUmX, 0, 0, out HTuple homScale);
-                HOperatorSet.AffineTransContourXld(contour1, out c1Phys, homScale);
-                HOperatorSet.AffineTransContourXld(contour2, out c2Phys, homScale);
-                HOperatorSet.DistanceCc(c1Phys, c2Phys, p.ContourMode,
-                    out HTuple minUm, out HTuple maxUm);
-
-                result.DistanceMinPx = minPx.D;
-                result.DistanceMaxPx = maxPx.D;
-                result.DistanceMinMm = minUm.D / 1000.0;
-                result.DistanceMaxMm = maxUm.D / 1000.0;
-                result.DistancePx = minPx.D;        // 一般關注最近距離
-                result.DistanceMm = result.DistanceMinMm;
-                result.Success = true;
-            }
-            catch (HalconException ex)
-            {
-                result.ErrorMessage = "Contour-MaxMin distance failed: " + ex.Message;
-            }
-            finally
-            {
-                c1Phys?.Dispose();
-                c2Phys?.Dispose();
-            }
-
-            Log("ContourMaxMin", p, result, "mode=" + p.ContourMode);
             return result;
         }
 

@@ -20,7 +20,7 @@ namespace FlashMeasurementSystem.Tests
             AssertEqual(0.0, result.DistanceMm, "New result distance mm should be 0");
             AssertEqual(string.Empty, result.ErrorMessage, "New result error message should be empty");
 
-            IDistanceMeasurer<object> fake = new FakeDistanceMeasurer();
+            IDistanceMeasurer fake = new FakeDistanceMeasurer();
             DistanceMeasurementResult fakeResult = fake.MeasurePointToPoint(0, 0, 1, 1, defaults);
             AssertEqual(true, fakeResult.Success, "Fake measurer should satisfy interface contract");
 
@@ -36,7 +36,7 @@ namespace FlashMeasurementSystem.Tests
             }
         }
 
-        private sealed class FakeDistanceMeasurer : IDistanceMeasurer<object>
+        private sealed class FakeDistanceMeasurer : IDistanceMeasurer
         {
             public DistanceMeasurementResult MeasurePointToPoint(
                 double row1, double col1, double row2, double col2,
@@ -67,13 +67,6 @@ namespace FlashMeasurementSystem.Tests
             public DistanceMeasurementResult MeasureCircleToCircle(
                 double circle1Row, double circle1Col,
                 double circle2Row, double circle2Col,
-                DistanceMeasurementParameters parameters)
-            {
-                return new DistanceMeasurementResult { Success = true };
-            }
-
-            public DistanceMeasurementResult MeasureContourMaxMin(
-                object contour1, object contour2,
                 DistanceMeasurementParameters parameters)
             {
                 return new DistanceMeasurementResult { Success = true };

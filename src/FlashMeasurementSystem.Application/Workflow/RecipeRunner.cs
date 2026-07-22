@@ -95,15 +95,15 @@ namespace FlashMeasurementSystem
     /// 配方執行引擎（M3c-1 B1）。把每個工具 ROI 由參考座標系轉到當前匹配姿態，
     /// 對 circle 工具量測直徑(mm) 並做公差判定。其他型別此版標示未支援、不擋流程。
     /// 不直接相依具體 HALCON 類別——以 Application 介面注入(可測/可換)。
-    /// 影像型別 TImage、輪廓型別 TContour 為型別參數：本類只把它們原封轉交注入的介面、
-    /// 不存取其成員，故 App.Wpf 用 &lt;HImage, HXLDCont&gt; 具現，測試可用 fake 型別具現。
+    /// 影像型別 TImage 為型別參數：本類只把它原封轉交注入的介面、不存取其成員，
+    /// 故 App.Wpf 用 &lt;HImage&gt; 具現，測試可用 fake 型別具現。
     /// </summary>
-    public sealed class RecipeRunner<TImage, TContour>
+    public sealed class RecipeRunner<TImage>
     {
         private readonly IEdgeDetector<TImage> _edgeDetector;
         private readonly ICircleFitter _circleFitter;
         private readonly ILineFitter _lineFitter;
-        private readonly IDistanceMeasurer<TContour> _distanceMeasurer;
+        private readonly IDistanceMeasurer _distanceMeasurer;
         private readonly IAngleMeasurer _angleMeasurer;
         private readonly IToleranceJudger _judger;
         private readonly ICoordinateMapper _mapper;
@@ -117,7 +117,7 @@ namespace FlashMeasurementSystem
         private readonly IHoleArrayDetector<TImage> _holeArrayDetector;
 
         public RecipeRunner(IEdgeDetector<TImage> edgeDetector, ICircleFitter circleFitter,
-            ILineFitter lineFitter, IDistanceMeasurer<TContour> distanceMeasurer,
+            ILineFitter lineFitter, IDistanceMeasurer distanceMeasurer,
             IAngleMeasurer angleMeasurer, IToleranceJudger judger, ICoordinateMapper mapper,
             IMetrologyModelRunner<TImage> metrologyRunner = null,
             IHoleDetector<TImage> holeDetector = null,

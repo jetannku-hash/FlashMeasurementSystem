@@ -217,10 +217,10 @@ namespace FlashMeasurementSystem.Tests
 
         // ─── builders ─────────────────────────────────────────────
 
-        private static RecipeRunner<object, object> MakeRunner(
+        private static RecipeRunner<object> MakeRunner(
             EdgeResult edges, CircleFittingResult circle, LineFittingResult line)
         {
-            return new RecipeRunner<object, object>(
+            return new RecipeRunner<object>(
                 new FakeEdgeDetector(edges),
                 new FakeCircleFitter(circle),
                 new FakeLineFitter(line),
@@ -231,15 +231,15 @@ namespace FlashMeasurementSystem.Tests
         }
 
         // 需要 distance / angle measurer 的複合工具測試用；null → 沿用 throwing（證明該路徑未被觸及）。
-        private static RecipeRunner<object, object> MakeRunnerFull(
+        private static RecipeRunner<object> MakeRunnerFull(
             EdgeResult edges, CircleFittingResult circle, LineFittingResult line,
             DistanceMeasurementResult dist, AngleMeasurementResult angle)
         {
-            return new RecipeRunner<object, object>(
+            return new RecipeRunner<object>(
                 new FakeEdgeDetector(edges),
                 new FakeCircleFitter(circle),
                 new FakeLineFitter(line),
-                dist != null ? (IDistanceMeasurer<object>)new FakeDistanceMeasurer(dist) : new ThrowingDistanceMeasurer(),
+                dist != null ? (IDistanceMeasurer)new FakeDistanceMeasurer(dist) : new ThrowingDistanceMeasurer(),
                 angle != null ? (IAngleMeasurer)new FakeAngleMeasurer(angle) : new ThrowingAngleMeasurer(),
                 new ToleranceJudger(),
                 new ThrowingMapper());
@@ -390,13 +390,12 @@ namespace FlashMeasurementSystem.Tests
         }
 
         // 以下工具型別不在本測試涵蓋範圍；被呼叫代表 Run 走錯分支，直接讓測試爆掉。
-        private sealed class ThrowingDistanceMeasurer : IDistanceMeasurer<object>
+        private sealed class ThrowingDistanceMeasurer : IDistanceMeasurer
         {
             public DistanceMeasurementResult MeasurePointToPoint(double ar, double ac, double br, double bc, DistanceMeasurementParameters p) => throw new InvalidOperationException("distance measurer should not be called");
             public DistanceMeasurementResult MeasurePointToLine(double pr, double pc, double lr1, double lc1, double lr2, double lc2, DistanceMeasurementParameters p) => throw new InvalidOperationException("distance measurer should not be called");
             public DistanceMeasurementResult MeasureLineToLine(double a1r, double a1c, double a2r, double a2c, double b1r, double b1c, double b2r, double b2c, DistanceMeasurementParameters p) => throw new InvalidOperationException("distance measurer should not be called");
             public DistanceMeasurementResult MeasureCircleToCircle(double ar, double ac, double br, double bc, DistanceMeasurementParameters p) => throw new InvalidOperationException("distance measurer should not be called");
-            public DistanceMeasurementResult MeasureContourMaxMin(object c1, object c2, DistanceMeasurementParameters p) => throw new InvalidOperationException("distance measurer should not be called");
         }
 
         private sealed class ThrowingAngleMeasurer : IAngleMeasurer
@@ -414,7 +413,7 @@ namespace FlashMeasurementSystem.Tests
         }
 
         // 複合工具的量測器 fake：回罐頭結果（circle↔circle / line↔line 版本足以覆蓋本測試的路由）。
-        private sealed class FakeDistanceMeasurer : IDistanceMeasurer<object>
+        private sealed class FakeDistanceMeasurer : IDistanceMeasurer
         {
             private readonly DistanceMeasurementResult _r;
             public FakeDistanceMeasurer(DistanceMeasurementResult r) { _r = r; }
@@ -422,7 +421,6 @@ namespace FlashMeasurementSystem.Tests
             public DistanceMeasurementResult MeasurePointToLine(double pr, double pc, double lr1, double lc1, double lr2, double lc2, DistanceMeasurementParameters p) => _r;
             public DistanceMeasurementResult MeasureLineToLine(double a1r, double a1c, double a2r, double a2c, double b1r, double b1c, double b2r, double b2c, DistanceMeasurementParameters p) => _r;
             public DistanceMeasurementResult MeasureCircleToCircle(double ar, double ac, double br, double bc, DistanceMeasurementParameters p) => _r;
-            public DistanceMeasurementResult MeasureContourMaxMin(object c1, object c2, DistanceMeasurementParameters p) => _r;
         }
 
         private sealed class FakeAngleMeasurer : IAngleMeasurer

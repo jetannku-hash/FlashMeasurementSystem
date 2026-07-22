@@ -251,7 +251,7 @@ namespace FlashMeasurementSystem.Tests
 
         // ─── builders ─────────────────────────────────────────────
 
-        private static RecipeRunner<object, object> MakeRunner(
+        private static RecipeRunner<object> MakeRunner(
             IEdgeDetector<object> edge = null,
             ICircleFitter circle = null,
             ILineFitter line = null,
@@ -260,7 +260,7 @@ namespace FlashMeasurementSystem.Tests
             IPinDetector<object> pin = null,
             IHoleArrayDetector<object> holeArray = null)
         {
-            return new RecipeRunner<object, object>(
+            return new RecipeRunner<object>(
                 edge ?? new FakeEdgeDetector(Edges(0)),
                 circle ?? new FakeCircleFitter(Circle(0, success: false)),
                 line ?? new SeqLineFitter(),
@@ -272,7 +272,7 @@ namespace FlashMeasurementSystem.Tests
         }
 
         // 只有一個工具的配方，回傳其唯一結果。
-        private static ToolRunResult Only(RecipeRunner<object, object> runner, Recipe recipe)
+        private static ToolRunResult Only(RecipeRunner<object> runner, Recipe recipe)
         {
             List<ToolRunResult> results = runner.Run(recipe, new object(), false, 0, 0, 0, 1000.0, 1000.0);
             AssertEqual(1, results.Count, "expected exactly one tool result");
@@ -376,13 +376,12 @@ namespace FlashMeasurementSystem.Tests
                 object image, double matchRow, double matchCol, double matchAngleRad, bool hasMatch) => _r;
         }
 
-        private sealed class ThrowingDistanceMeasurer : IDistanceMeasurer<object>
+        private sealed class ThrowingDistanceMeasurer : IDistanceMeasurer
         {
             public DistanceMeasurementResult MeasurePointToPoint(double ar, double ac, double br, double bc, DistanceMeasurementParameters p) => throw new InvalidOperationException("distance not expected");
             public DistanceMeasurementResult MeasurePointToLine(double pr, double pc, double lr1, double lc1, double lr2, double lc2, DistanceMeasurementParameters p) => throw new InvalidOperationException("distance not expected");
             public DistanceMeasurementResult MeasureLineToLine(double a1r, double a1c, double a2r, double a2c, double b1r, double b1c, double b2r, double b2c, DistanceMeasurementParameters p) => throw new InvalidOperationException("distance not expected");
             public DistanceMeasurementResult MeasureCircleToCircle(double ar, double ac, double br, double bc, DistanceMeasurementParameters p) => throw new InvalidOperationException("distance not expected");
-            public DistanceMeasurementResult MeasureContourMaxMin(object c1, object c2, DistanceMeasurementParameters p) => throw new InvalidOperationException("distance not expected");
         }
 
         private sealed class ThrowingAngleMeasurer : IAngleMeasurer
