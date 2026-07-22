@@ -75,6 +75,7 @@
     <Compile Include="RecipeValidatorTests.cs" />
     <Compile Include="MeasurementOutcomeTests.cs" />
     <Compile Include="RecipeRunnerDomainTests.cs" />
+    <Compile Include="RecipeRunnerToolWiringDomainTests.cs" />
     <Compile Include="MeasurementWorkflowDomainTests.cs" />
     <Compile Include="ArcRoiTransformDomainTests.cs" />
     <Compile Include="ToolTypesTests.cs" />

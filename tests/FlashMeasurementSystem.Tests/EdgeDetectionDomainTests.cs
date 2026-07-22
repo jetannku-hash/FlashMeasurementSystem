@@ -149,6 +149,7 @@ namespace FlashMeasurementSystem.Tests
             IqcThresholdsRecipeTests.Run();
             TemplateReferenceRecipeTests.Run();
             RecipeRunnerDomainTests.Run();
+            RecipeRunnerToolWiringDomainTests.Run();
             MeasurementWorkflowDomainTests.Run();
             ArcRoiTransformDomainTests.Run();
             Console.WriteLine("RecipeValidatorTests passed");
