@@ -41,10 +41,6 @@ namespace FlashMeasurementSystem.Tests.Halcon
             Assert(cc.Success, "Cir2Cir: Success, got=" + cc.DistancePx.ToString("F2"));
             AssertClose(200.0, cc.DistancePx, 0.01, "Cir2Cir: 200px center distance");
 
-            // ── ContourMaxMin null guard ──
-            DistanceMeasurementResult cmNull = dm.MeasureContourMaxMin(null, null, dp);
-            Assert(!cmNull.Success, "ContourMaxMin null: !Success");
-
             // ── Pixel-to-mm scaling ──
             var dpUm = new DistanceMeasurementParameters { PixelSizeUmX = 2.5, PixelSizeUmY = 2.5 };
             DistanceMeasurementResult ppUm = dm.MeasurePointToPoint(0, 0, 0, 1000, dpUm);

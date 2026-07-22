@@ -2,7 +2,7 @@ using FlashMeasurementSystem.Domain.DistanceMeasurement;
 
 namespace FlashMeasurementSystem.Application.DistanceMeasurement
 {
-    public interface IDistanceMeasurer<TContour>
+    public interface IDistanceMeasurer
     {
         DistanceMeasurementResult MeasurePointToPoint(
             double row1, double col1,
@@ -25,11 +25,6 @@ namespace FlashMeasurementSystem.Application.DistanceMeasurement
         DistanceMeasurementResult MeasureCircleToCircle(
             double circle1Row, double circle1Col,
             double circle2Row, double circle2Col,
-            DistanceMeasurementParameters parameters);
-
-        DistanceMeasurementResult MeasureContourMaxMin(
-            TContour contour1,
-            TContour contour2,
             DistanceMeasurementParameters parameters);
     }
 }

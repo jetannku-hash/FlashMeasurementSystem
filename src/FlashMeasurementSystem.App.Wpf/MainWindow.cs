@@ -85,8 +85,8 @@ namespace FlashMeasurementSystem
         private readonly CsvMeasurementReportWriter _reportWriter = new CsvMeasurementReportWriter();
         // 一鍵量測的附加輸出：PDF 報表（含視窗截圖）。CSV 行為不受影響。
         private readonly IMeasurementPdfReportWriter _pdfReportWriter = new PdfMeasurementReportWriter();
-        private RecipeRunner<HImage, HXLDCont> _recipeRunner;
-        private MeasurementWorkflow<HImage, HRegion, HXLDCont> _workflow;
+        private RecipeRunner<HImage> _recipeRunner;
+        private MeasurementWorkflow<HImage, HRegion> _workflow;
         private CheckBox _skipIqcCheckBox;
         private ToolTip _toolTip;
 
@@ -115,8 +115,8 @@ namespace FlashMeasurementSystem
             _imageHelper.RoiSelected += OnImageRoiSelected;
 
             // 配方執行引擎：以既有 adapters 注入（邊緣 + 圓/線擬合 + 公差 + 座標映射）。
-            _recipeRunner = new RecipeRunner<HImage, HXLDCont>(_edgeDetector, _circleFitter, _lineFitter, _distanceMeasurer, _angleMeasurer, _judger, _coordinateMapper, _metrologyRunner, _holeDetector, _pinDetector, _holeArrayDetector);
-            _workflow = new MeasurementWorkflow<HImage, HRegion, HXLDCont>(_iqc, _templateMatcher, _recipeRunner, _judger, _reportWriter, img => img.IsInitialized());
+            _recipeRunner = new RecipeRunner<HImage>(_edgeDetector, _circleFitter, _lineFitter, _distanceMeasurer, _angleMeasurer, _judger, _coordinateMapper, _metrologyRunner, _holeDetector, _pinDetector, _holeArrayDetector);
+            _workflow = new MeasurementWorkflow<HImage, HRegion>(_iqc, _templateMatcher, _recipeRunner, _judger, _reportWriter, img => img.IsInitialized());
             // 一鍵量測逐階段進度：StateChanged 在 UI 執行緒同步觸發，於 status bar 即時顯示。
             _workflow.StateChanged += OnWorkflowStateChanged;
 
