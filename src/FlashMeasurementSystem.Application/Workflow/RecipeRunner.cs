@@ -174,8 +174,7 @@ namespace FlashMeasurementSystem
                     MeasureCircleSector(image, sres, tool, placedArc, pixelSizeUm);
                     if (sres.Measured)
                         sres.OutputPrimitive = GeometricPrimitive.Circle(sres.FitCenterRow, sres.FitCenterCol, sres.FitRadiusPx);
-                    results.Add(sres);
-                    if (!string.IsNullOrEmpty(tool.Id)) byId[tool.Id] = sres;
+                    Emit(results, byId, tool, sres);
                     continue;
                 }
 
@@ -213,8 +212,7 @@ namespace FlashMeasurementSystem
                 else if (res.Measured && tool.ToolType == "line")
                     res.OutputPrimitive = GeometricPrimitive.Line(res.LineRow1, res.LineCol1, res.LineRow2, res.LineCol2);
 
-                results.Add(res);
-                if (!string.IsNullOrEmpty(tool.Id)) byId[tool.Id] = res;
+                Emit(results, byId, tool, res);
             }
 
             // ── Pass 1.2：弧形卡尺工具（自足元素工具；量圓周邊數）──
@@ -243,8 +241,7 @@ namespace FlashMeasurementSystem
                     res.Measured = false;
                     res.ValueText = "弧形卡尺量測失敗";
                     res.Message = string.IsNullOrEmpty(er.ErrorMessage) ? "弧形卡尺量測失敗" : er.ErrorMessage;
-                    results.Add(res);
-                    if (!string.IsNullOrEmpty(tool.Id)) byId[tool.Id] = res;
+                    Emit(results, byId, tool, res);
                     continue;
                 }
 
@@ -258,8 +255,7 @@ namespace FlashMeasurementSystem
                 res.ValueText = string.Format(CultureInfo.InvariantCulture, "邊數={0}", er.EdgePoints.Count);
                 JudgeSingle(res, tool, er.EdgePoints.Count);
 
-                results.Add(res);
-                if (!string.IsNullOrEmpty(tool.Id)) byId[tool.Id] = res;
+                Emit(results, byId, tool, res);
             }
 
             // ── Pass 1.3：齒輪工具（重用弧卡尺量邊 → 純 Domain 齒輪分析）──
@@ -280,7 +276,7 @@ namespace FlashMeasurementSystem
                     res.Measured = false;
                     res.ValueText = "齒輪量測失敗";
                     res.Message = string.IsNullOrEmpty(er.ErrorMessage) ? "弧卡尺量測失敗" : er.ErrorMessage;
-                    results.Add(res); if (!string.IsNullOrEmpty(tool.Id)) byId[tool.Id] = res; continue;
+                    Emit(results, byId, tool, res); continue;
                 }
                 foreach (EdgePoint pt in er.EdgePoints) { res.ArcEdgeRows.Add(pt.Row); res.ArcEdgeCols.Add(pt.Column); }
 
@@ -291,7 +287,7 @@ namespace FlashMeasurementSystem
                 res.ValueText = gr.Message;
                 res.IsOk = gr.Success ? gr.IsPass : (bool?)null;
                 if (!gr.Success) res.Message = gr.Message;
-                results.Add(res); if (!string.IsNullOrEmpty(tool.Id)) byId[tool.Id] = res;
+                Emit(results, byId, tool, res);
             }
 
             // ── Pass 1.4：PCD 螺栓孔圈（環帶 blob 偵測孔 → 純 Domain 圓擬合/四判定）──
@@ -308,7 +304,7 @@ namespace FlashMeasurementSystem
                     res.Measured = false;
                     res.ValueText = "PCD 量測失敗";
                     res.Message = "未注入孔偵測器";
-                    results.Add(res); if (!string.IsNullOrEmpty(tool.Id)) byId[tool.Id] = res; continue;
+                    Emit(results, byId, tool, res); continue;
                 }
 
                 HoleDetectionResult hd = _holeDetector.DetectHolesInAnnulus(image, placed, tool.Pcd);
@@ -317,7 +313,7 @@ namespace FlashMeasurementSystem
                     res.Measured = false;
                     res.ValueText = "PCD 量測失敗";
                     res.Message = string.IsNullOrEmpty(hd.ErrorMessage) ? "孔偵測失敗" : hd.ErrorMessage;
-                    results.Add(res); if (!string.IsNullOrEmpty(tool.Id)) byId[tool.Id] = res; continue;
+                    Emit(results, byId, tool, res); continue;
                 }
 
                 PcdAnalysisResult pr = PcdAnalyzer.Analyze(hd.Holes, pixelSizeUm, tool.Pcd);
@@ -326,7 +322,7 @@ namespace FlashMeasurementSystem
                 res.ValueText = pr.Message;
                 res.IsOk = pr.Success ? pr.IsPass : (bool?)null;
                 if (!pr.Success) res.Message = pr.Message;
-                results.Add(res); if (!string.IsNullOrEmpty(tool.Id)) byId[tool.Id] = res;
+                Emit(results, byId, tool, res);
             }
 
             // ── Pass 1.45：引腳間距（rect2 blob 偵測質心 → 純 Domain 主軸擬合/間距判定）──
@@ -363,7 +359,7 @@ namespace FlashMeasurementSystem
                     res.ValueText = "引腳間距量測失敗";
                     res.Message = "未注入引腳偵測器";
                     res.IsOk = null;
-                    results.Add(res); if (!string.IsNullOrEmpty(tool.Id)) byId[tool.Id] = res; continue;
+                    Emit(results, byId, tool, res); continue;
                 }
 
                 PinDetectionResult det = _pinDetector.DetectPinsInRect(image, placedRoi, tool.PinPitch);
@@ -373,7 +369,7 @@ namespace FlashMeasurementSystem
                     res.ValueText = "引腳間距量測失敗";
                     res.Message = string.IsNullOrEmpty(det.ErrorMessage) ? "引腳偵測失敗" : det.ErrorMessage;
                     res.IsOk = null;
-                    results.Add(res); if (!string.IsNullOrEmpty(tool.Id)) byId[tool.Id] = res; continue;
+                    Emit(results, byId, tool, res); continue;
                 }
 
                 PinPitchAnalysisResult analysis = PinPitchAnalyzer.Analyze(det.Pins, pixelSizeUm, tool.PinPitch);
@@ -394,7 +390,7 @@ namespace FlashMeasurementSystem
                     res.ValueText = "引腳間距分析失敗";
                     res.Message = analysis.ErrorMessage;
                 }
-                results.Add(res); if (!string.IsNullOrEmpty(tool.Id)) byId[tool.Id] = res;
+                Emit(results, byId, tool, res);
             }
 
             // ── Pass 1.47：孔陣列（rect2 blob 偵測孔質心/等效孔徑 → 純 Domain 網格擬合/四判定）──
@@ -430,7 +426,7 @@ namespace FlashMeasurementSystem
                     res.ValueText = "孔陣列量測失敗";
                     res.Message = "未注入孔陣列偵測器";
                     res.IsOk = null;
-                    results.Add(res); if (!string.IsNullOrEmpty(tool.Id)) byId[tool.Id] = res; continue;
+                    Emit(results, byId, tool, res); continue;
                 }
 
                 HoleArrayDetectionResult det = _holeArrayDetector.DetectHolesInRect(image, placedRoi, tool.HoleArray);
@@ -440,7 +436,7 @@ namespace FlashMeasurementSystem
                     res.ValueText = "孔陣列量測失敗";
                     res.Message = string.IsNullOrEmpty(det.ErrorMessage) ? "孔偵測失敗" : det.ErrorMessage;
                     res.IsOk = null;
-                    results.Add(res); if (!string.IsNullOrEmpty(tool.Id)) byId[tool.Id] = res; continue;
+                    Emit(results, byId, tool, res); continue;
                 }
 
                 HoleArrayAnalysisResult analysis = HoleArrayAnalyzer.Analyze(det.Holes, pixelSizeUm, tool.HoleArray);
@@ -468,7 +464,7 @@ namespace FlashMeasurementSystem
                     res.Message = analysis.ErrorMessage;
                     AppendBridgedHoleNote(res, det.RejectedByShapeCount);
                 }
-                results.Add(res); if (!string.IsNullOrEmpty(tool.Id)) byId[tool.Id] = res;
+                Emit(results, byId, tool, res);
             }
 
             // ── Pass 1.5：構造工具（intersection / midline / projection）──
@@ -481,8 +477,7 @@ namespace FlashMeasurementSystem
 
                 var res = new ToolRunResult { Name = tool.Name, ToolType = tool.ToolType, Supported = true };
                 MeasureConstruction(res, tool, byId);
-                results.Add(res);
-                if (!string.IsNullOrEmpty(tool.Id)) byId[tool.Id] = res;
+                Emit(results, byId, tool, res);
             }
 
             // ── Pass 1.7：GD&T 形位公差工具（單邊判定，0 ≤ 偏差 ≤ T）──
@@ -494,8 +489,7 @@ namespace FlashMeasurementSystem
 
                 var res = new ToolRunResult { Name = tool.Name, ToolType = tool.ToolType };
                 MeasureGdt(res, tool, byId, pixelSizeUm);
-                results.Add(res);
-                if (!string.IsNullOrEmpty(tool.Id)) byId[tool.Id] = res;
+                Emit(results, byId, tool, res);
             }
 
             // ── Pass 2：複合工具（distance）與其他 ──
@@ -597,6 +591,13 @@ namespace FlashMeasurementSystem
             }
 
             return results;
+        }
+
+        // 每個 pass 的收尾：加入結果，並在工具有 Id 時登記到 byId 供複合工具（distance/angle/construction/gdt）引用。
+        private static void Emit(List<ToolRunResult> results, Dictionary<string, ToolRunResult> byId, MeasurementTool tool, ToolRunResult res)
+        {
+            results.Add(res);
+            if (!string.IsNullOrEmpty(tool.Id)) byId[tool.Id] = res;
         }
 
         // 用與 1D 相同的剛體變換把整個量測模型的標稱幾何轉到當前匹配姿態（位置+方向，尺寸不變）。
