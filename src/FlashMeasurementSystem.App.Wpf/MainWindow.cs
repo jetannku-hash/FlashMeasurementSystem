@@ -193,7 +193,7 @@ namespace FlashMeasurementSystem
             var dxfButton = new Button { Text = "DXF 比對…", Width = 90, Height = 26 };
             dxfButton.Click += OpenDxfComparisonForm;
             diagToolbar.Controls.Add(dxfButton);
-            edgeDetectionTabPage.Controls.Add(diagToolbar);
+            diagnosticsTabPage.Controls.Add(diagToolbar);
 
             _toolTip.SetToolTip(loadRecipeButton, "載入量測配方 (.zcp)");
             _toolTip.SetToolTip(setRefButton, "把目前的匹配姿態設為本配方的參考姿態，並記住所用模板");
