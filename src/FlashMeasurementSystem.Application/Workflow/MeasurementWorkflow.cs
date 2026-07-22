@@ -680,7 +680,14 @@ namespace FlashMeasurementSystem
                 return r.DistMm;
             if (r.ToolType == "angle")
                 return r.AngleDeg;
-            return 0;
+
+            // 只有雙邊公差型別會走到這裡（唯一呼叫點已用 ToolTypes.IsDoubleSidedTolerance 過濾）。
+            // 落到這代表：某型別列入了雙邊集合、卻忘了在此加對應取值——正是「型別清單寫兩處必漂移」。
+            // 靜默 return 0 會讓預設 [0,0] 公差把該型別判為假 OK（歷史假 PASS 事故的同一機制），
+            // 故大聲失敗，逼開發者把「集合 ↔ 取值」兩處同步。
+            throw new InvalidOperationException(
+                "GetMeasuredValue 未處理雙邊公差型別 '" + r.ToolType +
+                "'：請與 Domain/Roi/ToolTypes.IsDoubleSidedTolerance 同步新增對應取值");
         }
 
         private static string BuildReportPath(string reportDir)

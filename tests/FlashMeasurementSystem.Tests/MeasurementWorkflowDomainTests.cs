@@ -143,6 +143,9 @@ namespace FlashMeasurementSystem.Tests
             AssertEqual(true, res.AllOk, "happy path: all ok");
             AssertEqual(1, tr.Count, "happy path: one tool result");
             AssertEqual(1, ij.Count, "happy path: one judgment row");
+            // 透過公開 API 驗證 GetMeasuredValue(circle)=DiameterMm 這條接縫：報表列的量測值必須是直徑 10mm，
+            // 而非 0（若 GetMeasuredValue 對 circle 漂移成 return 0，此斷言會抓到）。
+            AssertClose(10.0, ij[0].MeasuredValue, 1e-9, "happy path: report MeasuredValue = circle diameter");
             AssertEqual(1, writer.Appends, "happy path: report written once");
         }
 
@@ -319,6 +322,13 @@ namespace FlashMeasurementSystem.Tests
         {
             if (!condition)
                 throw new InvalidOperationException("FAIL " + name);
+        }
+
+        private static void AssertClose(double expected, double actual, double tol, string name)
+        {
+            if (Math.Abs(expected - actual) > tol)
+                throw new InvalidOperationException(
+                    "FAIL " + name + " | expected=" + expected + " actual=" + actual);
         }
     }
 }
