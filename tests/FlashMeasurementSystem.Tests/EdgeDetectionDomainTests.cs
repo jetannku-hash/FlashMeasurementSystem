@@ -148,6 +148,7 @@ namespace FlashMeasurementSystem.Tests
             ToolTypesTests.Run();
             IqcThresholdsRecipeTests.Run();
             TemplateReferenceRecipeTests.Run();
+            RecipeRunnerDomainTests.Run();
             Console.WriteLine("RecipeValidatorTests passed");
             CsvReportWriterTests.Run();
             Console.WriteLine("CsvReportWriterTests passed");
