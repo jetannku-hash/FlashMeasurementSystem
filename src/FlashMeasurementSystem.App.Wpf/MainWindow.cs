@@ -13,7 +13,6 @@ using FlashMeasurementSystem.Halcon.LineFitting;
 using FlashMeasurementSystem.Halcon.TemplateMatching;
 using FlashMeasurementSystem.Halcon.CircleFitting;
 using FlashMeasurementSystem.Halcon.DistanceMeasurement;
-using FlashMeasurementSystem.Domain.AngleMeasurement;
 using FlashMeasurementSystem.Halcon.AngleMeasurement;
 using FlashMeasurementSystem.Domain.Roi;
 using FlashMeasurementSystem.Domain.Calibration;
@@ -310,11 +309,11 @@ namespace FlashMeasurementSystem
         {
             _toolTip = new ToolTip { AutoPopDelay = 8000, InitialDelay = 600, ReshowDelay = 300, ShowAlways = true };
 
-            // ── Inspection: Image Quality Check ──
-            _toolTip.SetToolTip(runIqcButton, "Check image brightness, saturation, blur, and contrast");
-            _toolTip.SetToolTip(iqcResultLabel, "Image quality check result — PASS (green) or FAIL (red)");
+            // 分組依「控制項實際位於哪個分頁」，與分頁順序一致——否則加新控制項時會憑舊的
+            // 技術分類擺錯位置。影像品質檢查曾被歸在此處的 Inspection 組，實際早已隨版面
+            // 重排移到「④ 診斷」，正是分組與實情脫節後沒人發現的例子。
 
-            // ── Inspection: Template Creation ──
+            // ── ① 建立模板：Template Creation ──
             _toolTip.SetToolTip(loadRefImageButton, "Load a reference image for template creation");
             _toolTip.SetToolTip(angleStartNumeric, "Starting angle offset (degrees) for template search");
             _toolTip.SetToolTip(angleExtentNumeric, "Angle search extent (degrees, ± from start)");
@@ -323,13 +322,22 @@ namespace FlashMeasurementSystem
             _toolTip.SetToolTip(roiClearButton, "Clear the current ROI region");
             _toolTip.SetToolTip(createTemplateButton, "Create a shape model (.shm) from the drawn ROI region");
 
-            // ── Inspection: Template Matching ──
+            // ── ① 建立模板：Template Matching ──
             _toolTip.SetToolTip(loadTestImageButton, "Load a test image for template matching");
             _toolTip.SetToolTip(templateFileCombo, "Select a shape model (.shm) file");
             _toolTip.SetToolTip(minScoreNumeric, "Minimum matching score (0.0–1.0, higher = stricter)");
             _toolTip.SetToolTip(runMatchingButton, "Find the loaded template in the current image");
 
-            // ── Edge Detection ──
+            // ── ③ 量測 ──
+            _toolTip.SetToolTip(measurementPixelSizeXNumeric, "Pixel size in X direction (µm/pixel)");
+            _toolTip.SetToolTip(measurementPixelSizeYNumeric, "Pixel size in Y direction (µm/pixel)");
+            _toolTip.SetToolTip(measureResultLabel, "Measurement result — OK (green) / NG (red). Or run '[執行配方]' or '[一鍵量測]' to execute a recipe");
+
+            // ── ④ 診斷：Image Quality Check ──
+            _toolTip.SetToolTip(runIqcButton, "Check image brightness, saturation, blur, and contrast");
+            _toolTip.SetToolTip(iqcResultLabel, "Image quality check result — PASS (green) or FAIL (red)");
+
+            // ── ④ 診斷：Edge Detection ──
             _toolTip.SetToolTip(_edgeMeasurePosRadio, "1D edge detection along scan lines (measure_pos)");
             _toolTip.SetToolTip(_edgeSubPixRadio, "Sub-pixel edge detection (edges_sub_pix)");
             _toolTip.SetToolTip(_edgeSigmaNumeric, "Gaussian smoothing sigma (higher = more noise reduction)");
@@ -348,11 +356,6 @@ namespace FlashMeasurementSystem
             _toolTip.SetToolTip(_sectorDrawCheck, "勾選後從圓心往外拖拉出扇形量測區，放開後自動進入把手微調");
             _toolTip.SetToolTip(_edgeResultsGrid, "Detected edge points (Row, Col, Amplitude, Distance)");
             _toolTip.SetToolTip(_edgeStatusLabel, "Edge detection status — PASS (green) or FAIL (red)");
-
-            // ── Measurement ──
-            _toolTip.SetToolTip(measurementPixelSizeXNumeric, "Pixel size in X direction (µm/pixel)");
-            _toolTip.SetToolTip(measurementPixelSizeYNumeric, "Pixel size in Y direction (µm/pixel)");
-            _toolTip.SetToolTip(measureResultLabel, "Measurement result — OK (green) / NG (red). Or run '[Run Recipe]' or '[一鍵量測]' to execute a recipe");
         }
 
         // ── 進度回饋（第四組）──────────────────────────────────────────
@@ -1033,11 +1036,6 @@ namespace FlashMeasurementSystem
             };
         }
 
-        private EdgeDetectionRoi CreateEdgeDetectionRoi(RegionInfo region)
-        {
-            return CreateEdgeDetectionRoiFromNumeric(region);
-        }
-
         private EdgeDetectionRoi CreateEdgeDetectionRoiFromNumeric(RegionInfo region)
         {
             double centerRow = (region.Row1 + region.Row2) / 2.0;
@@ -1234,9 +1232,9 @@ namespace FlashMeasurementSystem
             if (_loadedRecipe == null) { MessageBox.Show("請先載入配方 (.zcp)。", "Info"); return; }
             if (!_hasMatch)
             {
-                // 同 Run Recipe：匹配失敗後這裡看到的也是「沒有姿態」，訊息須點出這個可能。
+                // 同「執行配方」：匹配失敗後這裡看到的也是「沒有姿態」，訊息須點出這個可能。
                 MessageBox.Show(
-                    "請先在參考影像上執行模板匹配（Inspection 分頁的 Run Matching）。\r\n\r\n" +
+                    "請先在參考影像上執行模板匹配（「① 建立模板」分頁的 Run Matching）。\r\n\r\n" +
                     "若剛才已執行過，代表匹配失敗——最常見的原因是所選模板與目前工件不符。",
                     "需要模板匹配", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
@@ -1884,7 +1882,7 @@ namespace FlashMeasurementSystem
                     _loadedRecipe = recipe;
                     _loadedRecipePath = path;
                     measureResultLabel.Text = string.Format(CultureInfo.InvariantCulture,
-                        "已從編輯器更新配方 '{0}'（{1} 工具）。可執行 Run Recipe。",
+                        "已從編輯器更新配方 '{0}'（{1} 工具）。可按「執行配方」。",
                         recipe.Name, recipe.Tools.Count);
                     UpdateEmptyState();
                 },
@@ -2011,7 +2009,7 @@ namespace FlashMeasurementSystem
                     string savedNote = string.IsNullOrEmpty(_loadedRecipePath)
                         ? "（未存檔，僅暫存記憶體）" : "（已存至 " + Path.GetFileName(_loadedRecipePath) + "）";
                     measureResultLabel.Text = string.Format(CultureInfo.InvariantCulture,
-                        "已更新量測模型（{0} 物件）{1}。可執行 Run Recipe。", count, savedNote);
+                        "已更新量測模型（{0} 物件）{1}。可按「執行配方」。", count, savedNote);
                 },
                 _imageHelper,
                 metrologyTrial);
@@ -2432,126 +2430,6 @@ namespace FlashMeasurementSystem
             public string FullPath => _fullPath;
             public bool IsRealFile { get; }
             public override string ToString() => IsRealFile ? Path.GetFileName(_fullPath) : _fullPath;
-        }
-
-        // 角度量測 overlay（line_to_line）：兩條線（綠）+ 頂點（洋紅）+ 角度值（黃）。
-        // 頂點用四點重心而非真正交點——對平行線也安全（交點可能不存在或在影像外）。
-        private void DrawAngleOverlay(double[] a1, double[] a2, double[] b1, double[] b2, AngleMeasurementResult result)
-        {
-            if (_imageHelper == null || _imageHelper.CurrentImage == null) return;
-            string angleText = string.Format(CultureInfo.InvariantCulture, "{0:F2}°", result.AngleDeg);
-
-            _imageHelper.EndRect2Edit();  // H2：接管畫面前結束殘留編輯把手
-            _imageHelper.EndArcEdit();
-            _imageHelper.SetPersistentOverlayAction(() =>
-            {
-                OverlayAnnotator an = _imageHelper.Annotator;
-                // 先重畫偵測/擬合底層再疊角度標註（與距離 overlay 一致）。
-                DrawFittingLayers(an);
-                an.DrawLine(a1[0], a1[1], a2[0], a2[1], "green");
-                an.DrawText("L1", (int)((a1[0] + a2[0]) / 2), (int)((a1[1] + a2[1]) / 2), "green");
-                an.DrawLine(b1[0], b1[1], b2[0], b2[1], "green");
-                an.DrawText("L2", (int)((b1[0] + b2[0]) / 2), (int)((b1[1] + b2[1]) / 2), "green");
-                double vr = (a1[0] + a2[0] + b1[0] + b2[0]) / 4.0;
-                double vc = (a1[1] + a2[1] + b1[1] + b2[1]) / 4.0;
-                an.DrawCross(vr, vc, 18, "magenta");
-                an.DrawText(angleText, (int)vr - 16, (int)vc + 8, "yellow");
-            });
-        }
-
-        // 角度量測 overlay（line_to_horizontal / line_to_vertical）：
-        // 線（綠）+ 通過線1第一點的參考軸（灰）+ 角度值（黃）。
-        private void DrawAngleRefOverlay(double[] a1, double[] a2, string mode, AngleMeasurementResult result)
-        {
-            if (_imageHelper == null || _imageHelper.CurrentImage == null) return;
-            string angleText = string.Format(CultureInfo.InvariantCulture, "{0:F2}°", result.AngleDeg);
-            const double refLen = 100.0;
-
-            _imageHelper.EndRect2Edit();  // H2：接管畫面前結束殘留編輯把手
-            _imageHelper.EndArcEdit();
-            _imageHelper.SetPersistentOverlayAction(() =>
-            {
-                OverlayAnnotator an = _imageHelper.Annotator;
-                DrawFittingLayers(an);
-                an.DrawLine(a1[0], a1[1], a2[0], a2[1], "green");
-                an.DrawText("L1", (int)((a1[0] + a2[0]) / 2), (int)((a1[1] + a2[1]) / 2), "green");
-                if (mode == "line_to_vertical")
-                    an.DrawLine(a1[0], a1[1], a1[0] + refLen, a1[1], "gray");
-                else
-                    an.DrawLine(a1[0], a1[1], a1[0], a1[1] + refLen, "gray");
-                an.DrawCross(a1[0], a1[1], 18, "magenta");
-                an.DrawText(angleText, (int)a1[0] - 16, (int)a1[1] + 8, "yellow");
-            });
-        }
-
-        // 抽樣畫 contour 控制點（避免上千點全畫造成卡頓）。
-        private static void DrawContourPoints(OverlayAnnotator an, System.Collections.Generic.List<double[]> c, string color)
-        {
-            int step = Math.Max(1, c.Count / 200);
-            for (int i = 0; i < c.Count; i += step)
-            {
-                an.DrawCross(c[i][0], c[i][1], 6, color);
-            }
-        }
-
-        // 在兩組點之間找最近與最遠的點對（像素距離；抽樣以控制計算量）。
-        private static void FindNearestFarthestPair(
-            System.Collections.Generic.List<double[]> c1, System.Collections.Generic.List<double[]> c2,
-            out double[] nearA, out double[] nearB, out double[] farA, out double[] farB)
-        {
-            nearA = c1[0]; nearB = c2[0]; farA = c1[0]; farB = c2[0];
-            double minD = double.MaxValue, maxD = double.MinValue;
-            int s1 = Math.Max(1, c1.Count / 300);
-            int s2 = Math.Max(1, c2.Count / 300);
-            for (int i = 0; i < c1.Count; i += s1)
-            {
-                for (int j = 0; j < c2.Count; j += s2)
-                {
-                    double dr = c1[i][0] - c2[j][0];
-                    double dc = c1[i][1] - c2[j][1];
-                    double d = dr * dr + dc * dc;
-                    if (d < minD) { minD = d; nearA = c1[i]; nearB = c2[j]; }
-                    if (d > maxD) { maxD = d; farA = c1[i]; farB = c2[j]; }
-                }
-            }
-        }
-
-        private static void DrawMeasurePoint(OverlayAnnotator an, double[] p, string label)
-        {
-            an.DrawCross(p[0], p[1], 24, "magenta");
-            an.DrawText(label, (int)p[0] - 18, (int)p[1] + 12, "magenta");
-        }
-
-        private static void DrawDistanceLabel(OverlayAnnotator an, double[] a, double[] b, string distText, string color = "yellow")
-        {
-            int midRow = (int)((a[0] + b[0]) / 2.0);
-            int midCol = (int)((a[1] + b[1]) / 2.0);
-            an.DrawText(distText, midRow - 16, midCol + 8, color);
-        }
-
-        // 點 P 到「線 A-B（視為無限延伸）」的垂足座標 [row, col]。
-        private static double[] PerpFoot(double[] p, double[] a, double[] b)
-        {
-            double abr = b[0] - a[0];
-            double abc = b[1] - a[1];
-            double denom = abr * abr + abc * abc;
-            if (denom < 1e-9) return new[] { a[0], a[1] };
-            double t = ((p[0] - a[0]) * abr + (p[1] - a[1]) * abc) / denom;
-            return new[] { a[0] + t * abr, a[1] + t * abc };
-        }
-        private static HXLDCont EdgePointsToContour(System.Collections.Generic.IList<EdgePoint> points)
-        {
-            int n = points.Count;
-            double[] rows = new double[n];
-            double[] cols = new double[n];
-            for (int i = 0; i < n; i++)
-            {
-                rows[i] = points[i].Row;
-                cols[i] = points[i].Column;
-            }
-            var contour = new HXLDCont();
-            contour.GenContourPolygonXld(rows, cols);
-            return contour;
         }
 
     }

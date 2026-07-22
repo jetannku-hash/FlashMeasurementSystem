@@ -217,7 +217,7 @@ namespace FlashMeasurementSystem
                 {
                     // 明確報錯而非默默退回選單：退回等於用「別的模板」跑，正是要防的錯誤量測。
                     error = "配方指定的模板不存在：" + recipe.TemplateModelId +
-                            "（預期位於 data/templates）。請重新建立模板並執行 Set Ref。";
+                            "（預期位於 data/templates）。請重新建立模板並按「設定參考姿態」。";
                     return null;
                 }
                 return path;
@@ -229,7 +229,7 @@ namespace FlashMeasurementSystem
         }
 
         /// <summary>
-        /// 把 Inspection 分頁的模板下拉選單切到配方指定的模板。
+        /// 把「① 建立模板」分頁的模板下拉選單切到配方指定的模板。
         ///
         /// 載入配方時呼叫，讓畫面反映配方的真相。少了這一步，使用者會看到一個與配方無關的
         /// 模板被選著，以為那就是會被使用的模板——但一鍵量測其實是用配方指定的那個，
@@ -266,14 +266,14 @@ namespace FlashMeasurementSystem
         /// <summary>
         /// 確保有一個「可用於本配方」的當前工件姿態；沒有就自己做一次模板匹配。
         ///
-        /// Run Recipe 原本只讀既有的 _lastMatch*，沒有姿態就叫使用者去 Inspection 分頁按
-        /// Run Matching。但 Run Recipe 手上其實什麼都有了——配方指定了模板（v16）、影像也載入了
-        /// ——那個前置步驟是早期全手動流程留下的產物，沒有理由存在。它還造成一個看不出來的落差：
-        /// 一鍵量測自給自足，Run Recipe 不行，而兩者在介面上長得一樣。
+        /// 「執行配方」原本只讀既有的 _lastMatch*，沒有姿態就叫使用者去「① 建立模板」分頁按
+        /// Run Matching。但它手上其實什麼都有了——配方指定了模板（v16）、影像也載入了——那個
+        /// 前置步驟是早期全手動流程留下的產物，沒有理由存在。它還造成一個看不出來的落差：
+        /// 一鍵量測自給自足，「執行配方」不行，而兩者在介面上長得一樣。
         ///
         /// 姿態沿用規則：既有姿態必須是「用本配方的模板」量出來的才可沿用——姿態只有在同一個
-        /// .shm 下才可與配方的參考姿態相比較。沿用而非一律重匹配，是為了保留工程師在 Inspection
-        /// 分頁調過 Min Score 後手動匹配的結果。
+        /// .shm 下才可與配方的參考姿態相比較。沿用而非一律重匹配，是為了保留工程師在
+        /// 「① 建立模板」分頁調過 Min Score 後手動匹配的結果。
         ///
         /// 自動匹配時用預設參數，與一鍵量測同一組；minScoreNumeric 仍只服務 Run Matching 這個
         /// 診斷工具，兩條量測路徑才不會因為一個看不見的欄位而給出不同結果。
@@ -296,7 +296,7 @@ namespace FlashMeasurementSystem
             {
                 MessageBox.Show(this,
                     "此配方需要工件姿態才能搬動 ROI，但找不到可用的模板。\r\n\r\n" +
-                    "請在 Inspection 分頁建立或選取模板，並執行 Set Ref 讓配方記住它。",
+                    "請在「① 建立模板」分頁建立或選取模板，並按「設定參考姿態」讓配方記住它。",
                     "需要模板", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return false;
             }
@@ -361,7 +361,7 @@ namespace FlashMeasurementSystem
                 SetMeasurementResult(string.Format(CultureInfo.InvariantCulture,
                     "已載入配方 '{0}'（{1} 工具，SchemaVer {2}{3}）",
                     _loadedRecipe.Name, _loadedRecipe.Tools.Count, _loadedRecipe.SchemaVersion,
-                    _loadedRecipe.HasReferencePose ? "，含參考姿態" : "，無參考姿態（需 Set Ref）"),
+                    _loadedRecipe.HasReferencePose ? "，含參考姿態" : "，無參考姿態（需按「設定參考姿態」）"),
                     SystemColors.ControlText);
                 // 操作員面板的「配方：」欄需同步，否則換配方後仍顯示舊料號。
                 UpdateOperatorRecipeInfo();
@@ -473,7 +473,7 @@ namespace FlashMeasurementSystem
         /// <summary>
         /// 設定影像品質檢查結果。
         ///
-        /// iqcResultLabel 實體位於 Inspection 分頁內（imageQualityBox），操作員模式下是隱藏的；
+        /// iqcResultLabel 實體位於「④ 診斷」分頁內（imageQualityBox），操作員模式下是隱藏的；
         /// 影像品質檢查按鈕同時出現在操作員面板上，若只寫該 label，操作員會看到「按了沒反應」。
         /// 與 measureResultLabel 同一類問題，處置方式一致：鏡像到操作員結果面。
         /// </summary>
