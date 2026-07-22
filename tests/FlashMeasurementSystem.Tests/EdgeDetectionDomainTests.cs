@@ -150,6 +150,7 @@ namespace FlashMeasurementSystem.Tests
             TemplateReferenceRecipeTests.Run();
             RecipeRunnerDomainTests.Run();
             MeasurementWorkflowDomainTests.Run();
+            ArcRoiTransformDomainTests.Run();
             Console.WriteLine("RecipeValidatorTests passed");
             CsvReportWriterTests.Run();
             Console.WriteLine("CsvReportWriterTests passed");
