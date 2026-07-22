@@ -75,6 +75,7 @@
     <Compile Include="RecipeValidatorTests.cs" />
     <Compile Include="MeasurementOutcomeTests.cs" />
     <Compile Include="RecipeRunnerDomainTests.cs" />
+    <Compile Include="MeasurementWorkflowDomainTests.cs" />
     <Compile Include="ToolTypesTests.cs" />
     <Compile Include="IqcThresholdsRecipeTests.cs" />
     <Compile Include="TemplateReferenceRecipeTests.cs" />
