@@ -102,6 +102,12 @@ namespace FlashMeasurementSystem.Halcon.EdgeDetection
                         clampedCenterRow, clampedCenterCol, roi.AngleRad,
                         maxLength1, maxLength2, width, height, effectiveParameters, "PRIMARY");
                 }
+                else if (effectiveParameters.FuzzyEnabled)
+                {
+                    primary = RunFuzzyMeasurePos(workingImage,
+                        clampedCenterRow, clampedCenterCol, roi.AngleRad,
+                        maxLength1, maxLength2, width, height, effectiveParameters, "PRIMARY");
+                }
                 else
                 {
                     primary = RunMeasurePos(workingImage,
@@ -123,6 +129,13 @@ namespace FlashMeasurementSystem.Halcon.EdgeDetection
                     if (usePairs)
                     {
                         fallback = RunMeasurePairs(workingImage,
+                            clampedCenterRow, clampedCenterCol, fallbackPhi,
+                            maxLength2, maxLength1,  // swap L1/L2
+                            width, height, effectiveParameters, "FALLBACK");
+                    }
+                    else if (effectiveParameters.FuzzyEnabled)
+                    {
+                        fallback = RunFuzzyMeasurePos(workingImage,
                             clampedCenterRow, clampedCenterCol, fallbackPhi,
                             maxLength2, maxLength1,  // swap L1/L2
                             width, height, effectiveParameters, "FALLBACK");
@@ -391,6 +404,77 @@ namespace FlashMeasurementSystem.Halcon.EdgeDetection
                 attempt.Exception = ex;
                 Log(string.Format(CultureInfo.InvariantCulture,
                     "DetectEdges {0} EXCEPTION [{1}] {2}",
+                    label, ex.GetErrorCode(), ex.Message));
+            }
+            finally
+            {
+                if (measureHandle != null) HOperatorSet.CloseMeasure(measureHandle);
+            }
+            return attempt;
+        }
+
+        // B1：fuzzy 邊緣量測（fuzzy_measure_pos）。與 RunMeasurePos 相同的 gen_measure_rectangle2 掃描區，
+        // 但以模糊權重挑邊、並用 FuzzyThresh 濾除低分邊（抗雜訊/干擾邊）。
+        // C# 簽章由 halcondotnet.dll 綁定於編譯期確認（見反射結果）；⚠️ set_fuzzy_measure 的 setType 值
+        // 與權重函式語意取自 HALCON 17.12 知識——節錄版離線參考未含 fuzzy operators，無法照專案規則對照，
+        // 故需在此 HALCON 機台 GUI 驗證。整段包 try/catch：若 setType/函式不合，回失敗結果、不讓 app 崩潰。
+        private static MeasureAttempt RunFuzzyMeasurePos(
+            HImage image,
+            double centerRow, double centerCol, double phi,
+            double length1, double length2,
+            HTuple width, HTuple height,
+            EdgeDetectionParameters p, string label)
+        {
+            var attempt = new MeasureAttempt { Edges = new List<EdgePoint>() };
+            HTuple measureHandle = null;
+            try
+            {
+                HOperatorSet.GenMeasureRectangle2(
+                    centerRow, centerCol, phi, length1, length2,
+                    width, height, p.Interpolation, out measureHandle);
+
+                // 模糊權重：SetType="contrast" 依邊的對比（振幅）加權，偏好高對比邊、抑制低對比雜訊。
+                // 權重函式在「振幅門檻 Threshold」處跨過 0.5：X=[0, 2×Threshold]→Y=[0,1]（門檻以上再線性到 1，
+                // 之後由邊界外插夾在 1）。故 FuzzyThresh=0.5 ≈「振幅≥Threshold」（與 measure_pos 一致、不會把
+                // 正常邊濾光）；調高 FuzzyThresh 即要求更高對比的邊＝fuzzy 選擇性。
+                // ⚠️ SetType/函式語意取自 HALCON 17.12（離線參考未含 fuzzy operators）；#1302 已修
+                //    （"contrast_norm"→"contrast"）。函式尺度與門檻互動需 GUI 實測微調。
+                double contrastFull = 2.0 * (p.Threshold > 0.0 ? p.Threshold : 25.0);
+                HOperatorSet.CreateFunct1dPairs(
+                    new HTuple(0.0, contrastFull), new HTuple(0.0, 1.0), out HTuple fuzzyFunc);
+                HOperatorSet.SetFuzzyMeasure(measureHandle, "contrast", fuzzyFunc);
+
+                HOperatorSet.FuzzyMeasurePos(image, measureHandle,
+                    new HTuple(p.Sigma), new HTuple(p.Threshold),
+                    new HTuple(p.FuzzyThresh), new HTuple(p.Polarity),
+                    out HTuple edgeRow, out HTuple edgeCol,
+                    out HTuple edgeAmplitude, out HTuple fuzzyScore, out HTuple edgeDistance);
+
+                int lenRow = edgeRow?.Length ?? 0;
+                int lenAmp = edgeAmplitude?.Length ?? 0;
+                int lenDist = edgeDistance?.Length ?? 0;
+                int lenScore = fuzzyScore?.Length ?? 0;
+
+                Log(string.Format(CultureInfo.InvariantCulture,
+                    "DetectEdges {0} FUZZYMEASUREPOS phi={1:F4} L1={2:F1} L2={3:F1} fuzzyThresh={4:F2} lenRow={5} lenScore={6}",
+                    label, phi, length1, length2, p.FuzzyThresh, lenRow, lenScore));
+
+                for (int i = 0; i < lenRow; i++)
+                {
+                    attempt.Edges.Add(new EdgePoint
+                    {
+                        Row = edgeRow[i].D,
+                        Column = edgeCol[i].D,
+                        Amplitude = (i < lenAmp) ? edgeAmplitude[i].D : 0.0,
+                        Distance = (i < lenDist) ? edgeDistance[i].D : 0.0
+                    });
+                }
+            }
+            catch (HalconException ex)
+            {
+                attempt.Exception = ex;
+                Log(string.Format(CultureInfo.InvariantCulture,
+                    "DetectEdges {0} FUZZY EXCEPTION [{1}] {2}",
                     label, ex.GetErrorCode(), ex.Message));
             }
             finally

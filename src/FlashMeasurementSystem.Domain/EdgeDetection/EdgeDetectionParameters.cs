@@ -15,6 +15,16 @@ namespace FlashMeasurementSystem.Domain.EdgeDetection
         public string Interpolation { get; set; } = "nearest_neighbor";
         public string MeasureMode { get; set; } = "single_edge";
 
+        // B1 fuzzy 邊緣量測（HALCON fuzzy_measure_pos）。預設關閉＝既有 measure_pos 行為不變。
+        // FuzzyThresh 為模糊分數門檻 [0,1]：分數低於此值的邊被濾除，抗雜訊/干擾邊。
+        public bool FuzzyEnabled { get; set; } = false;
+        public double FuzzyThresh { get; set; } = 0.5;
+
+        public static bool IsValidFuzzyThresh(double value)
+        {
+            return value >= 0.0 && value <= 1.0;
+        }
+
         public static bool IsSupportedInterpolation(string value)
         {
             return value == "nearest_neighbor" || value == "bilinear" || value == "bicubic";

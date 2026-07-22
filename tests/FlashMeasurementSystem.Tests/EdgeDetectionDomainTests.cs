@@ -154,6 +154,7 @@ namespace FlashMeasurementSystem.Tests
             ArcRoiTransformDomainTests.Run();
             RepeatabilityDomainTests.Run();
             StraightnessBandDomainTests.Run();
+            EdgeParametersFuzzyDomainTests.Run();
             Console.WriteLine("RecipeValidatorTests passed");
             CsvReportWriterTests.Run();
             Console.WriteLine("CsvReportWriterTests passed");
