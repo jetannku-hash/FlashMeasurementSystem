@@ -21,7 +21,7 @@
             this.hWindowControl = new HalconDotNet.HWindowControl();
             this.rightPanel = new System.Windows.Forms.Panel();
             this.featureTabControl = new System.Windows.Forms.TabControl();
-            this.inspectionTabPage = new System.Windows.Forms.TabPage();
+            this.templateTabPage = new System.Windows.Forms.TabPage();
             this.templateMatchingBox = new System.Windows.Forms.GroupBox();
             this.matchResultTextBox = new System.Windows.Forms.TextBox();
             this.runMatchingButton = new System.Windows.Forms.Button();
@@ -44,7 +44,7 @@
             this.imageQualityBox = new System.Windows.Forms.GroupBox();
             this.iqcResultLabel = new System.Windows.Forms.Label();
             this.runIqcButton = new System.Windows.Forms.Button();
-            this.edgeDetectionTabPage = new System.Windows.Forms.TabPage();
+            this.diagnosticsTabPage = new System.Windows.Forms.TabPage();
             this._edgeDetectionBox = new System.Windows.Forms.GroupBox();
             this.edgeTableLayout = new System.Windows.Forms.TableLayoutPanel();
             this.edgeAlgorithmLabel = new System.Windows.Forms.Label();
@@ -121,7 +121,7 @@
             this.resultBannerPanel.SuspendLayout();
             this.rightPanel.SuspendLayout();
             this.featureTabControl.SuspendLayout();
-            this.inspectionTabPage.SuspendLayout();
+            this.templateTabPage.SuspendLayout();
             this.templateMatchingBox.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.minScoreNumeric)).BeginInit();
             this.templateCreationBox.SuspendLayout();
@@ -129,7 +129,7 @@
             ((System.ComponentModel.ISupportInitialize)(this.angleExtentNumeric)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.angleStartNumeric)).BeginInit();
             this.imageQualityBox.SuspendLayout();
-            this.edgeDetectionTabPage.SuspendLayout();
+            this.diagnosticsTabPage.SuspendLayout();
             this._edgeDetectionBox.SuspendLayout();
             this.edgeTableLayout.SuspendLayout();
             this.edgeAlgorithmPanel.SuspendLayout();
@@ -249,10 +249,10 @@
             // 分頁順序＝工作流程順序：從左到右做一遍就是建立並驗證一個配方。
             // 原本三個分頁是按「技術分類」切的（Inspection / Edge Detection / Measurement），
             // 導致「建一個新料號」這件事要橫跨兩個分頁加一個彈出視窗，看不出先後。
-            this.featureTabControl.Controls.Add(this.inspectionTabPage);      // ① 建立模板
+            this.featureTabControl.Controls.Add(this.templateTabPage);      // ① 建立模板
             this.featureTabControl.Controls.Add(this.recipeTabPage);          // ② 配方
             this.featureTabControl.Controls.Add(this.measurementTabPage);     // ③ 量測
-            this.featureTabControl.Controls.Add(this.edgeDetectionTabPage);   // ④ 診斷
+            this.featureTabControl.Controls.Add(this.diagnosticsTabPage);   // ④ 診斷
             this.featureTabControl.Dock = System.Windows.Forms.DockStyle.Fill;
             this.featureTabControl.Location = new System.Drawing.Point(4, 4);
             this.featureTabControl.Name = "featureTabControl";
@@ -261,20 +261,20 @@
             this.featureTabControl.Size = new System.Drawing.Size(261, 634);
             this.featureTabControl.TabIndex = 0;
             // 
-            // inspectionTabPage
+            // templateTabPage
             // 
             // Dock=Fill 的必須先加入，Dock=Top 的後加（後加者顯示在上方），與原本順序一致。
             // imageQualityBox 已移至「④ 診斷」——影像品質檢查是出問題時才用的診斷工具，
             // 不是建立模板的步驟，留在這裡會讓人以為每次建模板都要先跑它。
-            this.inspectionTabPage.Controls.Add(this.templateMatchingBox);
-            this.inspectionTabPage.Controls.Add(this.templateCreationBox);
-            this.inspectionTabPage.Location = new System.Drawing.Point(4, 22);
-            this.inspectionTabPage.Name = "inspectionTabPage";
-            this.inspectionTabPage.Padding = new System.Windows.Forms.Padding(3);
-            this.inspectionTabPage.Size = new System.Drawing.Size(253, 608);
-            this.inspectionTabPage.TabIndex = 0;
-            this.inspectionTabPage.Text = "① 建立模板";
-            this.inspectionTabPage.UseVisualStyleBackColor = true;
+            this.templateTabPage.Controls.Add(this.templateMatchingBox);
+            this.templateTabPage.Controls.Add(this.templateCreationBox);
+            this.templateTabPage.Location = new System.Drawing.Point(4, 22);
+            this.templateTabPage.Name = "templateTabPage";
+            this.templateTabPage.Padding = new System.Windows.Forms.Padding(3);
+            this.templateTabPage.Size = new System.Drawing.Size(253, 608);
+            this.templateTabPage.TabIndex = 0;
+            this.templateTabPage.Text = "① 建立模板";
+            this.templateTabPage.UseVisualStyleBackColor = true;
             //
             // recipeTabPage
             //
@@ -576,18 +576,18 @@
             this.runIqcButton.UseVisualStyleBackColor = true;
             this.runIqcButton.Click += new System.EventHandler(this.RunIqcButton_Click);
             // 
-            // edgeDetectionTabPage
+            // diagnosticsTabPage
             // 
             // 診斷分頁：Dock=Fill 的邊緣檢測先加入，Dock=Top 的影像品質檢查後加（顯示在上方）。
-            this.edgeDetectionTabPage.Controls.Add(this._edgeDetectionBox);
-            this.edgeDetectionTabPage.Controls.Add(this.imageQualityBox);
-            this.edgeDetectionTabPage.Location = new System.Drawing.Point(4, 22);
-            this.edgeDetectionTabPage.Name = "edgeDetectionTabPage";
-            this.edgeDetectionTabPage.Padding = new System.Windows.Forms.Padding(3);
-            this.edgeDetectionTabPage.Size = new System.Drawing.Size(253, 608);
-            this.edgeDetectionTabPage.TabIndex = 3;
-            this.edgeDetectionTabPage.Text = "④ 診斷";
-            this.edgeDetectionTabPage.UseVisualStyleBackColor = true;
+            this.diagnosticsTabPage.Controls.Add(this._edgeDetectionBox);
+            this.diagnosticsTabPage.Controls.Add(this.imageQualityBox);
+            this.diagnosticsTabPage.Location = new System.Drawing.Point(4, 22);
+            this.diagnosticsTabPage.Name = "diagnosticsTabPage";
+            this.diagnosticsTabPage.Padding = new System.Windows.Forms.Padding(3);
+            this.diagnosticsTabPage.Size = new System.Drawing.Size(253, 608);
+            this.diagnosticsTabPage.TabIndex = 3;
+            this.diagnosticsTabPage.Text = "④ 診斷";
+            this.diagnosticsTabPage.UseVisualStyleBackColor = true;
             // 
             // _edgeDetectionBox
             // 
@@ -1467,7 +1467,7 @@
             this.resultBannerPanel.ResumeLayout(false);
             this.rightPanel.ResumeLayout(false);
             this.featureTabControl.ResumeLayout(false);
-            this.inspectionTabPage.ResumeLayout(false);
+            this.templateTabPage.ResumeLayout(false);
             this.templateMatchingBox.ResumeLayout(false);
             this.templateMatchingBox.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)(this.minScoreNumeric)).EndInit();
@@ -1477,7 +1477,7 @@
             ((System.ComponentModel.ISupportInitialize)(this.angleExtentNumeric)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.angleStartNumeric)).EndInit();
             this.imageQualityBox.ResumeLayout(false);
-            this.edgeDetectionTabPage.ResumeLayout(false);
+            this.diagnosticsTabPage.ResumeLayout(false);
             this._edgeDetectionBox.ResumeLayout(false);
             this.edgeTableLayout.ResumeLayout(false);
             this.edgeAlgorithmPanel.ResumeLayout(false);
@@ -1515,8 +1515,8 @@
         private HalconDotNet.HWindowControl hWindowControl;
         private System.Windows.Forms.Panel rightPanel;
         private System.Windows.Forms.TabControl featureTabControl;
-        private System.Windows.Forms.TabPage inspectionTabPage;
-        private System.Windows.Forms.TabPage edgeDetectionTabPage;
+        private System.Windows.Forms.TabPage templateTabPage;
+        private System.Windows.Forms.TabPage diagnosticsTabPage;
         private System.Windows.Forms.GroupBox imageQualityBox;
         private System.Windows.Forms.TabPage measurementTabPage;
         private System.Windows.Forms.TabPage recipeTabPage;
