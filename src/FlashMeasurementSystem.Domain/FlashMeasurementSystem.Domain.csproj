@@ -136,6 +136,7 @@
     <Compile Include="Workflow\MeasurementOutcome.cs" />
     <Compile Include="Repeatability\RepeatabilityVerdict.cs" />
     <Compile Include="Repeatability\RepeatabilityReport.cs" />
+    <Compile Include="Gdt\StraightnessBand.cs" />
     <Compile Include="Workflow\MeasurementState.cs" />
     <Compile Include="Workflow\WorkflowResult.cs" />
   </ItemGroup>

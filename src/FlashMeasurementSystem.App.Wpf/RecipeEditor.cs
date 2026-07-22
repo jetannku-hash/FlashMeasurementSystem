@@ -2301,7 +2301,7 @@ namespace FlashMeasurementSystem
             _toolTip.SetToolTip(_addDistanceButton, "Add a distance tool (between two line/circle tools)");
             _toolTip.SetToolTip(_addAngleButton, "Add an angle tool (between two line tools)");
             _toolTip.SetToolTip(_addRoundnessButton, "真圓度：Ref1=一個 circle，偏差=圓擬合 max-min 徑向");
-            _toolTip.SetToolTip(_addStraightnessButton, "真直度：Ref1=一個 line，偏差=線擬合殘差 RMS（v1 近似）");
+            _toolTip.SetToolTip(_addStraightnessButton, "真直度：Ref1=一個 line，偏差=各點到擬合線垂距的 peak-to-peak 帶寬（真值）");
             _toolTip.SetToolTip(_addParallelismButton, "平行度：Ref1=量測 line，Ref2=基準 line");
             _toolTip.SetToolTip(_addPerpendicularityButton, "垂直度：Ref1=量測 line，Ref2=基準 line");
             _toolTip.SetToolTip(_addConcentricityButton, "同心度：Ref1=量測 circle，Ref2=基準 circle");

@@ -54,6 +54,7 @@ namespace FlashMeasurementSystem.Tests
             ConstructionIntersectionSucceeds();
             ConstructionMissingRefFails();
             GdtRoundnessWiring();
+            GdtStraightnessUsesPeakToPeakBand();
 
             Console.WriteLine("RecipeRunnerToolWiringDomainTests passed");
         }
@@ -247,6 +248,35 @@ namespace FlashMeasurementSystem.Tests
             AssertEqual(true, g.Measured, "roundness: measured");
             AssertClose(0.0, g.GdtDeviationMm, 1e-9, "roundness: deviation mm (roundness 0px)");
             AssertEqual(true, g.IsOk, "roundness: 0 within 0.1 zone → OK");
+        }
+
+        // gd&t 真直度：偏差取自「各邊點到擬合線的 peak-to-peak 帶寬」（真值），非 ResidualRms。
+        // 邊點 row={0,4}、水平擬合線 (0,0)-(0,10) → 帶寬=4px → 4×1000/1000=4mm，公差 5mm → OK。
+        // 若 GD&T 退回讀 ResidualRms（此處 fake 線為 0），GdtDeviationMm 會變 0 → 本測試會抓到。
+        private static void GdtStraightnessUsesPeakToPeakBand()
+        {
+            var edges = new EdgeResult { Success = true };
+            edges.EdgePoints.Add(new EdgePoint { Row = 0, Column = 1 });
+            edges.EdgePoints.Add(new EdgePoint { Row = 4, Column = 9 });
+            var runner = MakeRunner(
+                edge: new FakeEdgeDetector(edges),
+                line: new SeqLineFitter(new LineFittingResult { Success = true, Row1 = 0, Column1 = 0, Row2 = 0, Column2 = 10 }));
+            var recipe = new Recipe { HasReferencePose = false };
+            recipe.Tools.Add(LineTool("l1"));
+            recipe.Tools.Add(new MeasurementTool
+            {
+                Id = "st", Name = "straight", ToolType = "straightness",
+                RefToolIds = new List<string> { "l1" },
+                Gdt = new GdtToleranceSpec { ToleranceZoneMm = 5.0 }
+            });
+
+            List<ToolRunResult> results = runner.Run(recipe, new object(), false, 0, 0, 0, 1000.0, 1000.0);
+            ToolRunResult g = results.Find(x => x.ToolType == "straightness");
+
+            AssertTrue(g != null, "straightness: result present");
+            AssertEqual(true, g.Measured, "straightness: measured");
+            AssertClose(4.0, g.GdtDeviationMm, 1e-9, "straightness: deviation = peak-to-peak band (4px), not ResidualRms");
+            AssertEqual(true, g.IsOk, "straightness: 4 within 5mm zone → OK");
         }
 
         // ─── builders ─────────────────────────────────────────────
