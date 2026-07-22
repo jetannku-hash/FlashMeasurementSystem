@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using FlashMeasurementSystem.Application;
 using FlashMeasurementSystem.Application.AngleMeasurement;
 using FlashMeasurementSystem.Application.CircleFitting;
 using FlashMeasurementSystem.Application.CoordinateSystem;
@@ -30,7 +31,6 @@ using FlashMeasurementSystem.Domain.Roi;
 using FlashMeasurementSystem.Domain.Geometry;
 using FlashMeasurementSystem.Domain.Gdt;
 using FlashMeasurementSystem.Domain.Tolerance;
-using HalconDotNet;
 
 namespace FlashMeasurementSystem
 {
@@ -95,32 +95,34 @@ namespace FlashMeasurementSystem
     /// 配方執行引擎（M3c-1 B1）。把每個工具 ROI 由參考座標系轉到當前匹配姿態，
     /// 對 circle 工具量測直徑(mm) 並做公差判定。其他型別此版標示未支援、不擋流程。
     /// 不直接相依具體 HALCON 類別——以 Application 介面注入(可測/可換)。
+    /// 影像型別 TImage、輪廓型別 TContour 為型別參數：本類只把它們原封轉交注入的介面、
+    /// 不存取其成員，故 App.Wpf 用 &lt;HImage, HXLDCont&gt; 具現，測試可用 fake 型別具現。
     /// </summary>
-    public sealed class RecipeRunner
+    public sealed class RecipeRunner<TImage, TContour>
     {
-        private readonly IEdgeDetector<HImage> _edgeDetector;
+        private readonly IEdgeDetector<TImage> _edgeDetector;
         private readonly ICircleFitter _circleFitter;
         private readonly ILineFitter _lineFitter;
-        private readonly IDistanceMeasurer<HXLDCont> _distanceMeasurer;
+        private readonly IDistanceMeasurer<TContour> _distanceMeasurer;
         private readonly IAngleMeasurer _angleMeasurer;
         private readonly IToleranceJudger _judger;
         private readonly ICoordinateMapper _mapper;
         // v6：2D 量測模型（加性、可為 null）。null 時 Pass 3 整段跳過，既有建構點/單元測試不受影響。
-        private readonly IMetrologyModelRunner<HImage> _metrologyRunner;
+        private readonly IMetrologyModelRunner<TImage> _metrologyRunner;
         // v9：PCD 環帶孔偵測（加性、可為 null）。null 時 Pass 1.4 該工具量測失敗但不擋其他工具。
-        private readonly IHoleDetector<HImage> _holeDetector;
+        private readonly IHoleDetector<TImage> _holeDetector;
         // v12：引腳間距 rect2 blob 偵測（加性、可為 null）。null 時 pin_pitch pass 該工具量測失敗但不擋其他工具。
-        private readonly IPinDetector<HImage> _pinDetector;
+        private readonly IPinDetector<TImage> _pinDetector;
         // v13：孔陣列 rect2 blob 偵測（加性、可為 null）。null 時 hole_array pass 該工具量測失敗但不擋其他工具。
-        private readonly IHoleArrayDetector<HImage> _holeArrayDetector;
+        private readonly IHoleArrayDetector<TImage> _holeArrayDetector;
 
-        public RecipeRunner(IEdgeDetector<HImage> edgeDetector, ICircleFitter circleFitter,
-            ILineFitter lineFitter, IDistanceMeasurer<HXLDCont> distanceMeasurer,
+        public RecipeRunner(IEdgeDetector<TImage> edgeDetector, ICircleFitter circleFitter,
+            ILineFitter lineFitter, IDistanceMeasurer<TContour> distanceMeasurer,
             IAngleMeasurer angleMeasurer, IToleranceJudger judger, ICoordinateMapper mapper,
-            IMetrologyModelRunner<HImage> metrologyRunner = null,
-            IHoleDetector<HImage> holeDetector = null,
-            IPinDetector<HImage> pinDetector = null,
-            IHoleArrayDetector<HImage> holeArrayDetector = null)
+            IMetrologyModelRunner<TImage> metrologyRunner = null,
+            IHoleDetector<TImage> holeDetector = null,
+            IPinDetector<TImage> pinDetector = null,
+            IHoleArrayDetector<TImage> holeArrayDetector = null)
         {
             _edgeDetector = edgeDetector;
             _circleFitter = circleFitter;
@@ -135,7 +137,7 @@ namespace FlashMeasurementSystem
             _holeArrayDetector = holeArrayDetector;
         }
 
-        public List<ToolRunResult> Run(Recipe recipe, HImage image,
+        public List<ToolRunResult> Run(Recipe recipe, TImage image,
             bool hasMatch, double matchRow, double matchCol, double matchAngleRad,
             double pixelSizeUmX, double pixelSizeUmY)
         {
@@ -709,7 +711,7 @@ namespace FlashMeasurementSystem
             res.IsOk = overall.Items.Count > 0 ? overall.Items[0].IsOk : (bool?)null;
         }
 
-        private void MeasureCircle(HImage image, ToolRunResult res, MeasurementTool tool,
+        private void MeasureCircle(TImage image, ToolRunResult res, MeasurementTool tool,
             double row, double col, double ang, double length1, double length2, double pixelSizeUm)
         {
             res.Supported = true;
@@ -720,7 +722,7 @@ namespace FlashMeasurementSystem
                 EdgeResult edges = _edgeDetector.DetectEdgesSubPix(image, edgeRoi, edgeParams);
                 FitCircleFromEdges(res, tool, edges, pixelSizeUm);
             }
-            catch (HalconException ex)
+            catch (MeasurementAdapterException ex)
             {
                 res.Measured = false;
                 res.ValueText = "量測異常";
@@ -730,7 +732,7 @@ namespace FlashMeasurementSystem
 
         // v10：circle 選扇形 ROI 的量測——與 MeasureCircle 唯一差異是邊緣偵測改用環帶掃描
         // （DetectEdgesInAnnularSector），擬合/欄位/判定尾段共用 FitCircleFromEdges。
-        private void MeasureCircleSector(HImage image, ToolRunResult res, MeasurementTool tool,
+        private void MeasureCircleSector(TImage image, ToolRunResult res, MeasurementTool tool,
             ArcMeasureRoi placedArc, double pixelSizeUm)
         {
             res.Supported = true;
@@ -740,7 +742,7 @@ namespace FlashMeasurementSystem
                 EdgeResult edges = _edgeDetector.DetectEdgesInAnnularSector(image, placedArc, edgeParams);
                 FitCircleFromEdges(res, tool, edges, pixelSizeUm);
             }
-            catch (HalconException ex)
+            catch (MeasurementAdapterException ex)
             {
                 res.Measured = false;
                 res.ValueText = "量測異常";
@@ -782,7 +784,7 @@ namespace FlashMeasurementSystem
 
         // line 元素（B2a）：ROI → subpix 邊緣 → 擬合線。元素本身不判定（IsOk=null），
         // 擬合線供繪製與後續複合工具（distance/angle）引用。
-        private void MeasureLine(HImage image, ToolRunResult res, MeasurementTool tool,
+        private void MeasureLine(TImage image, ToolRunResult res, MeasurementTool tool,
             double row, double col, double ang, double length1, double length2)
         {
             res.Supported = true;
@@ -846,7 +848,7 @@ namespace FlashMeasurementSystem
                         "Len={0:F1}px Ang={1:F2}deg", line.Length, displayAngle);
                 }
             }
-            catch (HalconException ex)
+            catch (MeasurementAdapterException ex)
             {
                 res.Measured = false;
                 res.ValueText = "量測異常";
@@ -1213,7 +1215,7 @@ namespace FlashMeasurementSystem
                     if (overall.Items.Count > 0) res.IsOk = overall.Items[0].IsOk;
                 }
             }
-            catch (HalconException ex)
+            catch (MeasurementAdapterException ex)
             {
                 res.Measured = false;
                 res.ValueText = "距離計算異常";
@@ -1333,7 +1335,7 @@ namespace FlashMeasurementSystem
                     if (overall.Items.Count > 0) res.IsOk = overall.Items[0].IsOk;
                 }
             }
-            catch (HalconException ex)
+            catch (MeasurementAdapterException ex)
             {
                 res.Measured = false;
                 res.ValueText = "角度計算異常";

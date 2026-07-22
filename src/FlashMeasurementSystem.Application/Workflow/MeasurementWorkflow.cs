@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using FlashMeasurementSystem.Application;
 using FlashMeasurementSystem.Application.ImageQuality;
 using FlashMeasurementSystem.Application.Reporting;
 using FlashMeasurementSystem.Application.TemplateMatching;
@@ -11,7 +12,6 @@ using FlashMeasurementSystem.Domain.Roi;
 using FlashMeasurementSystem.Domain.TemplateMatching;
 using FlashMeasurementSystem.Domain.Tolerance;
 using FlashMeasurementSystem.Domain.Workflow;
-using HalconDotNet;
 
 namespace FlashMeasurementSystem
 {
@@ -20,28 +20,34 @@ namespace FlashMeasurementSystem
     /// Orchestrates: image quality check → template matching → measurement → evaluation → CSV report.
     /// Hardware stages (WaitingPart/Acquiring/Outputting) are excluded — see manual §4.14.
     /// </summary>
-    public sealed class MeasurementWorkflow
+    public sealed class MeasurementWorkflow<TImage, TRegion, TContour>
+        where TImage : class
     {
-        private readonly IImageQualityChecker<HImage> _iqc;
-        private readonly ITemplateMatcher<HImage, HRegion> _templateMatcher;
-        private readonly RecipeRunner _recipeRunner;
+        private readonly IImageQualityChecker<TImage> _iqc;
+        private readonly ITemplateMatcher<TImage, TRegion> _templateMatcher;
+        private readonly RecipeRunner<TImage, TContour> _recipeRunner;
         private readonly IToleranceJudger _judger;
         private readonly IMeasurementReportWriter _reportWriter;
+        // 影像「已初始化」是 vendor 專屬判斷（HImage.IsInitialized），不進 HALCON-free 的本類。
+        // 由呼叫端以 predicate 注入，保留原本「null 或未初始化即失敗」的守門行為。
+        private readonly Func<TImage, bool> _isImageInitialized;
 
         public event Action<MeasurementState> StateChanged;
 
         public MeasurementWorkflow(
-            IImageQualityChecker<HImage> iqc,
-            ITemplateMatcher<HImage, HRegion> templateMatcher,
-            RecipeRunner recipeRunner,
+            IImageQualityChecker<TImage> iqc,
+            ITemplateMatcher<TImage, TRegion> templateMatcher,
+            RecipeRunner<TImage, TContour> recipeRunner,
             IToleranceJudger judger,
-            IMeasurementReportWriter reportWriter)
+            IMeasurementReportWriter reportWriter,
+            Func<TImage, bool> isImageInitialized)
         {
             _iqc = iqc ?? throw new ArgumentNullException(nameof(iqc));
             _templateMatcher = templateMatcher ?? throw new ArgumentNullException(nameof(templateMatcher));
             _recipeRunner = recipeRunner ?? throw new ArgumentNullException(nameof(recipeRunner));
             _judger = judger ?? throw new ArgumentNullException(nameof(judger));
             _reportWriter = reportWriter ?? throw new ArgumentNullException(nameof(reportWriter));
+            _isImageInitialized = isImageInitialized ?? throw new ArgumentNullException(nameof(isImageInitialized));
         }
 
         /// <summary>
@@ -64,12 +70,12 @@ namespace FlashMeasurementSystem
         /// <returns>Overall workflow result.</returns>
         public WorkflowResult RunOnce(
             Recipe recipe,
-            HImage image,
+            TImage image,
             double pixelSizeUmX,
             double pixelSizeUmY,
             string reportDir,
             string templateModelPath,
-            HRegion searchRegion,
+            TRegion searchRegion,
             TemplateMatchingParameters matchParams,
             bool skipImageQualityCheck,
             out List<ToolRunResult> toolResults,
@@ -91,7 +97,7 @@ namespace FlashMeasurementSystem
                 result.Message = "Recipe is null";
                 return result;
             }
-            if (image == null || !image.IsInitialized())
+            if (image == null || !_isImageInitialized(image))
             {
                 result.Success = false;
                 result.FinalState = MeasurementState.Failed;
@@ -115,7 +121,7 @@ namespace FlashMeasurementSystem
                     return result;
                 }
             }
-            catch (HalconException ex)
+            catch (MeasurementAdapterException ex)
             {
                 result.Success = false;
                 result.FinalState = MeasurementState.Failed;
@@ -163,7 +169,7 @@ namespace FlashMeasurementSystem
                     result.MatchCol = match.Column;
                     result.MatchAngleDeg = match.AngleDeg;
                 }
-                catch (HalconException ex)
+                catch (MeasurementAdapterException ex)
                 {
                     result.Success = false;
                     result.FinalState = MeasurementState.Failed;
@@ -184,7 +190,7 @@ namespace FlashMeasurementSystem
                     hasMatch, matchRow, matchCol, matchAngleRad,
                     pixelSizeUmX, pixelSizeUmY);
             }
-            catch (HalconException ex)
+            catch (MeasurementAdapterException ex)
             {
                 result.Success = false;
                 result.FinalState = MeasurementState.Failed;

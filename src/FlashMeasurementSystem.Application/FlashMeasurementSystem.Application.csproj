@@ -52,6 +52,9 @@
     <Reference Include="System.Core" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="MeasurementAdapterException.cs" />
+    <Compile Include="Workflow\RecipeRunner.cs" />
+    <Compile Include="Workflow\MeasurementWorkflow.cs" />
     <Compile Include="EdgeDetection\IEdgeDetector.cs" />
     <Compile Include="ImageQuality\IImageQualityChecker.cs" />
     <Compile Include="LineFitting\ILineFitter.cs" />

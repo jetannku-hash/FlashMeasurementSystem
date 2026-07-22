@@ -1,4 +1,5 @@
 using System;
+using FlashMeasurementSystem.Application;
 using FlashMeasurementSystem.Application.TemplateMatching;
 using FlashMeasurementSystem.Domain.TemplateMatching;
 using HalconDotNet;
@@ -24,22 +25,32 @@ namespace FlashMeasurementSystem.Halcon.TemplateMatching
             }
 
             DisposeModel();
-            HOperatorSet.ReadShapeModel(modelFilePath, out _modelID);
+            // 邊界翻譯：讀檔/取參數的 HalconException 不外洩到 Application 介面，包成
+            // MeasurementAdapterException（保留 InnerException）。呼叫端 MeasurementWorkflow 已改為
+            // 捕捉此型別，因而不再相依 HalconDotNet。
+            try
+            {
+                HOperatorSet.ReadShapeModel(modelFilePath, out _modelID);
 
-            HOperatorSet.GetShapeModelParams(_modelID,
-                out HTuple _,
-                out HTuple angleStart,
-                out HTuple angleExtent,
-                out HTuple _,
-                out HTuple _,
-                out HTuple _,
-                out HTuple _,
-                out HTuple _,
-                out HTuple _
-            );
+                HOperatorSet.GetShapeModelParams(_modelID,
+                    out HTuple _,
+                    out HTuple angleStart,
+                    out HTuple angleExtent,
+                    out HTuple _,
+                    out HTuple _,
+                    out HTuple _,
+                    out HTuple _,
+                    out HTuple _,
+                    out HTuple _
+                );
 
-            _modelAngleStartRad = angleStart.D;
-            _modelAngleExtentRad = angleExtent.D;
+                _modelAngleStartRad = angleStart.D;
+                _modelAngleExtentRad = angleExtent.D;
+            }
+            catch (HalconException ex)
+            {
+                throw new MeasurementAdapterException("載入模板失敗：" + ex.Message, ex);
+            }
 
             // 快取路徑「最後」才記錄。原本在 ReadShapeModel 之後、GetShapeModelParams 之前就指派，
             // 若讀取參數擲例外，角度範圍會停在 0，而路徑已被記下——之後重試同一個模板會被開頭的
