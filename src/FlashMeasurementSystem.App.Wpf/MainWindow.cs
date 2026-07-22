@@ -88,6 +88,8 @@ namespace FlashMeasurementSystem
         private RecipeRunner<HImage> _recipeRunner;
         private MeasurementWorkflow<HImage, HRegion> _workflow;
         private CheckBox _skipIqcCheckBox;
+        private CheckBox _edgeFuzzyCheck;              // B1：④ 診斷 Detect 的 fuzzy 開關
+        private NumericUpDown _edgeFuzzyThreshNumeric; // B1：fuzzy 分數門檻 [0,1]
         private ToolTip _toolTip;
 
         private readonly FlashMeasurementSystem.Halcon.DxfComparison.HalconDxfContourComparer _dxfComparer
@@ -193,6 +195,17 @@ namespace FlashMeasurementSystem
             var dxfButton = new Button { Text = "DXF 比對…", Width = 90, Height = 26 };
             dxfButton.Click += OpenDxfComparisonForm;
             diagToolbar.Controls.Add(dxfButton);
+            // B1：fuzzy 邊緣開關（僅作用於 MeasurePos 路徑的 Detect）。程式建控制項、不動 Designer。
+            _edgeFuzzyCheck = new CheckBox { Text = "Fuzzy", AutoSize = true, Margin = new Padding(8, 6, 2, 0) };
+            _edgeFuzzyThreshNumeric = new NumericUpDown
+            {
+                Minimum = 0.0M, Maximum = 1.0M, DecimalPlaces = 2, Increment = 0.05M,
+                Value = 0.5M, Width = 55, Margin = new Padding(0, 3, 2, 0)
+            };
+            diagToolbar.Controls.Add(_edgeFuzzyCheck);
+            diagToolbar.Controls.Add(_edgeFuzzyThreshNumeric);
+            _toolTip.SetToolTip(_edgeFuzzyCheck, "以 fuzzy_measure_pos 取代 measure_pos：模糊權重挑邊 + 分數門檻濾雜訊（僅 MeasurePos 模式）");
+            _toolTip.SetToolTip(_edgeFuzzyThreshNumeric, "模糊分數門檻 [0,1]：低於此值的邊被濾除");
             diagnosticsTabPage.Controls.Add(diagToolbar);
 
             _toolTip.SetToolTip(loadRecipeButton, "載入量測配方 (.zcp)");
@@ -1032,7 +1045,9 @@ namespace FlashMeasurementSystem
                 Polarity = _edgePolarityCombo.SelectedItem.ToString(),
                 EdgeSelector = _edgeSelectorCombo.SelectedItem.ToString(),
                 Interpolation = _edgeInterpolationCombo.SelectedItem.ToString(),
-                MeasureMode = _edgeMeasureModeCombo.SelectedItem.ToString()
+                MeasureMode = _edgeMeasureModeCombo.SelectedItem.ToString(),
+                FuzzyEnabled = _edgeFuzzyCheck != null && _edgeFuzzyCheck.Checked,
+                FuzzyThresh = _edgeFuzzyThreshNumeric != null ? (double)_edgeFuzzyThreshNumeric.Value : 0.5
             };
         }
 
