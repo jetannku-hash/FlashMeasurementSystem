@@ -152,6 +152,7 @@ namespace FlashMeasurementSystem.Tests
             RecipeRunnerToolWiringDomainTests.Run();
             MeasurementWorkflowDomainTests.Run();
             ArcRoiTransformDomainTests.Run();
+            RepeatabilityDomainTests.Run();
             Console.WriteLine("RecipeValidatorTests passed");
             CsvReportWriterTests.Run();
             Console.WriteLine("CsvReportWriterTests passed");
