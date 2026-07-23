@@ -1380,7 +1380,9 @@ namespace FlashMeasurementSystem
                     if (r.Roi != null)
                     {
                         an.DrawRectangle2(r.Roi.Row, r.Roi.Col, r.Roi.AngleRad, r.Roi.Length1, r.Roi.Length2, "orange");
-                        an.DrawText(r.Name ?? string.Empty, (int)r.Roi.Row, (int)r.Roi.Col, "orange");
+                        // 名稱/數值文字一律走 QueueLabel（防碰撞佇列），overlay pass 結尾 FlushLabels
+                        // 統一排版繪出——同錨點/相近錨點的標籤自動往下錯開，不再互疊。
+                        an.QueueLabel(r.Name ?? string.Empty, r.Roi.Row, r.Roi.Col, "orange");
                     }
 
                     // v10：扇形 ROI 的 circle 工具畫量測扇形帶（PlacedArc；成功/失敗都畫，顯示環帶位置）。
@@ -1389,7 +1391,7 @@ namespace FlashMeasurementSystem
                     {
                         an.DrawSectorRoi(r.PlacedArc.CenterRow, r.PlacedArc.CenterCol, r.PlacedArc.Radius,
                             r.PlacedArc.AnnulusRadius, r.PlacedArc.AngleStart, r.PlacedArc.AngleExtent);
-                        an.DrawText(r.Name ?? string.Empty, (int)r.PlacedArc.CenterRow, (int)r.PlacedArc.CenterCol, "orange");
+                        an.QueueLabel(r.Name ?? string.Empty, r.PlacedArc.CenterRow, r.PlacedArc.CenterCol, "orange");
                     }
 
                     if (r.Measured && r.ToolType == "circle")
@@ -1397,7 +1399,7 @@ namespace FlashMeasurementSystem
                         string circleColor = r.IsOk == true ? "green" : (r.IsOk == false ? "red" : "yellow");
                         an.DrawCircle(r.FitCenterRow, r.FitCenterCol, r.FitRadiusPx, circleColor);
                         // 數值畫在影像上（比照 2D 量測模型/distance/angle）：錨在擬合圓心。
-                        an.DrawText(r.ValueText ?? string.Empty, (int)r.FitCenterRow, (int)r.FitCenterCol, circleColor);
+                        an.QueueLabel(r.ValueText ?? string.Empty, r.FitCenterRow, r.FitCenterCol, circleColor);
                     }
                     else if (r.Measured && r.ToolType == "line")
                     {
@@ -1405,8 +1407,9 @@ namespace FlashMeasurementSystem
                         an.DrawLine(r.LineRow1, r.LineCol1, r.LineRow2, r.LineCol2, lineColor);
                         // 數值畫在影像上（比照 2D 量測模型/distance/angle）：錨在擬合線中點「上方」
                         // 一段距離，避開亮線本體與橘色名稱標籤，落在深色背景上更清楚。
-                        an.DrawText(r.ValueText ?? string.Empty,
-                            (int)((r.LineRow1 + r.LineRow2) / 2.0) - 22, (int)((r.LineCol1 + r.LineCol2) / 2.0), lineColor);
+                        an.QueueLabel(r.ValueText ?? string.Empty,
+                            (r.LineRow1 + r.LineRow2) / 2.0 - 22, (r.LineCol1 + r.LineCol2) / 2.0, lineColor,
+                            (r.LineRow1 + r.LineRow2) / 2.0, (r.LineCol1 + r.LineCol2) / 2.0);   // 錨=線中點
                     }
                     else if (r.Measured && r.ToolType == "distance")
                     {
@@ -1414,8 +1417,10 @@ namespace FlashMeasurementSystem
                     }
                     else if (r.Measured && r.ToolType == "angle")
                     {
-                        double extent = r.AngleDeg * Math.PI / 180.0;
-                        an.DrawAngle(r.AngleCenterRow, r.AngleCenterCol, r.AngleRadiusPx, r.AngleStartRad, extent, r.ValueText, r.IsOk);
+                        // 掃角改用 RecipeRunner 算好的「有號」AngleSweepRad（起點=線A方向掃到線B方向），
+                        // 弧才會真的夾在兩線之間；AngleDeg 只是無方向的銳角數值，不能當掃角。
+                        an.DrawAngle(r.AngleCenterRow, r.AngleCenterCol, r.AngleRadiusPx,
+                            r.AngleStartRad, r.AngleSweepRad, r.ValueText, r.IsOk);
                     }
                     else if (r.Measured && r.ToolType == "intersection" && r.OutputPrimitive != null)
                     {
@@ -1464,7 +1469,7 @@ namespace FlashMeasurementSystem
                         // 文字錨點：線用兩端中點，其餘用擬合中心。
                         double mTextRow = r.ToolType == "metrology_line" ? (r.LineRow1 + r.LineRow2) / 2.0 : r.FitCenterRow;
                         double mTextCol = r.ToolType == "metrology_line" ? (r.LineCol1 + r.LineCol2) / 2.0 : r.FitCenterCol;
-                        an.DrawText(r.ValueText ?? string.Empty, (int)mTextRow, (int)mTextCol, mColor);
+                        an.QueueLabel(r.ValueText ?? string.Empty, mTextRow, mTextCol, mColor);
                     }
                     else if (r.ToolType == "pin_pitch" && r.PinPitch != null)
                     {
@@ -1483,8 +1488,8 @@ namespace FlashMeasurementSystem
                         }
                         // 判定/數值文字錨在 ROI 中心上方一段（避開橘名稱標籤與引腳本體），依判定上色。
                         if (r.Roi != null)
-                            an.DrawText(r.ValueText ?? string.Empty,
-                                (int)r.Roi.Row - 24, (int)r.Roi.Col, pinColor);
+                            an.QueueLabel(r.ValueText ?? string.Empty, r.Roi.Row - 24, r.Roi.Col, pinColor,
+                                r.Roi.Row, r.Roi.Col);   // 錨=ROI 中心
                     }
                     else if (r.ToolType == "hole_array" && r.HoleArray != null)
                     {
@@ -1515,8 +1520,8 @@ namespace FlashMeasurementSystem
                         }
                         // 判定/數值文字錨在 ROI 中心上方一段（避開橘名稱標籤與孔本體），依判定上色。
                         if (r.Roi != null)
-                            an.DrawText(r.ValueText ?? string.Empty,
-                                (int)r.Roi.Row - 24, (int)r.Roi.Col, holeColor);
+                            an.QueueLabel(r.ValueText ?? string.Empty, r.Roi.Row - 24, r.Roi.Col, holeColor,
+                                r.Roi.Row, r.Roi.Col);   // 錨=ROI 中心
                     }
 
                     // 結果表值欄由 DrawResultTable 統一裁到欄寬（過長截斷加「…」），任何工具皆不溢到判定欄。
@@ -1544,7 +1549,7 @@ namespace FlashMeasurementSystem
                     }
 
                     // 名稱標籤：錨在弧心（比照 Roi 分支把名稱標在 Roi.Row/Col 的慣例）。
-                    an.DrawText(r.Name ?? string.Empty, (int)a.CenterRow, (int)a.CenterCol, arcColor);
+                    an.QueueLabel(r.Name ?? string.Empty, a.CenterRow, a.CenterCol, arcColor);
                 }
 
                 // 齒輪工具結果：與 arc 同樣 Roi 刻意留 null（見 RecipeRunner Pass 1.3），畫框那段不會經過。
@@ -1574,7 +1579,7 @@ namespace FlashMeasurementSystem
                         }
                     }
                     // 影像上只標工具名（比照 arc/pcd），避免三項長字串疊在環帶/齒中心上；數值看左上結果表 HUD。
-                    an.DrawText(r.Name ?? string.Empty, (int)a.CenterRow, (int)a.CenterCol, gearColor);
+                    an.QueueLabel(r.Name ?? string.Empty, a.CenterRow, a.CenterCol, gearColor);
                 }
 
                 // PCD 工具結果：Roi 刻意留 null（同 arc/gear），畫框那段不會經過。畫量測環帶 + 擬合節圓
@@ -1602,8 +1607,13 @@ namespace FlashMeasurementSystem
                     }
                     // 影像上只標工具名（比照 arc 分支），避免四項長字串疊在環帶/節圓上；
                     // 數值看左上結果表 HUD。名稱錨在弧心（節圓中心為空，不會蓋到孔/缺孔標記）。
-                    an.DrawText(r.Name ?? string.Empty, (int)a.CenterRow, (int)a.CenterCol, pcdColor);
+                    an.QueueLabel(r.Name ?? string.Empty, a.CenterRow, a.CenterCol, pcdColor);
                 }
+                // 先把結果表 HUD 登記為固定障礙物（左上區的標籤自動被推開），
+                // 再統一排版繪出所有佇列標籤（含 DrawDistance/DrawAngle 內部佇列的數值），
+                // 最後畫結果表 HUD 使其保持最上層。
+                an.AddResultTableObstacle(rows);
+                an.FlushLabels();
                 an.DrawResultTable(rows);
             });
 

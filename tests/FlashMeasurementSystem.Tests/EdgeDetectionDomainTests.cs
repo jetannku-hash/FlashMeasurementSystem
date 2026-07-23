@@ -123,6 +123,8 @@ namespace FlashMeasurementSystem.Tests
             Console.WriteLine("AngleMeasurementDomainTests passed");
             AngleNormalizerTests.Run();
             Console.WriteLine("AngleNormalizerTests passed");
+            AngleAnnotationMathTests.Run();   // Run() 內部自行印出 passed
+            LabelLayoutMathTests.Run();       // Run() 內部自行印出 passed
             ToleranceDomainTests.Run();
             Console.WriteLine("ToleranceDomainTests passed");
             CoordinateSystemDomainTests.Run();

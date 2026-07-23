@@ -62,6 +62,8 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="DistanceMeasurementDomainTests.cs" />
     <Compile Include="AngleMeasurementDomainTests.cs" />
+    <Compile Include="AngleAnnotationMathTests.cs" />
+    <Compile Include="LabelLayoutMathTests.cs" />
     <Compile Include="AngleNormalizerTests.cs" />
     <Compile Include="ToleranceDomainTests.cs" />
     <Compile Include="CoordinateSystemDomainTests.cs" />

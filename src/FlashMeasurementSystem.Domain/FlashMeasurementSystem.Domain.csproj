@@ -75,6 +75,7 @@
     <Compile Include="DistanceMeasurement\DistanceMeasurementType.cs" />
     <Compile Include="DistanceMeasurement\DistanceMeasurementParameters.cs" />
     <Compile Include="DistanceMeasurement\DistanceMeasurementResult.cs" />
+    <Compile Include="AngleMeasurement\AngleAnnotationMath.cs" />
     <Compile Include="AngleMeasurement\AngleMeasurementParameters.cs" />
     <Compile Include="AngleMeasurement\AngleMeasurementResult.cs" />
     <Compile Include="AngleMeasurement\AngleNormalizer.cs" />
@@ -88,6 +89,7 @@
     <Compile Include="CoordinateSystem\RigidTransform.cs" />
     <Compile Include="CoordinateSystem\TransformedRoi.cs" />
     <Compile Include="Calibration\CalibrationProfile.cs" />
+    <Compile Include="Overlay\LabelLayoutMath.cs" />
     <Compile Include="Roi\RoiGeometry.cs" />
     <Compile Include="Roi\Rect2EditMath.cs" />
     <Compile Include="Roi\ArcEditMath.cs" />
