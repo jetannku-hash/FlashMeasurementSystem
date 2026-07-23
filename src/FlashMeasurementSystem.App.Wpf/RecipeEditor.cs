@@ -1062,7 +1062,10 @@ namespace FlashMeasurementSystem
                 double txtC = usesArcRoi && arc != null ? arc.CenterCol : (roi != null ? roi.CenterCol : 20);
                 if (result == null || !result.Measured)
                 {
-                    an.DrawText("未偵測到邊緣 / No edge detected", (int)txtR, (int)txtC, "yellow");
+                    // 標籤一律走 QueueLabel + FlushLabels（與 MainWindow 同一套防碰撞系統）。
+                    // 此 overlay pass 有多個出口，每個出口前都要 Flush，否則佇列文字不會畫出。
+                    an.QueueLabel("未偵測到邊緣 / No edge detected", txtR, txtC, "yellow");
+                    an.FlushLabels();
                     return;
                 }
 
@@ -1083,7 +1086,9 @@ namespace FlashMeasurementSystem
                         an.DrawCross(result.ArcEdgeRows[i], result.ArcEdgeCols[i], 10, c);
                     // 試測值標在環帶外緣上方，避免長字串（gear/pcd 三～四項）疊在環帶/邊點上；調機時仍看得到數值。
                     double labelRow = a.CenterRow - (a.Radius + a.AnnulusRadius) - 20;
-                    an.DrawText(result.ValueText ?? string.Empty, (int)labelRow, (int)a.CenterCol, c);
+                    an.QueueLabel(result.ValueText ?? string.Empty, labelRow, a.CenterCol, c,
+                        a.CenterRow - (a.Radius + a.AnnulusRadius), a.CenterCol);   // 錨=環帶外緣頂點
+                    an.FlushLabels();
                     return;
                 }
 
@@ -1098,7 +1103,8 @@ namespace FlashMeasurementSystem
                     an.DrawCircle(result.FitCenterRow, result.FitCenterCol, result.FitRadiusPx, "green");
                 else if (result.ToolType == "line")
                     an.DrawLine(result.LineRow1, result.LineCol1, result.LineRow2, result.LineCol2, "green");
-                an.DrawText(result.ValueText ?? string.Empty, (int)txtR, (int)txtC + 18, "green");
+                an.QueueLabel(result.ValueText ?? string.Empty, txtR, txtC + 18, "green", txtR, txtC);
+                an.FlushLabels();
             });
         }
 
@@ -1673,8 +1679,9 @@ namespace FlashMeasurementSystem
             {
                 RoiGeometry roi = t.Roi;
                 an.DrawRectangle2(roi.CenterRow, roi.CenterCol, roi.AngleRad, roi.Length1, roi.Length2, "cyan");
-                an.DrawText(t.Name ?? string.Empty, (int)roi.CenterRow, (int)roi.CenterCol, "cyan");
+                an.QueueLabel(t.Name ?? string.Empty, roi.CenterRow, roi.CenterCol, "cyan");
             }
+            an.FlushLabels();   // 名稱標籤統一防碰撞排版（與 MainWindow 同一套系統）
         }
 
         // 滑鼠互動編輯回呼：回寫 RoiGeometry（弧度）與數值框，標記 dirty。

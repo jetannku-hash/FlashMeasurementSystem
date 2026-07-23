@@ -79,7 +79,8 @@ namespace FlashMeasurementSystem
         public double AngleDeg;         // angle：夾角 AcuteAngleDeg (0~90)
         public double AngleCenterRow, AngleCenterCol;   // angle 兩線交點（供畫弧）
         public double AngleRadiusPx;    // angle 弧線半徑（供畫弧）
-        public double AngleStartRad;    // angle 弧起點方位角（供畫弧）
+        public double AngleStartRad;    // angle 弧起點方位角 = 線 A 方向（供畫弧）
+        public double AngleSweepRad;    // angle 有號掃角：起點掃到線 B 方向，|值| = 銳角（供畫弧）
         public bool? IsOk;             // 公差判定；null = 無判定
         // v11：metrology 物件的每「判定量」判定結果（供 CSV 多列 + overlay 上色）。無公差時為 null/空。
         public List<FlashMeasurementSystem.Domain.MetrologyModel.MetrologyJudgment> MetrologyJudgments;
@@ -1321,11 +1322,29 @@ namespace FlashMeasurementSystem
                 res.AngleDeg = ar.AcuteAngleDeg;
                 res.ValueText = string.Format(CultureInfo.InvariantCulture, "{0:F2}°", res.AngleDeg);
 
-                // 兩線交點：取 a1→a2 與 b1→b2 的交點（四點重心當近似頂點，對近交點/平行線也安全）。
-                res.AngleCenterRow = (pa.Row1 + pa.Row2 + pb.Row1 + pb.Row2) / 4.0;
-                res.AngleCenterCol = (pa.Col1 + pa.Col2 + pb.Col1 + pb.Col2) / 4.0;
-                res.AngleRadiusPx = 80.0;
-                res.AngleStartRad = Math.Atan2(pa.Row1 - res.AngleCenterRow, pa.Col1 - res.AngleCenterCol);
+                // 標註幾何（工業製圖慣例）：頂點 = 兩線真交點，弧掃在兩線方向之間
+                // （|掃角| = 銳角），半徑依線段長度自適應。近平行無可靠交點時退回
+                // 四點重心 + 名目半徑（此時銳角 ≈ 0，弧退化，實際上只有數值有意義）。
+                double vRow, vCol, startRad, sweepRad, radiusPx;
+                if (AngleAnnotationMath.TryCompute(
+                        pa.Row1, pa.Col1, pa.Row2, pa.Col2,
+                        pb.Row1, pb.Col1, pb.Row2, pb.Col2,
+                        out vRow, out vCol, out startRad, out sweepRad, out radiusPx))
+                {
+                    res.AngleCenterRow = vRow;
+                    res.AngleCenterCol = vCol;
+                    res.AngleStartRad = startRad;
+                    res.AngleSweepRad = sweepRad;
+                    res.AngleRadiusPx = radiusPx;
+                }
+                else
+                {
+                    res.AngleCenterRow = (pa.Row1 + pa.Row2 + pb.Row1 + pb.Row2) / 4.0;
+                    res.AngleCenterCol = (pa.Col1 + pa.Col2 + pb.Col1 + pb.Col2) / 4.0;
+                    res.AngleRadiusPx = 80.0;
+                    res.AngleStartRad = Math.Atan2(pa.Row1 - res.AngleCenterRow, pa.Col1 - res.AngleCenterCol);
+                    res.AngleSweepRad = res.AngleDeg * Math.PI / 180.0;
+                }
 
                 if (tool.Tolerance != null)
                 {

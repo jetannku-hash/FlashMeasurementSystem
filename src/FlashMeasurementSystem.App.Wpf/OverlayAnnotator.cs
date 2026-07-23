@@ -200,6 +200,129 @@ namespace FlashMeasurementSystem
             HOperatorSet.DispRectangle1(_window, r1, c1, r2, c2);
         }
 
+        // ─── 標籤防碰撞排版 ──────────────────────────────────────────────
+        // 用法：overlay pass 內把「名稱/數值」文字改呼叫 QueueLabel（幾何圖形照常即時畫），
+        // pass 結尾呼叫一次 FlushLabels 統一排版繪出。碰撞在「視窗像素」空間解
+        // （disp_text 的 image 座標錨點會隨縮放移動、但字面大小固定），persistent overlay
+        // 每次 pan/zoom 重繪都重算，任何縮放下標籤都不互疊。未 Flush 的佇列不會被畫出。
+
+        private class PendingLabel
+        {
+            public string Text;
+            public double Row, Col;           // 期望標籤位置（影像座標）
+            public double AnchorRow, AnchorCol; // 幾何錨點（引出線起點；預設=標籤位置）
+            public string Color;
+        }
+
+        private readonly System.Collections.Generic.List<PendingLabel> _pendingLabels =
+            new System.Collections.Generic.List<PendingLabel>();
+
+        // 固定障礙物（視窗像素矩形，如結果表 HUD）：標籤排版時避開，FlushLabels 後清空。
+        private readonly System.Collections.Generic.List<Domain.Overlay.LabelBox> _labelObstacles =
+            new System.Collections.Generic.List<Domain.Overlay.LabelBox>();
+
+        /// <summary>把標籤加入防碰撞佇列（影像座標）。空字串忽略。</summary>
+        public void QueueLabel(string text, double row, double col, string color = null)
+        {
+            QueueLabel(text, row, col, color, row, col);
+        }
+
+        /// <summary>
+        /// 帶「幾何錨點」的標籤：期望位置 (row,col) 與特徵實際位置 (anchorRow,anchorCol) 分離
+        /// （如線數值標在中點上方 22px、錨點是線中點本身）。標籤被排版擠遠時，
+        /// 引出線從幾何錨點畫起，操作員才看得出標籤屬於哪個特徵。
+        /// </summary>
+        public void QueueLabel(string text, double row, double col, string color,
+            double anchorRow, double anchorCol)
+        {
+            if (string.IsNullOrEmpty(text)) return;
+            _pendingLabels.Add(new PendingLabel
+            {
+                Text = text, Row = row, Col = col, Color = color,
+                AnchorRow = anchorRow, AnchorCol = anchorCol
+            });
+        }
+
+        /// <summary>
+        /// 排版並繪出所有佇列標籤：影像錨點 → 視窗像素、量字串寬高（get_string_extents，
+        /// 視窗像素）、LabelLayoutMath 貪婪下移排開、再轉回影像座標用 DrawText 畫出。
+        /// 佇列順序即優先序（先到的不動），與 results 順序一致故重繪不洗牌。
+        /// </summary>
+        public void FlushLabels()
+        {
+            if (_pendingLabels.Count == 0) { _labelObstacles.Clear(); return; }
+            try
+            {
+                HOperatorSet.GetWindowExtents(_window, out HTuple _, out HTuple _,
+                    out HTuple winWidth, out HTuple winHeight);
+                HOperatorSet.GetPart(_window, out HTuple pr1, out HTuple pc1, out HTuple pr2, out HTuple pc2);
+                double rowScale = winHeight.D / (pr2.D - pr1.D + 1.0);
+                double colScale = winWidth.D / (pc2.D - pc1.D + 1.0);
+                if (double.IsNaN(rowScale) || double.IsInfinity(rowScale) || rowScale <= 0
+                    || double.IsNaN(colScale) || double.IsInfinity(colScale) || colScale <= 0)
+                {
+                    DrawPendingWithoutLayout();
+                    return;
+                }
+
+                // 字型須與 DrawText 一致（10），量出的寬高才等於實際繪出大小。
+                SetAvailableFont(10);
+                // 固定障礙物（HUD 等）排最前（Fixed 框永不動、其他標籤避開它）。
+                var boxes = new System.Collections.Generic.List<Domain.Overlay.LabelBox>(_labelObstacles);
+                int obstacleCount = boxes.Count;
+                foreach (PendingLabel l in _pendingLabels)
+                {
+                    HOperatorSet.GetStringExtents(_window, l.Text,
+                        out HTuple _, out HTuple _, out HTuple w, out HTuple h);
+                    boxes.Add(new Domain.Overlay.LabelBox
+                    {
+                        Top = (l.Row - pr1.D) * rowScale,
+                        Left = (l.Col - pc1.D) * colScale,
+                        Width = w.D,
+                        Height = h.D
+                    });
+                }
+                Domain.Overlay.LabelLayoutMath.PlaceWithoutOverlap(boxes, 3.0);
+
+                for (int i = 0; i < _pendingLabels.Count; i++)
+                {
+                    PendingLabel l = _pendingLabels[i];
+                    Domain.Overlay.LabelBox box = boxes[obstacleCount + i];
+                    double finalRow = pr1.D + box.Top / rowScale;
+                    double finalCol = pc1.D + box.Left / colScale;
+
+                    // 被排版擠遠（超過 1.5 倍字高）→ 從幾何錨點畫細引出線到標籤框左緣中點，
+                    // 先畫線再畫字，讓文字底框壓住線端。
+                    double desiredTop = (l.Row - pr1.D) * rowScale;
+                    if (Domain.Overlay.LabelLayoutMath.NeedsLeader(desiredTop, box.Top, box.Height, 1.5))
+                    {
+                        HOperatorSet.SetColor(_window, l.Color ?? "yellow");
+                        HOperatorSet.SetLineWidth(_window, 1);
+                        HOperatorSet.DispLine(_window, l.AnchorRow, l.AnchorCol,
+                            finalRow + box.Height / 2.0 / rowScale, finalCol);
+                    }
+
+                    DrawText(l.Text, (int)finalRow, (int)finalCol, l.Color);
+                }
+            }
+            catch (HalconException ex)
+            {
+                Debug.WriteLine($"HALCON label layout failed: {ex.Message}");
+                DrawPendingWithoutLayout();   // 排版失敗退回原位置直接畫，標籤不能消失
+            }
+            finally
+            {
+                _pendingLabels.Clear();
+                _labelObstacles.Clear();
+            }
+        }
+
+        private void DrawPendingWithoutLayout()
+        {
+            foreach (PendingLabel l in _pendingLabels)
+                DrawText(l.Text, (int)l.Row, (int)l.Col, l.Color);
+        }
+
         public void DrawText(string message, int row, int col, string color = null)
         {
             if (string.IsNullOrEmpty(message)) return;
@@ -310,6 +433,7 @@ namespace FlashMeasurementSystem
         /// <summary>
         /// 距離標註：兩端連線 + 中點數值文字。isOk 為 null 時用中性黃色，
         /// true 綠 / false 紅（供公差判定上色）。
+        /// 數值走 QueueLabel（防碰撞佇列），呼叫端 overlay pass 結尾須呼叫 FlushLabels。
         /// </summary>
         public void DrawDistance(double row1, double col1, double row2, double col2,
             string valueText, bool? isOk = null)
@@ -319,37 +443,50 @@ namespace FlashMeasurementSystem
             HOperatorSet.SetLineWidth(_window, 2);
             HOperatorSet.DispLine(_window, row1, col1, row2, col2);
 
-            int midRow = (int)((row1 + row2) / 2.0);
-            int midCol = (int)((col1 + col2) / 2.0);
-            SetAvailableFont(12);
-            HOperatorSet.SetTposition(_window, midRow - 16, midCol + 8);
-            HOperatorSet.WriteString(_window, valueText ?? string.Empty);
+            double midRow = (row1 + row2) / 2.0;
+            double midCol = (col1 + col2) / 2.0;
+            // 幾何錨點 = 連線中點（引出線起點）；標籤期望位置在其上方偏右。
+            QueueLabel(valueText ?? string.Empty, midRow - 16, midCol + 8, color, midRow, midCol);
         }
 
         /// <summary>
-        /// 角度弧線 + 數值。startAngleRad = 弧起點方位角；extentRad = 弧張角（有號，會取絕對值）。
-        /// 採 HALCON disp_arc(Window, CenterRow, CenterCol, Angle(張角,>0), BeginRow, BeginCol)：
-        /// 起點由 中心 + 半徑×(sinφ→Row, cosφ→Col) 算出。弧僅作角度視覺指示。
+        /// 角度標註（工業製圖慣例）：頂點兩條細「腿」沿兩線方向延伸 + 夾在兩腿之間的弧 +
+        /// 角平分線方向的數值（深色底框）。vertexRow/Col = 兩線交點（AngleAnnotationMath），
+        /// startAngleRad = 線 A 方位角（影像慣例 row = cr + R·sinθ），sweepRad = 有號掃角
+        /// （起點掃到線 B 方向，|值| = 銳角）。弧改用 gen_circle_contour_xld（經 DrawArc）
+        /// 而非 disp_arc——後者要求「弧心必須在視窗內」，平移/縮放後頂點出視窗弧就消失。
         /// </summary>
-        public void DrawAngle(double centerRow, double centerCol, double radiusPx,
-            double startAngleRad, double extentRad, string valueText, bool? isOk = null)
+        public void DrawAngle(double vertexRow, double vertexCol, double radiusPx,
+            double startAngleRad, double sweepRad, string valueText, bool? isOk = null)
         {
             string color = isOk == null ? "yellow" : (isOk.Value ? "green" : "red");
+            double endAngleRad = startAngleRad + sweepRad;
+            double legLen = radiusPx + 10;
+
+            // 兩條腿：把弧錨在頂點上，即使量測線段本身離頂點有段距離也看得出角在哪。
             HOperatorSet.SetColor(_window, color);
-            HOperatorSet.SetLineWidth(_window, 2);
+            HOperatorSet.SetLineWidth(_window, 1);
+            HOperatorSet.DispLine(_window, vertexRow, vertexCol,
+                vertexRow + legLen * Math.Sin(startAngleRad), vertexCol + legLen * Math.Cos(startAngleRad));
+            HOperatorSet.DispLine(_window, vertexRow, vertexCol,
+                vertexRow + legLen * Math.Sin(endAngleRad), vertexCol + legLen * Math.Cos(endAngleRad));
 
-            double beginRow = centerRow + radiusPx * Math.Sin(startAngleRad);
-            double beginCol = centerCol + radiusPx * Math.Cos(startAngleRad);
-            double extent = Math.Abs(extentRad);
-            if (extent < 1e-6) extent = 1e-6;  // disp_arc 要求 Angle > 0
-            HOperatorSet.DispArc(_window, centerRow, centerCol, extent, beginRow, beginCol);
+            // 弧：影像方位角 θ 與 gen_circle_contour_xld 的 φ 互為相反數
+            // （row = cr + R·sinθ = cr − R·sin(−θ)），掃向由 point order 控制（同 DrawArcBand：
+            // φ 遞增 = "positive"）。θ 掃角為正 → φ 遞減 → "negative"。
+            double sweep = Math.Abs(sweepRad) < 1e-6 ? 1e-6 : sweepRad;
+            DrawArc(vertexRow, vertexCol, Math.Max(2.0, radiusPx),
+                -startAngleRad, -(startAngleRad + sweep),
+                sweep > 0 ? "negative" : "positive", color);
 
-            double midAngle = startAngleRad + extentRad / 2.0;
-            int textRow = (int)(centerRow + (radiusPx + 16) * Math.Sin(midAngle));
-            int textCol = (int)(centerCol + (radiusPx + 16) * Math.Cos(midAngle));
-            SetAvailableFont(12);
-            HOperatorSet.SetTposition(_window, textRow, textCol);
-            HOperatorSet.WriteString(_window, valueText ?? string.Empty);
+            // 數值：角平分線方向、弧外側。走 QueueLabel（防碰撞佇列），
+            // 呼叫端 overlay pass 結尾須呼叫 FlushLabels。幾何錨點 = 弧中點（引出線起點）。
+            double midAngle = startAngleRad + sweepRad / 2.0;
+            QueueLabel(valueText ?? string.Empty,
+                vertexRow + (radiusPx + 14) * Math.Sin(midAngle),
+                vertexCol + (radiusPx + 14) * Math.Cos(midAngle), color,
+                vertexRow + radiusPx * Math.Sin(midAngle),
+                vertexCol + radiusPx * Math.Cos(midAngle));
         }
 
         /// <summary>
@@ -371,43 +508,19 @@ namespace FlashMeasurementSystem
                 // 影像座標 == 視窗像素：之後的 set_tposition / disp_rectangle1 皆以視窗像素計。
                 HOperatorSet.SetPart(_window, 0, 0, winHeight - 1, winWidth - 1);
 
-                // 字型必須先設定，量測字串寬度才有意義（get_string_extents 用的是「視窗當下字型」）。
-                SetAvailableFont(12);
-
-                // 欄寬改為「依內容自適應」：先量測實際文字寬度再決定欄位位置，
-                // 而非寫死常數。寫死的下場是每加一個摘要較長的工具，值欄就被默默截成「…」，
-                // 得有人回頭手動調整（孔陣列就發生過）。量測成本是每列三次 get_string_extents，
-                // 相對每次重繪已做的繪圖工作可忽略。
-                const int lineH = 22, boxLeft = 6, padLeft = 8, gap = 16, padRight = 12;
-                int col1 = boxLeft + padLeft;
-
-                int nameW = MaxTextWidth(rows, RowField.Name, "項目");
-                int valueW = MaxTextWidth(rows, RowField.Value, "實測值");
-                int verdictW = MaxTextWidth(rows, RowField.Verdict, "判定");
-
-                // 可用寬度上限：視窗寬扣掉左右邊界。超出時壓縮「值欄」（最長且最有彈性的一欄），
-                // 由既有的 ClipToWidth 收尾，其餘欄位維持完整可讀。
-                int maxBoxWidth = Math.Max(240, winWidth.I - boxLeft * 2);
-                int naturalWidth = padLeft + nameW + gap + valueW + gap + verdictW + padRight;
-                if (naturalWidth > maxBoxWidth)
-                    valueW = Math.Max(60, valueW - (naturalWidth - maxBoxWidth));
-
-                int col2 = col1 + nameW + gap;
-                int col3 = col2 + valueW + gap;
-                int boxWidth = Math.Min(maxBoxWidth, padLeft + nameW + gap + valueW + gap + verdictW + padRight);
-                int boxBottom = 6 + (rows.Count + 1) * lineH + 6;
+                ResultTableLayout t = MeasureResultTableLayout(rows, winWidth.I);
 
                 // 深色背景框（填滿），確保任何影像背景上文字皆可讀。
                 HOperatorSet.SetColor(_window, "black");
                 HOperatorSet.SetDraw(_window, "fill");
-                HOperatorSet.DispRectangle1(_window, 6, boxLeft, boxBottom, boxLeft + boxWidth);
+                HOperatorSet.DispRectangle1(_window, 6, t.BoxLeft, t.BoxBottom, t.BoxLeft + t.BoxWidth);
                 HOperatorSet.SetDraw(_window, "margin");
 
                 // 表頭（白字）
                 HOperatorSet.SetColor(_window, "white");
-                WriteAt(12, col1, "項目");
-                WriteAt(12, col2, "實測值");
-                WriteAt(12, col3, "判定");
+                WriteAt(12, t.Col1, "項目");
+                WriteAt(12, t.Col2, "實測值");
+                WriteAt(12, t.Col3, "判定");
 
                 for (int i = 0; i < rows.Count; i++)
                 {
@@ -415,11 +528,11 @@ namespace FlashMeasurementSystem
                     if (r == null) continue;
                     string color = r.IsOk == null ? "white" : (r.IsOk.Value ? "green" : "red");
                     HOperatorSet.SetColor(_window, color);
-                    int y = 12 + (i + 1) * lineH;
-                    WriteAt(y, col1, r.Name ?? string.Empty);
+                    int y = 12 + (i + 1) * t.LineH;
+                    WriteAt(y, t.Col1, r.Name ?? string.Empty);
                     // 值欄裁到欄寬（col2→col3 之間留 8px），過長截斷加「…」，任何工具的長字串皆不溢到判定欄。
-                    WriteAt(y, col2, ClipToWidth(r.ValueText ?? string.Empty, col3 - col2 - 8));
-                    WriteAt(y, col3, r.IsOk == null ? string.Empty : (r.IsOk.Value ? "OK" : "NG"));
+                    WriteAt(y, t.Col2, ClipToWidth(r.ValueText ?? string.Empty, t.Col3 - t.Col2 - 8));
+                    WriteAt(y, t.Col3, r.IsOk == null ? string.Empty : (r.IsOk.Value ? "OK" : "NG"));
                 }
             }
             finally
@@ -427,6 +540,71 @@ namespace FlashMeasurementSystem
                 // 還原原本 part（回到影像座標），不影響後續重繪。
                 HOperatorSet.SetPart(_window, pr1, pc1, pr2, pc2);
             }
+        }
+
+        /// <summary>
+        /// 把結果表 HUD 佔用的視窗矩形登記為標籤排版的「固定障礙物」：
+        /// 落在左上區的標籤會被 FlushLabels 自動推到 HUD 下方，不再被蓋住。
+        /// 必須在 FlushLabels 之前呼叫；障礙物於 Flush 後自動清空。
+        /// 尺寸計算與 DrawResultTable 共用 MeasureResultTableLayout（單一來源，不會漂移）。
+        /// </summary>
+        public void AddResultTableObstacle(System.Collections.Generic.IList<OverlayResultRow> rows)
+        {
+            if (rows == null || rows.Count == 0) return;
+            try
+            {
+                HOperatorSet.GetWindowExtents(_window, out HTuple _, out HTuple _,
+                    out HTuple winWidth, out HTuple _);
+                ResultTableLayout t = MeasureResultTableLayout(rows, winWidth.I);
+                _labelObstacles.Add(new Domain.Overlay.LabelBox
+                {
+                    Top = 6, Left = t.BoxLeft, Width = t.BoxWidth, Height = t.BoxBottom - 6,
+                    Fixed = true
+                });
+            }
+            catch (HalconException ex)
+            {
+                Debug.WriteLine($"HALCON result table obstacle failed: {ex.Message}");
+            }
+        }
+
+        private class ResultTableLayout
+        {
+            public int Col1, Col2, Col3, BoxLeft, BoxWidth, BoxBottom, LineH;
+        }
+
+        // 結果表版面計算（視窗像素）：DrawResultTable 繪製與 AddResultTableObstacle 登記
+        // 障礙物共用，避免同一份尺寸規則寫兩處而漂移。會把視窗字型設為 12
+        //（get_string_extents 量的是視窗當下字型），呼叫端若需其他字級須自行重設。
+        private ResultTableLayout MeasureResultTableLayout(
+            System.Collections.Generic.IList<OverlayResultRow> rows, int winWidthPx)
+        {
+            // 字型必須先設定，量測字串寬度才有意義。
+            SetAvailableFont(12);
+
+            // 欄寬「依內容自適應」：先量測實際文字寬度再決定欄位位置，而非寫死常數。
+            // 寫死的下場是每加一個摘要較長的工具，值欄就被默默截成「…」，
+            // 得有人回頭手動調整（孔陣列就發生過）。
+            const int lineH = 22, boxLeft = 6, padLeft = 8, gap = 16, padRight = 12;
+            int col1 = boxLeft + padLeft;
+
+            int nameW = MaxTextWidth(rows, RowField.Name, "項目");
+            int valueW = MaxTextWidth(rows, RowField.Value, "實測值");
+            int verdictW = MaxTextWidth(rows, RowField.Verdict, "判定");
+
+            // 可用寬度上限：視窗寬扣掉左右邊界。超出時壓縮「值欄」（最長且最有彈性的一欄），
+            // 由既有的 ClipToWidth 收尾，其餘欄位維持完整可讀。
+            int maxBoxWidth = Math.Max(240, winWidthPx - boxLeft * 2);
+            int naturalWidth = padLeft + nameW + gap + valueW + gap + verdictW + padRight;
+            if (naturalWidth > maxBoxWidth)
+                valueW = Math.Max(60, valueW - (naturalWidth - maxBoxWidth));
+
+            var t = new ResultTableLayout { LineH = lineH, BoxLeft = boxLeft, Col1 = col1 };
+            t.Col2 = col1 + nameW + gap;
+            t.Col3 = t.Col2 + valueW + gap;
+            t.BoxWidth = Math.Min(maxBoxWidth, padLeft + nameW + gap + valueW + gap + verdictW + padRight);
+            t.BoxBottom = 6 + (rows.Count + 1) * lineH + 6;
+            return t;
         }
 
         private enum RowField { Name, Value, Verdict }
